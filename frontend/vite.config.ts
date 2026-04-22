@@ -6,7 +6,7 @@ export default defineConfig({
     open: true
   },
   optimizeDeps: {
-    include: ['phaser']   // ← это главное исправление
+    include: ['phaser']     // ← эта строка обязательна
   },
   build: {
     outDir: 'dist'
