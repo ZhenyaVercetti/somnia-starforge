@@ -2,20 +2,19 @@
 
 **Стек:** Phaser 3.90.0 + Vite + TypeScript + viem/wagmi + @somniaforge/sdk
 
-## Актуальная структура сцен (v1.1)
-1. **BootScene** — preload ассетов, подключение wallet, инициализация контрактов
-2. **PrepareScene** — owned units + shop + drag-and-drop + TEAM grid + профиль
-3. **BattleScene** — визуальный бой + on-chain результат (запускается из PrepareScene)
-4. **RewardScene** — (будет позже)
-5. **LobbyScene** — (будет позже)
+## Актуальная структура файлов (v1.1)
 
+**Сцены:**
+- `src/main.ts` — только запуск игры и конфиг
+- `src/scenes/BootScene.ts` — preload, подключение MetaMask, инициализация контрактов
+- `src/scenes/PrepareScene.ts` — основной интерфейс (owned, shop, drag-and-drop, профиль, кнопки)
+- `src/scenes/BattleScene.ts` — отдельная сцена визуального боя
+
+**Статус:** Полная разбивка main.ts на сцены завершена.
 
 ## Как работаем вдвоём
 - Я пишу всю логику контрактов + хуки
 - Ты/фронт — только Phaser-сцены и UI
 - При отсутствии фронт-девов — я правлю сцены полностью
 
-**Статус:** main.ts полностью разбит на сцены (BootScene + PrepareScene + BattleScene).  
-Hover tooltip и подсветка team-slots реализованы.
-
-**Следующий шаг:** Автообновление Player Profile после buy/reroll/battle + мелкие UX-улучшения.
+**Следующий шаг:** Priority 4 — финальная полировка UX и стабильность.

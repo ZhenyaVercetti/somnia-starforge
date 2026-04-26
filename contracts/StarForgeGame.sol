@@ -32,11 +32,16 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
     mapping(address => ShopUnit[5]) public playerShopPreview;
 
+    // === V1.2: ПОСТОЯННЫЙ ИИ-ПРОТИВНИК ===
+    // Фиксированная команда ИИ до победы игрока (один раз генерируется, потом хранится)
+    mapping(address => ShopUnit[]) public playerCurrentAI;
+
     mapping(address => uint256[]) public playerUnits;
 
     event UnitBought(address player, uint256 tokenId);
-    event MatchPlayed(address player, uint256 score, uint256[] rewards);
+    event MatchPlayed(address player, bool won, uint256 playerScore, uint256 aiScore, uint256[] rewards);
     event ShopRerolled(address player);
+    event AIOpponentGenerated(address player, uint16 aiLevel);
 
     constructor(address _unitNFT) Ownable(msg.sender) {
         unitNFT = StarForgeUnitNFT(_unitNFT);
@@ -85,6 +90,51 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
                 speed: baseSpd
             });
         }
+    }
+
+        // === V1.2: ГЕНЕРАЦИЯ ПОСТОЯННОГО ИИ ===
+    function _generateAIOpponent(address player) internal {
+        PlayerProfile memory profile = profiles[player];
+        uint16 aiLevel = profile.level > 0 ? profile.level : 1;
+
+        uint256 seed = uint256(keccak256(abi.encodePacked(
+            block.timestamp,
+            player,
+            aiLevel,
+            unitNFT.totalSupply(),
+            block.prevrandao
+        )));
+
+        uint8 teamSize = 4; // Начальный противник — 4 слабых Common. Позже можно сделать scale с уровнем
+
+        delete playerCurrentAI[player]; // очищаем предыдущего
+
+        for (uint256 i = 0; i < teamSize; i++) {
+            ShopUnit memory u;
+            u.faction = StarForgeUnitNFT.Faction(uint8((seed >> (i * 8)) % 3));
+            u.rarity = StarForgeUnitNFT.Rarity.Common; // начальные — слабые Common
+            u.unitClass = StarForgeUnitNFT.UnitClass(uint8((seed >> (i * 16)) % 4));
+
+            // Stats scale с уровнем ИИ + слабый base
+            uint8 base = 3 + uint8(aiLevel / 4);   // <-- ИСПРАВЛЕНО: явный cast
+            u.attack = base + uint8((seed >> (i * 32 + 8)) % 6);
+            u.defense = base + uint8((seed >> (i * 40)) % 6);
+            u.speed = base + uint8((seed >> (i * 48)) % 6);
+
+            if (uint8((seed >> (i * 56)) % 100) < 15) {
+                u.rarity = StarForgeUnitNFT.Rarity.Rare;
+                u.attack += 2;
+                u.defense += 1;
+            }
+
+            playerCurrentAI[player].push(u);
+        }
+
+        emit AIOpponentGenerated(player, aiLevel);
+    }
+
+    function getCurrentAI(address player) external view returns (ShopUnit[] memory) {
+        return playerCurrentAI[player];
     }
 
     function rerollShop() external payable whenNotPaused nonReentrant {
@@ -142,60 +192,8 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         emit UnitBought(msg.sender, tokenId);
     }
 
-    function startMatch(uint256[] calldata team) external whenNotPaused nonReentrant {
-        require(team.length >= 4 && team.length <= 8, "Team size 4-8 only");
-
-        for (uint256 i = 0; i < team.length; i++) {
-            require(unitNFT.ownerOf(team[i]) == msg.sender, "Not your unit");
-        }
-
-        (uint256 score, uint8 synergyCount) = _simulateBattle(team);
-        _updateProfileMatch(msg.sender, score > 70);
-
-        uint256[] memory rewards = new uint256[](3);
-        uint256 rewardCount = 0;
-
-        // 1. Всегда Common
-        rewards[rewardCount++] = unitNFT.mintUnit(
-            msg.sender,
-            StarForgeUnitNFT.Faction(uint8(uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender))) % 3)),
-            StarForgeUnitNFT.Rarity.Common,
-            StarForgeUnitNFT.UnitClass.Fighter,
-            5, 5, 6
-        );
-
-        if (score >= 70) {
-            // 2. Rare
-            rewards[rewardCount++] = unitNFT.mintUnit(
-                msg.sender,
-                StarForgeUnitNFT.Faction(uint8(uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, uint256(1)))) % 3)),
-                StarForgeUnitNFT.Rarity.Rare,
-                StarForgeUnitNFT.UnitClass.Cruiser,
-                7, 7, 7
-            );
-        }
-
-        if (score >= 100 || synergyCount >= 2) {
-            // 3. Legendary + бонус за синергии
-            rewards[rewardCount++] = unitNFT.mintUnit(
-                msg.sender,
-                StarForgeUnitNFT.Faction(uint8(uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, uint256(2)))) % 3)),
-                StarForgeUnitNFT.Rarity.Legendary,
-                StarForgeUnitNFT.UnitClass.Dreadnought,
-                9, 9, 8
-            );
-        }
-
-        uint256[] memory finalRewards = new uint256[](rewardCount);
-        for (uint256 i = 0; i < rewardCount; i++) {
-            finalRewards[i] = rewards[i];
-            playerUnits[msg.sender].push(rewards[i]);
-        }
-
-        emit MatchPlayed(msg.sender, score, finalRewards);
-    }
-
-    function _simulateBattle(uint256[] calldata team) internal view returns (uint256 score, uint8 synergyCount) {
+    // === V1.2: БОЙ ПРОТИВ ПОСТОЯННОГО ИИ ===
+    function _calculateTeamPower(uint256[] calldata team) internal view returns (uint256 power, uint8 synergyCount) {
         uint256 totalAtk = 0;
         uint256 totalDef = 0;
         uint256 totalSpd = 0;
@@ -214,11 +212,105 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         if (factionCount[uint8(StarForgeUnitNFT.Faction.Voidborn)] >= 3) { totalAtk = totalAtk * 145 / 100; synergyCount++; }
         if (factionCount[uint8(StarForgeUnitNFT.Faction.Mechanoids)] >= 3) { totalAtk = totalAtk * 125 / 100; totalDef = totalDef * 125 / 100; synergyCount++; }
 
-        uint256 totalPower = totalAtk + totalDef + (totalSpd * 2);
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, totalPower)));
-        score = (totalPower % 80) + 50 + (seed % 30) + (uint256(synergyCount) * 15);
+        power = totalAtk + totalDef + (totalSpd * 2);
+        return (power, synergyCount);
+    }
 
-        return (score, synergyCount);
+    function _calculateAIPower(ShopUnit[] memory aiTeam) internal pure returns (uint256 power, uint8 synergyCount) {
+        uint256 totalAtk = 0;
+        uint256 totalDef = 0;
+        uint256 totalSpd = 0;
+        uint8[3] memory factionCount;
+
+        for (uint256 i = 0; i < aiTeam.length; i++) {
+            ShopUnit memory u = aiTeam[i];
+            totalAtk += u.attack;
+            totalDef += u.defense;
+            totalSpd += u.speed;
+            factionCount[uint8(u.faction)]++;
+        }
+
+        synergyCount = 0;
+        if (factionCount[uint8(StarForgeUnitNFT.Faction.Empire)] >= 3) { totalDef = totalDef * 130 / 100; synergyCount++; }
+        if (factionCount[uint8(StarForgeUnitNFT.Faction.Voidborn)] >= 3) { totalAtk = totalAtk * 145 / 100; synergyCount++; }
+        if (factionCount[uint8(StarForgeUnitNFT.Faction.Mechanoids)] >= 3) { totalAtk = totalAtk * 125 / 100; totalDef = totalDef * 125 / 100; synergyCount++; }
+
+        power = totalAtk + totalDef + (totalSpd * 2);
+        return (power, synergyCount);
+    }
+
+    function startMatch(uint256[] calldata team) external whenNotPaused nonReentrant {
+        require(team.length >= 4 && team.length <= 8, "Team size 4-8 only");
+
+        for (uint256 i = 0; i < team.length; i++) {
+            require(unitNFT.ownerOf(team[i]) == msg.sender, "Not your unit");
+        }
+
+        // Получаем или генерируем постоянного ИИ
+        ShopUnit[] memory aiTeam = playerCurrentAI[msg.sender];
+        if (aiTeam.length == 0) {
+            _generateAIOpponent(msg.sender);
+            aiTeam = playerCurrentAI[msg.sender];
+        }
+
+        (uint256 playerPower, uint8 playerSynergy) = _calculateTeamPower(team);
+        (uint256 aiPower, ) = _calculateAIPower(aiTeam);
+
+        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao)));
+        uint256 playerScore = playerPower + (seed % 50) + (uint256(playerSynergy) * 25);
+        uint256 aiScore = aiPower + ((seed >> 64) % 45);
+
+        bool won = playerScore > aiScore;
+
+        _updateProfileMatch(msg.sender, won);
+
+        // Награды
+        uint256 rewardCount = won ? 3 : 1;
+        uint256[] memory rewards = new uint256[](rewardCount);
+        uint256 idx = 0;
+
+        // Всегда 1 Common
+        rewards[idx++] = unitNFT.mintUnit(
+            msg.sender,
+            StarForgeUnitNFT.Faction(uint8(uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender))) % 3)),
+            StarForgeUnitNFT.Rarity.Common,
+            StarForgeUnitNFT.UnitClass.Fighter,
+            5, 5, 6
+        );
+
+        if (won) {
+            // Rare при победе
+            rewards[idx++] = unitNFT.mintUnit(
+                msg.sender,
+                StarForgeUnitNFT.Faction(uint8(uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, uint256(1)))) % 3)),
+                StarForgeUnitNFT.Rarity.Rare,
+                StarForgeUnitNFT.UnitClass.Cruiser,
+                7, 7, 7
+            );
+            if (playerSynergy >= 2) {
+                // Legendary + бонус за синергии
+                rewards[idx++] = unitNFT.mintUnit(
+                    msg.sender,
+                    StarForgeUnitNFT.Faction(uint8(uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, uint256(2)))) % 3)),
+                    StarForgeUnitNFT.Rarity.Legendary,
+                    StarForgeUnitNFT.UnitClass.Dreadnought,
+                    9, 9, 8
+                );
+            }
+        }
+
+        uint256[] memory finalRewards = new uint256[](rewardCount);
+        for (uint256 i = 0; i < rewardCount; i++) {
+            finalRewards[i] = rewards[i];
+            playerUnits[msg.sender].push(rewards[i]);
+        }
+
+        // Если победа — генерируем нового ИИ для следующего боя
+        if (won) {
+            delete playerCurrentAI[msg.sender];
+        }
+
+        emit MatchPlayed(msg.sender, won, playerScore, aiScore, finalRewards);
     }
 
     function _updateProfileBuy(address player) internal {

@@ -64,8 +64,39 @@
 					},
 					{
 						"indexed": false,
+						"internalType": "uint16",
+						"name": "aiLevel",
+						"type": "uint16"
+					}
+				],
+				"name": "AIOpponentGenerated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "won",
+						"type": "bool"
+					},
+					{
+						"indexed": false,
 						"internalType": "uint256",
-						"name": "score",
+						"name": "playerScore",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "aiScore",
 						"type": "uint256"
 					},
 					{
@@ -209,6 +240,57 @@
 						"type": "address"
 					}
 				],
+				"name": "getCurrentAI",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "enum StarForgeUnitNFT.Faction",
+								"name": "faction",
+								"type": "uint8"
+							},
+							{
+								"internalType": "enum StarForgeUnitNFT.Rarity",
+								"name": "rarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "enum StarForgeUnitNFT.UnitClass",
+								"name": "unitClass",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attack",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "defense",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "speed",
+								"type": "uint8"
+							}
+						],
+						"internalType": "struct StarForgeGame.ShopUnit[]",
+						"name": "",
+						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
 				"name": "getPlayerShop",
 				"outputs": [
 					{
@@ -299,6 +381,55 @@
 						"internalType": "bool",
 						"name": "",
 						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "playerCurrentAI",
+				"outputs": [
+					{
+						"internalType": "enum StarForgeUnitNFT.Faction",
+						"name": "faction",
+						"type": "uint8"
+					},
+					{
+						"internalType": "enum StarForgeUnitNFT.Rarity",
+						"name": "rarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "enum StarForgeUnitNFT.UnitClass",
+						"name": "unitClass",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attack",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "defense",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "speed",
+						"type": "uint8"
 					}
 				],
 				"stateMutability": "view",
@@ -728,11 +859,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0xdeb5eb40087c93217ee48000cd3494f11c22a7dca16108d213ca63bc267a25ad",
+			"keccak256": "0xbdfb746a9f170833d05ae48788790cd2b44a5696729c7c9d88dee93156cf2a7b",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e5607789c72029b053854db29fca6409bfcf2b025011248df74ed342dcad832f",
-				"dweb:/ipfs/Qmbmpbx1sSA6NqxSdgDAtf3ASZX8hXeZtkTXaHqot41uoH"
+				"bzz-raw://d47cb062a691c42ec9767043444f6a856583f626bf269dea70dbe1cbe9673da0",
+				"dweb:/ipfs/Qmb1cjAzp3fNCjZHiNZVNr9vQmn55T5tqe4bFFRao4d7cK"
 			]
 		},
 		"StarForgeUnitNFT.sol": {
