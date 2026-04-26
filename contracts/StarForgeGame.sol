@@ -9,8 +9,8 @@ import "./StarForgeUnitNFT.sol";
 contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     StarForgeUnitNFT public unitNFT;
 
-    uint256 public constant BUY_PRICE = 0.001 ether;
-    uint256 public constant REROLL_PRICE = 0.0005 ether;
+    uint256 public constant BUY_PRICE = 0 ether;      // ← было 0.001 ether
+    uint256 public constant REROLL_PRICE = 0 ether;   // ← было 0.0005 ether
 
     struct PlayerProfile {
         uint16 level;
@@ -133,8 +133,23 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         emit AIOpponentGenerated(player, aiLevel);
     }
 
+    // V1.2: Генерация первого ИИ сразу при заходе в PrepareScene
+    function generateAIOpponent() external whenNotPaused nonReentrant {
+        if (playerCurrentAI[msg.sender].length == 0) {
+            _generateAIOpponent(msg.sender);
+        }
+    }
+
     function getCurrentAI(address player) external view returns (ShopUnit[] memory) {
         return playerCurrentAI[player];
+    }
+
+        // V1.2: Бесплатная инициализация shop preview при первом заходе игрока
+    function initializeShopPreview() external whenNotPaused nonReentrant {
+        // Если preview ещё не инициализирован (первый слот пустой)
+        if (playerShopPreview[msg.sender][0].attack == 0) {
+            _generateShopPreview(msg.sender);
+        }
     }
 
     function rerollShop() external payable whenNotPaused nonReentrant {

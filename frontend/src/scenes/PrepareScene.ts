@@ -20,6 +20,8 @@ export default class PrepareScene extends Phaser.Scene {
   private lastRewardIds: number[] = [];
   private teamCounterText: Phaser.GameObjects.Text | null = null;
   private tooltip: Phaser.GameObjects.Text | null = null;
+  private aiSprites: Phaser.GameObjects.Sprite[] = [];
+  private aiTexts: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -32,10 +34,11 @@ export default class PrepareScene extends Phaser.Scene {
     this.isWalletReady = true;
   }
 
-      create() {
+          create() {
     this.addGameUI();
     this.loadOwnedUnits();
-    this.loadPlayerShop();
+    this.loadPlayerShop();      // ← теперь инициализирует preview автоматически
+    this.loadCurrentAI();
     this.updatePlayerProfile();
 
     // === HOVER TOOLTIP ===
@@ -51,7 +54,7 @@ export default class PrepareScene extends Phaser.Scene {
       .setVisible(false);
   }
 
-         private async loadOwnedUnits() {
+             private async loadOwnedUnits() {
     if (!this.account || !this.gameContract || !this.nftContract) return;
 
     this.ownedSprites.forEach(s => s.destroy());
@@ -59,12 +62,14 @@ export default class PrepareScene extends Phaser.Scene {
 
     try {
       const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
-      console.log('📦 Твои юниты:', ownedIds);
+      console.log('📦 Твои юниты после reload:', ownedIds.length, ownedIds);
 
       this.children.getAll().forEach(child => {
         if (child instanceof Phaser.GameObjects.Text && child.text.includes('ТВОИ ЮНИТЫ')) child.destroy();
       });
       this.add.text(50, 150, `ТВОИ ЮНИТЫ (${ownedIds.length})`, { fontSize: '18px', fill: '#ffff00' });
+
+      if (ownedIds.length === 0) return;
 
       const unitsData = await Promise.all(
         ownedIds.map(async (tokenIdBig) => {
@@ -91,17 +96,15 @@ export default class PrepareScene extends Phaser.Scene {
         if (rarity === 1) scaleMod = 0.85;
         else if (rarity === 2) scaleMod = 0.95;
 
-        // Плавная анимация появления
         this.tweens.add({
           targets: rect,
           scale: scaleMod,
           alpha: 1,
           duration: 320,
           ease: 'Back.easeOut',
-          delay: index * 12   // красивый stagger-эффект
+          delay: index * 12
         });
 
-        // Hover tooltip
         rect.on('pointerover', () => {
           const tooltipText = 
             `${this.getFactionName(unit.faction)}\n` +
@@ -110,21 +113,12 @@ export default class PrepareScene extends Phaser.Scene {
             `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
           this.showTooltip(x + 25, y, tooltipText);
         });
-
         rect.on('pointerout', () => this.hideTooltip());
 
         this.input.setDraggable(rect);
 
-        rect.on('dragstart', () => {
-          rect.setScale(0.9);
-          this.highlightFreeSlots();
-        });
-
-        rect.on('drag', (_: any, dragX: number, dragY: number) => {
-          rect.x = dragX;
-          rect.y = dragY;
-        });
-
+        rect.on('dragstart', () => { rect.setScale(0.9); this.highlightFreeSlots(); });
+        rect.on('drag', (_: any, dragX: number, dragY: number) => { rect.x = dragX; rect.y = dragY; });
         rect.on('dragend', () => {
           rect.setScale(0.75);
           this.resetSlotHighlights();
@@ -133,13 +127,7 @@ export default class PrepareScene extends Phaser.Scene {
             Math.abs(s.x - rect.x) < 55 && Math.abs(s.y - rect.y) < 55
           );
 
-          const slotAlreadyOccupied = this.ownedSprites.some((s: any) => 
-            s !== rect && 
-            Math.abs(s.x - this.gridSlots[slotIndex]?.x) < 20 && 
-            Math.abs(s.y - this.gridSlots[slotIndex]?.y) < 20
-          );
-
-          if (slotIndex !== -1 && this.team.length < 8 && !this.team.includes(tokenId) && !slotAlreadyOccupied) {
+          if (slotIndex !== -1 && this.team.length < 8 && !this.team.includes(tokenId)) {
             this.team.push(tokenId);
             rect.setPosition(this.gridSlots[slotIndex].x, this.gridSlots[slotIndex].y);
             rect.disableInteractive();
@@ -152,37 +140,54 @@ export default class PrepareScene extends Phaser.Scene {
 
         this.ownedSprites.push(rect);
       });
-
-      if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
     } catch (e) {
       console.error('loadOwnedUnits error', e);
     }
   }
 
-    private async loadPlayerShop() {
+            private async loadPlayerShop() {
     if (!this.account || !this.gameContract) return;
     this.shopSprites.forEach(s => s.destroy()); this.shopSprites = [];
 
     try {
       const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
-      console.log('🛒 Shop preview:', shopData);
+      console.log('🛒 Shop preview RAW:', shopData);
+
+      // Аккуратная очистка только shop-элементов
+      this.children.getAll().forEach(child => {
+        if (child instanceof Phaser.GameObjects.Text && 
+            (child.text.includes('SHOP (5 слотов)') || 
+             (child.text.includes('BUY') && child.y > 200 && child.y < 250))) {
+          child.destroy();
+        }
+        if (child instanceof Phaser.GameObjects.Rectangle && 
+            child.x > 650 && child.x < 1200 && child.y < 250) {
+          child.destroy();
+        }
+      });
 
       this.add.text(650, 80, 'SHOP (5 слотов)', { fontSize: '22px', fill: '#ff00ff' });
+
+      const isEmpty = shopData[0] && shopData[0].attack === 0;
+
+      if (isEmpty) {
+        const placeholder = this.add.text(850, 175, 'REROLL SHOP\n(0.0005 STT)\nчтобы увидеть\nпервые предложения', {
+          fontSize: '16px',
+          fill: '#888888',
+          align: 'center',
+          lineSpacing: 8
+        }).setOrigin(0.5);
+        this.shopSprites.push(placeholder as any);
+        return;
+      }
 
       for (let i = 0; i < 5; i++) {
         const unit = shopData[i];
         const x = 680 + i * 100;
         const y = 140;
 
-        // Удаляем старые элементы слота
-        this.children.getAll().forEach(child => {
-          if (child instanceof Phaser.GameObjects.Text && 
-              Math.abs(child.x - x) < 60 && Math.abs(child.y - y) < 100) child.destroy();
-          if (child instanceof Phaser.GameObjects.Rectangle && 
-              Math.abs(child.x - x) < 60 && Math.abs(child.y - y) < 60) child.destroy();
-        });
-
         const strokeColor = unit.rarity === 2 ? 0xffaa00 : unit.rarity === 1 ? 0x00ff88 : 0x00ffff;
+
         this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(4, strokeColor);
 
         const sprite = this.add.sprite(x, y, 'ship').setInteractive();
@@ -199,7 +204,6 @@ export default class PrepareScene extends Phaser.Scene {
           .setInteractive()
           .on('pointerdown', () => this.buyFromShopSlot(i));
 
-        // === HOVER TOOLTIP ДЛЯ SHOP ===
         sprite.on('pointerover', () => {
           const tooltipText = 
             `${this.getFactionName(unit.faction)}\n` +
@@ -209,30 +213,107 @@ export default class PrepareScene extends Phaser.Scene {
           this.showTooltip(x + 90, y - 30, tooltipText);
         });
 
-        sprite.on('pointerout', () => {
-          this.hideTooltip();
-        });
+        sprite.on('pointerout', () => this.hideTooltip());
 
         this.shopSprites.push(sprite);
       }
-    } catch (e) { console.error('loadPlayerShop error', e); }
+    } catch (e) { 
+      console.error('loadPlayerShop error', e); 
+    }
+  }
+
+          private async loadCurrentAI() {
+    if (!this.account || !this.gameContract) return;
+
+    this.aiSprites.forEach(s => s.destroy());
+    this.aiTexts.forEach(t => t.destroy());
+    this.aiSprites = [];
+    this.aiTexts = [];
+
+    try {
+      const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+      console.log('🤖 Current AI opponent:', aiData);
+
+      // Заголовок AI
+      this.children.getAll().forEach(child => {
+        if (child instanceof Phaser.GameObjects.Text && 
+            Math.abs((child as any).x - 680) < 100 && (child as any).y === 240) {
+          child.destroy();
+        }
+      });
+
+      this.add.text(680, 240, 'AI OPPONENT', { fontSize: '22px', fill: '#ff3366' });
+
+      if (aiData.length === 0) {
+        const placeholder = this.add.text(720, 285, 'Первый противник\nбудет сгенерирован\nпри старте первого боя', {
+          fontSize: '14px',
+          fill: '#888888',
+          align: 'center',
+          lineSpacing: 4
+        }).setOrigin(0.5, 0);
+        this.aiTexts.push(placeholder);
+        return;
+      }
+
+      for (let i = 0; i < aiData.length; i++) {
+        const unit = aiData[i];
+        const x = 680 + i * 85;
+        const y = 280;
+
+        const strokeColor = unit.rarity === 2 ? 0xffaa00 : unit.rarity === 1 ? 0x00ff88 : 0x00ffff;
+
+        const rect = this.add.rectangle(x, y, 68, 68, 0x112233)
+          .setStrokeStyle(3, strokeColor);
+
+        const sprite = this.add.sprite(x, y, 'ship').setInteractive();
+        if (unit.rarity === 2) sprite.setScale(0.95);
+        else if (unit.rarity === 1) sprite.setScale(0.85);
+
+        const statsText = this.add.text(x - 30, y + 38, 
+          `${unit.attack}/${unit.defense}/${unit.speed}`, 
+          { fontSize: '13px', fill: '#ffff00' });
+
+        this.aiSprites.push(sprite);
+        this.aiTexts.push(statsText);
+
+        // Hover tooltip
+        sprite.on('pointerover', () => {
+          const tooltipText = 
+            `${this.getFactionName(unit.faction)}\n` +
+            `Rarity: ${this.getRarityName(unit.rarity)}\n` +
+            `Class: ${this.getClassName(unit.unitClass)}\n` +
+            `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
+          this.showTooltip(x + 40, y - 20, tooltipText);
+        });
+
+        sprite.on('pointerout', () => this.hideTooltip());
+      }
+    } catch (e) {
+      console.error('loadCurrentAI error', e);
+    }
   }
 
       private async buyFromShopSlot(slot: number) {
     if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
     try {
-      await this.gameContract.write.buyFromShop([BigInt(slot)], { account: this.account, value: 1000000000000000n });
-      const msg = this.add.text(400, 300, `Юнит из слота ${slot} куплен!`, { fontSize: '28px', fill: '#00ff00' });
+      console.log('🚀 buyFromShopSlot slot', slot);
+      await this.gameContract.write.buyFromShop([BigInt(slot)], { 
+        account: this.account, 
+        value: 1000000000000000n,
+        gas: 1200000n 
+      });
+      const msg = this.add.text(400, 300, `✅ Юнит из слота ${slot} куплен!`, { fontSize: '28px', fill: '#00ff00' });
       setTimeout(() => { msg.destroy(); }, 2200);
 
-      setTimeout(() => {
-        this.loadPlayerShop();
-        this.loadOwnedUnits();
-      }, 2200);
+      setTimeout(async () => {
+        await this.loadOwnedUnits();
+        await this.loadPlayerShop();
+      }, 9000);
     } catch (e: any) {
-      const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
-      const errorText = this.add.text(400, 300, `Ошибка: ${errMsg}`, { fontSize: '24px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 4000);
+      console.error('buyFromShopSlot FULL ERROR:', e);
+      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
+      const errorText = this.add.text(400, 300, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
+      setTimeout(() => errorText.destroy(), 8000);
     }
   }
 
@@ -370,41 +451,79 @@ export default class PrepareScene extends Phaser.Scene {
     return names[unitClass] || 'Unknown';
   }
 
-     private async buyUnit() {
+       private async buyUnit() {
     if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
     try {
-      await this.gameContract.write.buyUnit([], { account: this.account, value: 1000000000000000n });
-      const msg = this.add.text(400, 300, 'Юнит куплен on-chain!', { fontSize: '32px', fill: '#00ff00' });
+      console.log('🚀 buyUnit: отправляем tx (0 STT)...');
+      await this.gameContract.write.buyUnit([], { 
+        account: this.account, 
+        value: 0n,           // ← ИЗМЕНЕНО
+        gas: 1200000n 
+      });
+      const msg = this.add.text(400, 300, '✅ Юнит куплен on-chain!', { fontSize: '32px', fill: '#00ff00' });
       setTimeout(() => { msg.destroy(); }, 2200);
 
-      setTimeout(() => {
-        this.loadOwnedUnits();
-        this.loadPlayerShop();
-      }, 2200);
+      setTimeout(async () => {
+        console.log('🔄 Обновляем owned units...');
+        await this.loadOwnedUnits();
+        await this.loadPlayerShop();
+      }, 8000);
     } catch (e: any) {
-      const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
-      const errorText = this.add.text(400, 300, `Ошибка: ${errMsg}`, { fontSize: '24px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 4000);
+      console.error('buyUnit FULL ERROR:', e);
+      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
+      const errorText = this.add.text(400, 300, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
+      setTimeout(() => errorText.destroy(), 8000);
     }
   }
 
-       private async rerollShop() {
+  private async buyFromShopSlot(slot: number) {
     if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
     try {
-      await this.gameContract.write.rerollShop([], { account: this.account, value: 500000000000000n });
-      const msg = this.add.text(400, 340, 'Shop rerolled', { fontSize: '28px', fill: '#ffff00' });
+      console.log('🚀 buyFromShopSlot slot', slot);
+      await this.gameContract.write.buyFromShop([BigInt(slot)], { 
+        account: this.account, 
+        value: 0n,           // ← ИЗМЕНЕНО
+        gas: 1200000n 
+      });
+      const msg = this.add.text(400, 300, `✅ Юнит из слота ${slot} куплен!`, { fontSize: '28px', fill: '#00ff00' });
+      setTimeout(() => { msg.destroy(); }, 2200);
+
+      setTimeout(async () => {
+        await this.loadOwnedUnits();
+        await this.loadPlayerShop();
+      }, 8000);
+    } catch (e: any) {
+      console.error('buyFromShopSlot FULL ERROR:', e);
+      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
+      const errorText = this.add.text(400, 300, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
+      setTimeout(() => errorText.destroy(), 8000);
+    }
+  }
+
+  private async rerollShop() {
+    if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
+    try {
+      console.log('🚀 rerollShop: отправляем tx (0 STT)...');
+      await this.gameContract.write.rerollShop([], { 
+        account: this.account, 
+        value: 0n,           // ← ИЗМЕНЕНО
+        gas: 350000n 
+      });
+      const msg = this.add.text(400, 340, '✅ Shop rerolled', { fontSize: '28px', fill: '#ffff00' });
       setTimeout(() => { msg.destroy(); }, 1800);
 
-      setTimeout(() => this.loadPlayerShop(), 1800);
+      setTimeout(async () => {
+        await this.loadPlayerShop();
+      }, 5000);
     } catch (e: any) {
-      const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
-      const errorText = this.add.text(400, 340, `Ошибка: ${errMsg}`, { fontSize: '24px', fill: '#ff4444' });
+      console.error('rerollShop FULL ERROR:', e);
+      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
+      const errorText = this.add.text(400, 340, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
       setTimeout(() => errorText.destroy(), 4000);
     }
   }
-  
 
-        private async startBattle() {
+  private async startBattle() {
     if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
     
     console.log('🚀 startBattle: team =', this.team);
@@ -415,12 +534,14 @@ export default class PrepareScene extends Phaser.Scene {
 
     try {
       const teamBigInt = this.team.map(id => BigInt(id));
-      console.log('📤 Отправляем teamBigInt:', teamBigInt);
 
       const ownedBefore = await this.gameContract.read.getPlayerUnits([this.account]);
       this.lastOwnedCount = ownedBefore.length;
 
-      await this.gameContract.write.startMatch([teamBigInt], { account: this.account });
+      await this.gameContract.write.startMatch([teamBigInt], { 
+        account: this.account,
+        gas: 600000n 
+      });
       
       this.add.text(500, 280, 'TX отправлена on-chain...', { fontSize: '24px', fill: '#ffff00' });
 
@@ -429,17 +550,15 @@ export default class PrepareScene extends Phaser.Scene {
       this.team = [];
       if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
 
-      // Обновление после боя
       setTimeout(async () => {
         await this.loadOwnedUnits();
         await this.loadPlayerShop();
+        await this.loadCurrentAI();
         
         const ownedAfter = await this.gameContract.read.getPlayerUnits([this.account]);
         this.lastRewardsCount = ownedAfter.length - this.lastOwnedCount;
         this.lastRewardIds = ownedAfter.slice(-this.lastRewardsCount).map(id => Number(id));
         
-        console.log(`🎁 Получено наград: ${this.lastRewardsCount} | ID:`, this.lastRewardIds);
-
         const rewardText = this.lastRewardsCount > 1 
           ? `Получено ${this.lastRewardsCount} юнита!` 
           : `Получено ${this.lastRewardsCount} юнит!`;
@@ -452,7 +571,6 @@ export default class PrepareScene extends Phaser.Scene {
           setTimeout(() => { idText.destroy(); }, 4500);
         }
         
-        // Автообновление профиля после боя
         setTimeout(async () => {
           await this.updatePlayerProfile();
         }, 800);
@@ -460,7 +578,7 @@ export default class PrepareScene extends Phaser.Scene {
         setTimeout(() => {
           if (this.rewardNotification) this.rewardNotification.destroy();
         }, 4500);
-      }, 8500);
+      }, 9000);   // ← увеличено
     } catch (e: any) {
       console.error('❌ startMatch error:', e);
       alert(e.shortMessage || e.message || 'Неизвестная ошибка контракта');

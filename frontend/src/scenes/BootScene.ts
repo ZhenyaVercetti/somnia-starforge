@@ -1,11 +1,11 @@
 // @ts-nocheck
-// // frontend/src/scenes/BootScene.ts
+// frontend/src/scenes/BootScene.ts
 import * as Phaser from 'phaser';
 import { createWalletClient, custom } from 'viem';
 import { somniaTestnet } from 'viem/chains';
 import { getContract } from 'viem';
 
-const GAME_CONTRACT = '0xA8D096516d744e747FB9C735d20AAC1dEe079bac';
+const GAME_CONTRACT = '0x0BB53b8b1e8Cb7Fc287d7cc35535705a1407Dc3C';
 const NFT_CONTRACT = '0x9D00dB7fb6faF315C9c63971ae34380d5b831a56';
 
 export default class BootScene extends Phaser.Scene {
@@ -18,7 +18,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    console.log('✅ Preload завершён (без внешних изображений)');
+    console.log('✅ Preload завершён');
   }
 
   create() {
@@ -63,7 +63,15 @@ export default class BootScene extends Phaser.Scene {
         { "internalType": "uint8", "name": "attack", "type": "uint8" },
         { "internalType": "uint8", "name": "defense", "type": "uint8" },
         { "internalType": "uint8", "name": "speed", "type": "uint8" }
-      ], "internalType": "struct StarForgeGame.ShopUnit[5]", "name": "", "type": "tuple[5]" }], "stateMutability": "view", "type": "function" }
+      ], "internalType": "struct StarForgeGame.ShopUnit[5]", "name": "", "type": "tuple[5]" }], "stateMutability": "view", "type": "function" },
+      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getCurrentAI", "outputs": [{ "components": [
+        { "internalType": "uint8", "name": "faction", "type": "uint8" },
+        { "internalType": "uint8", "name": "rarity", "type": "uint8" },
+        { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
+        { "internalType": "uint8", "name": "attack", "type": "uint8" },
+        { "internalType": "uint8", "name": "defense", "type": "uint8" },
+        { "internalType": "uint8", "name": "speed", "type": "uint8" }
+      ], "internalType": "struct StarForgeGame.ShopUnit[]", "name": "", "type": "tuple[]" }], "stateMutability": "view", "type": "function" }
     ];
 
     const nftAbi = [
@@ -91,7 +99,7 @@ export default class BootScene extends Phaser.Scene {
     this.gameContract = getContract({ address: GAME_CONTRACT, abi: gameAbi, client: { ...walletClient, account: this.account } });
     this.nftContract = getContract({ address: NFT_CONTRACT, abi: nftAbi, client: { ...walletClient, account: this.account } });
 
-    console.log('✅ MetaMask подключён:', this.account);
+    console.log('✅ MetaMask подключён. Game:', GAME_CONTRACT);
 
     this.children.getAll().forEach(child => {
       if (child instanceof Phaser.GameObjects.Text && child.text.includes('ПОДКЛЮЧИТЬ')) child.destroy();

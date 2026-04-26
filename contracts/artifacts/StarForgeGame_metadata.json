@@ -233,6 +233,13 @@
 				"type": "function"
 			},
 			{
+				"inputs": [],
+				"name": "generateAIOpponent",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -351,6 +358,13 @@
 					}
 				],
 				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "initializeShopPreview",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -859,11 +873,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0xbdfb746a9f170833d05ae48788790cd2b44a5696729c7c9d88dee93156cf2a7b",
+			"keccak256": "0x8499d905cde45e9ec58ffba20baa9a1a960aba57c2b465c5b2fae510e97b468b",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://d47cb062a691c42ec9767043444f6a856583f626bf269dea70dbe1cbe9673da0",
-				"dweb:/ipfs/Qmb1cjAzp3fNCjZHiNZVNr9vQmn55T5tqe4bFFRao4d7cK"
+				"bzz-raw://fc53abed3601e3e21d6252306be135d91f25aa75d6f6f0c65e063598f519b85a",
+				"dweb:/ipfs/QmXoBszxruWTKqYCDQJFGfzGMusH296wHPGnTQPZMGJpH1"
 			]
 		},
 		"StarForgeUnitNFT.sol": {

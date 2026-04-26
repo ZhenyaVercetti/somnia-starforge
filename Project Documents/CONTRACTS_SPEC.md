@@ -1,25 +1,14 @@
 # CONTRACTS_SPEC.md
 
-**Версия:** 1.2 (26 апреля 2026)  
-**Адрес Game:** 0xA8D096516d744e747FB9C735d20AAC1dEe079bac
+**Версия:** 1.2 (26 апреля 2026) — НЕ ЗАВЕРШЁН
+**Адрес Game (последний):** 0x0BB53b8b1e8Cb7Fc287d7cc35535705a1407Dc3C
 
-**Фронтенд архитектура:**  
-- BootScene, PrepareScene, BattleScene (Phaser 3.90.0)
+**Статус:**
+- Логика ИИ и shop preview добавлена
+- BUY_PRICE = 0, REROLL_PRICE = 0
+- **КРИТИЧЕСКАЯ ОШИБКА:** buyUnit / buyFromShop / rerollShop постоянно ревертят ("Incorrect payment")
 
-**Shop (Вариант B):**  
-- playerShopPreview[address][5]  
-- rerollShop → только preview  
-- buyFromShop / buyUnit → минтит реальный NFT
-
-**Battle:**  
-- Полные синергии фракций (Empire +30% def, Voidborn +45% atk, Mechanoids +25% power)  
-- Rewards: 1–3 юнита в зависимости от score + synergyCount
-
-**getPlayerUnits** — через mapping (оптимизировано).
-
-**Планы v1.2:**  
-- Постоянный ИИ-противник (on-chain хранение currentOpponent)  
-- Генерация новой команды ИИ только после победы игрока  
-- Глобальные баффы уровня применяются к ИИ
-
-**Статус:** v1.1 полностью завершена.
+**Что нужно проверить в первую очередь:**
+- Реальные значения BUY_PRICE / REROLL_PRICE
+- setUnitNFT / setGameContract после последнего деплоя
+- paused() == false
