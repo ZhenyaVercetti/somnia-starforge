@@ -3,76 +3,168 @@
 import * as Phaser from 'phaser';
 
 export default class BattleScene extends Phaser.Scene {
+  private battleEvents: any[] = [];
+  private playerWon: boolean = false;
+
+  private playerShips: Phaser.GameObjects.Sprite[] = [];
+  private aiShips: Phaser.GameObjects.Sprite[] = [];
+  private playerHPBars: Phaser.GameObjects.Graphics[] = [];
+  private aiHPBars: Phaser.GameObjects.Graphics[] = [];
+  private playerHPLabels: Phaser.GameObjects.Text[] = [];
+  private aiHPLabels: Phaser.GameObjects.Text[] = [];
+
+  private currentEventIndex = 0;
+
   constructor() {
     super({ key: 'BattleScene' });
   }
 
+  init(data: any) {
+    this.battleEvents = data.events || [];
+    this.playerWon = data.playerWon || false;
+    console.log(`🎮 BattleScene init → ${this.battleEvents.length} событий, победа: ${this.playerWon}`);
+  }
+
   create() {
-    const cx = 640, cy = 400;
+    this.add.rectangle(640, 360, 1280, 720, 0x0a0022).setAlpha(0.92);
+    this.add.text(640, 60, 'ON-CHAIN ПОШАГОВЫЙ БОЙ', { fontSize: '42px', fill: '#ff00ff' }).setOrigin(0.5);
 
-    this.add.text(420, 260, 'БОЙ НАЧАЛСЯ...', { fontSize: '32px', fill: '#ff00ff' });
+    this.setupTeams();
+    this.playBattleSequence();
+  }
 
-    for (let wave = 0; wave < 4; wave++) {
-      setTimeout(() => {
-        // Лазеры игрока
-        for (let i = 0; i < 6; i++) {
-          const startX = 200 + Math.random() * 100;
-          const startY = 300 + Math.random() * 200;
-          const laser = this.add.line(0, 0, startX, startY, cx - 80, cy + (Math.random() * 120 - 60), 0x00ffff)
-            .setLineWidth(4);
-          this.tweens.add({
-            targets: laser,
-            alpha: 0,
-            duration: 280 + Math.random() * 120,
-            onComplete: () => laser.destroy()
-          });
-        }
+  private setupTeams() {
+    // Игрок — 8 слотов слева
+    for (let i = 0; i < 8; i++) {
+      const x = 180 + (i % 4) * 110;
+      const y = 220 + Math.floor(i / 4) * 160;
+      const ship = this.add.sprite(x, y, 'ship').setScale(0.9).setTint(0x00ffff);
+      this.playerShips.push(ship);
 
-        // Лазеры врага
-        for (let i = 0; i < 4; i++) {
-          const startX = 1080 - Math.random() * 100;
-          const startY = 300 + Math.random() * 200;
-          const laser = this.add.line(0, 0, startX, startY, cx + 80, cy + (Math.random() * 120 - 60), 0xff3366)
-            .setLineWidth(3);
-          this.tweens.add({
-            targets: laser,
-            alpha: 0,
-            duration: 320 + Math.random() * 100,
-            onComplete: () => laser.destroy()
-          });
-        }
+      const bar = this.add.graphics();
+      bar.fillStyle(0x00ff88, 1);
+      bar.fillRect(x - 45, y - 75, 90, 14);
+      this.playerHPBars.push(bar);
 
-        if (wave >= 2) {
-          const boom = this.add.circle(cx, cy, 50 + wave * 15, 0xffaa00).setAlpha(0.9);
-          this.tweens.add({
-            targets: boom,
-            scale: 3.5,
-            alpha: 0,
-            duration: 450 + wave * 50,
-            onComplete: () => boom.destroy()
-          });
-        }
-
-        if (wave === 3) {
-          setTimeout(() => {
-            const victoryFlash = this.add.circle(cx, cy, 180, 0x00ffcc).setAlpha(0.6);
-            this.tweens.add({
-              targets: victoryFlash,
-              scale: 4,
-              alpha: 0,
-              duration: 800,
-              onComplete: () => victoryFlash.destroy()
-            });
-
-            this.add.text(420, 260, 'ПОБЕДА! + rewards on-chain', { fontSize: '38px', fill: '#00ff00', fontStyle: 'bold' });
-
-            // Возвращаемся в PrepareScene через 2 секунды
-            setTimeout(() => {
-              this.scene.start('PrepareScene');
-            }, 2000);
-          }, 300);
-        }
-      }, wave * 520);
+      const label = this.add.text(x, y - 95, 'HP 50', { fontSize: '16px', fill: '#ffffff' }).setOrigin(0.5);
+      this.playerHPLabels.push(label);
     }
+
+    // ИИ — 4 слота справа
+    for (let i = 0; i < 4; i++) {
+      const x = 820 + (i % 4) * 110;
+      const y = 280 + Math.floor(i / 2) * 160;
+      const ship = this.add.sprite(x, y, 'ship').setScale(0.9).setTint(0xff3366);
+      this.aiShips.push(ship);
+
+      const bar = this.add.graphics();
+      bar.fillStyle(0x00ff88, 1);
+      bar.fillRect(x - 45, y - 75, 90, 14);
+      this.aiHPBars.push(bar);
+
+      const label = this.add.text(x, y - 95, 'HP 50', { fontSize: '16px', fill: '#ffffff' }).setOrigin(0.5);
+      this.aiHPLabels.push(label);
+    }
+  }
+
+  private playBattleSequence() {
+    if (this.battleEvents.length === 0) {
+      this.add.text(640, 300, 'Нет событий боя', { fontSize: '32px', fill: '#ffff00' }).setOrigin(0.5);
+      this.showFinalResult();
+      return;
+    }
+
+    this.currentEventIndex = 0;
+    this.processNextEvent();
+  }
+
+  private processNextEvent() {
+    if (this.currentEventIndex >= this.battleEvents.length) {
+      this.showFinalResult();
+      return;
+    }
+
+    const event = this.battleEvents[this.currentEventIndex];
+    this.animateEvent(event);
+
+    this.currentEventIndex++;
+    setTimeout(() => this.processNextEvent(), 1000); // ровно 1 секунда на каждое событие
+  }
+
+  private animateEvent(event: any) {
+    const isPlayer = event.isPlayerSide;
+    const attackers = isPlayer ? this.playerShips : this.aiShips;
+    const targets = isPlayer ? this.aiShips : this.playerShips;
+    const hpBars = isPlayer ? this.aiHPBars : this.playerHPBars;
+    const hpLabels = isPlayer ? this.aiHPLabels : this.playerHPLabels;
+
+    const attacker = attackers[event.attackerIndex % attackers.length];
+    const target = targets[event.targetIndex % targets.length];
+    const hpBar = hpBars[event.targetIndex % hpBars.length];
+    const hpLabel = hpLabels[event.targetIndex % hpLabels.length];
+
+    if (!attacker || !target) return;
+
+    // Атака
+    this.tweens.add({
+      targets: attacker,
+      x: attacker.x + (isPlayer ? 80 : -80),
+      duration: 180,
+      yoyo: true,
+      onComplete: () => {
+        // Лазер
+        const laser = this.add.line(0, 0, attacker.x, attacker.y, target.x, target.y, isPlayer ? 0x00ffff : 0xff3366)
+          .setLineWidth(7);
+        this.tweens.add({ targets: laser, alpha: 0, duration: 220, onComplete: () => laser.destroy() });
+
+        // Урон
+        const dmgText = this.add.text(target.x, target.y - 50, `-${event.damage}`, {
+          fontSize: '36px', fill: '#ff2222', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.tweens.add({ targets: dmgText, y: dmgText.y - 90, alpha: 0, duration: 900, onComplete: () => dmgText.destroy() });
+
+        // Special Effect
+        if (event.specialEffect) {
+          const fx = this.add.text(target.x, target.y - 110, event.specialEffect, {
+            fontSize: '26px', fill: '#ffff00', fontStyle: 'bold'
+          }).setOrigin(0.5);
+          this.tweens.add({ targets: fx, alpha: 0, duration: 1400, onComplete: () => fx.destroy() });
+        }
+
+        // Обновление HP
+        const maxHp = 50; // можно будет сделать динамическим позже
+        const ratio = Math.max(0, event.remainingHp / maxHp);
+        hpBar.clear();
+        hpBar.fillStyle(0x00ff88, 1);
+        hpBar.fillRect(hpBar.x - 45, hpBar.y, 90 * ratio, 14);
+        hpLabel.setText(`HP ${event.remainingHp}`);
+
+        if (event.remainingHp <= 0) {
+          target.setAlpha(0.3);
+          this.tweens.add({ targets: target, alpha: 0.1, duration: 800 });
+        }
+      }
+    });
+  }
+
+  private showFinalResult() {
+    const resultText = this.playerWon ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ';
+    const color = this.playerWon ? '#00ff88' : '#ff3366';
+
+    this.add.text(640, 160, resultText, {
+      fontSize: '82px',
+      fill: color,
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    this.add.text(640, 620, '← ВЕРНУТЬСЯ В ПОДГОТОВКУ', {
+      fontSize: '32px',
+      fill: '#ffffff',
+      backgroundColor: '#112233',
+      padding: { x: 30, y: 12 }
+    })
+      .setOrigin(0.5)
+      .setInteractive()
+      .on('pointerdown', () => this.scene.start('PrepareScene'));
   }
 }

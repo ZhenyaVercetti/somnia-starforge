@@ -1,14 +1,17 @@
 # CONTRACTS_SPEC.md
 
-**Версия:** 1.2 (26 апреля 2026) — НЕ ЗАВЕРШЁН
-**Адрес Game (последний):** 0x0BB53b8b1e8Cb7Fc287d7cc35535705a1407Dc3C
+**Версия:** 1.3.4 (27 апреля 2026)
+
+**Актуальные адреса (testnet):**
+- StarForgeUnitNFT: 0x9D00dB7fb6faF315C9c63971ae34380d5b831a56
+- StarForgeGame: 0x1cfB6c6fe1775cD9a324684f6C426f206368Eb59
+- StarForgeRelic: 0x83930224Ced8cEB6350fC9F41202B8fAA0033173
 
 **Статус:**
-- Логика ИИ и shop preview добавлена
-- BUY_PRICE = 0, REROLL_PRICE = 0
-- **КРИТИЧЕСКАЯ ОШИБКА:** buyUnit / buyFromShop / rerollShop постоянно ревертят ("Incorrect payment")
+- StarForgeBattleLibrary.sol — вынесена логика боя
+- StarForgeGame.sol — использует библиотеку, имеет getLastBattleResult
+- rerollShop / buyFromShop / startMatch — работают стабильно
+- Артефакты полностью применяются в бою
+- Double-click по юнитам оставлен как есть
 
-**Что нужно проверить в первую очередь:**
-- Реальные значения BUY_PRICE / REROLL_PRICE
-- setUnitNFT / setGameContract после последнего деплоя
-- paused() == false
+Готовы к v1.4.

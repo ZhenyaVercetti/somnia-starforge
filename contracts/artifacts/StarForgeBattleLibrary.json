@@ -1,0 +1,66 @@
+{
+	"deploy": {
+		"VM:-": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"main:1": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"ropsten:3": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"rinkeby:4": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"kovan:42": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"goerli:5": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"Custom": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		}
+	},
+	"data": {
+		"bytecode": {
+			"functionDebugData": {},
+			"generatedSources": [],
+			"linkReferences": {},
+			"object": "6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220bf3f7101447de211342703b9c6b4506135293e4a7b0dcc2835c6ca72d1d1150b64736f6c634300081e0033",
+			"opcodes": "PUSH1 0x80 DUP1 PUSH1 0x40 MSTORE CALLVALUE PUSH1 0x17 JUMPI PUSH1 0x39 SWAP1 DUP2 PUSH1 0x1C DUP3 CODECOPY ADDRESS DUP2 POP POP RETURN JUMPDEST PUSH0 DUP1 REVERT INVALID PUSH0 DUP1 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 0xBF EXTCODEHASH PUSH18 0x1447DE211342703B9C6B4506135293E4A7B 0xD 0xCC 0x28 CALLDATALOAD 0xC6 0xCA PUSH19 0xD1D1150B64736F6C634300081E003300000000 ",
+			"sourceMap": "129:7263:26:-:0;;;;;;;;;;;;;;;;;;;;;"
+		},
+		"deployedBytecode": {
+			"functionDebugData": {},
+			"generatedSources": [],
+			"immutableReferences": {},
+			"linkReferences": {},
+			"object": "5f80fdfea2646970667358221220bf3f7101447de211342703b9c6b4506135293e4a7b0dcc2835c6ca72d1d1150b64736f6c634300081e0033",
+			"opcodes": "PUSH0 DUP1 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 0xBF EXTCODEHASH PUSH18 0x1447DE211342703B9C6B4506135293E4A7B 0xD 0xCC 0x28 CALLDATALOAD 0xC6 0xCA PUSH19 0xD1D1150B64736F6C634300081E003300000000 ",
+			"sourceMap": "129:7263:26:-:0;;"
+		},
+		"gasEstimates": {
+			"creation": {
+				"codeDepositCost": "11400",
+				"executionCost": "infinite",
+				"totalCost": "infinite"
+			},
+			"internal": {
+				"_applyRelics(struct StarForgeBattleLibrary.CombatUnit memory[] memory,address,contract StarForgeRelic,uint256[] memory)": "infinite",
+				"_doAttack(struct StarForgeBattleLibrary.CombatUnit memory[] memory,struct StarForgeBattleLibrary.CombatUnit memory[] memory,bool,uint8,uint256,struct StarForgeBattleLibrary.BattleEvent memory[] memory,uint256)": "infinite",
+				"_getPlayerTeamStats(uint256[] memory,contract StarForgeUnitNFT)": "infinite",
+				"_simulateBattle(uint256[] memory,struct StarForgeBattleLibrary.ShopItem memory[] memory,uint256,address,contract StarForgeUnitNFT,contract StarForgeRelic,uint256[] memory)": "infinite"
+			}
+		},
+		"methodIdentifiers": {}
+	},
+	"abi": []
+}

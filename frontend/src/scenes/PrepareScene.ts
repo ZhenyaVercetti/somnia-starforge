@@ -4,362 +4,449 @@ import * as Phaser from 'phaser';
 import { getContract } from 'viem';
 
 export default class PrepareScene extends Phaser.Scene {
+      constructor() {
+    super({ key: 'PrepareScene' });
+  }
   private gameContract: any;
+  private publicClient: any;
   private nftContract: any;
   private account: `0x${string}` | undefined;
 
   private team: number[] = [];
-  private isWalletReady = false;
-  private ownedSprites: Phaser.GameObjects.GameObject[] = [];
-  private shopSprites: Phaser.GameObjects.Sprite[] = [];
-  private gridSlots: Phaser.GameObjects.Rectangle[] = [];
-  private playerProfileText: Phaser.GameObjects.Text | null = null;
-  private rewardNotification: Phaser.GameObjects.Text | null = null;
-  private lastRewardsCount = 0;
-  private lastOwnedCount = 0;
-  private lastRewardIds: number[] = [];
-  private teamCounterText: Phaser.GameObjects.Text | null = null;
-  private tooltip: Phaser.GameObjects.Text | null = null;
-  private aiSprites: Phaser.GameObjects.Sprite[] = [];
-  private aiTexts: Phaser.GameObjects.Text[] = [];
+private isWalletReady = false;
+private ownedSprites: Phaser.GameObjects.GameObject[] = [];
+private shopSprites: Phaser.GameObjects.Sprite[] = [];
+private gridSlots: Phaser.GameObjects.Rectangle[] = [];
+private playerProfileText: Phaser.GameObjects.Text | null = null;
+private rewardNotification: Phaser.GameObjects.Text | null = null;
+private lastRewardsCount = 0;
+private lastOwnedCount = 0;
+private lastRewardIds: number[] = [];
+private teamCounterText: Phaser.GameObjects.Text | null = null;
+private tooltip: Phaser.GameObjects.Text | null = null;
+private lastClickTime = 0;
+private teamSlotOccupants: (Phaser.GameObjects.GameObject | null)[] = [];
+private originalPositions: Map<number, {x: number, y: number}> = new Map();
+private aiSprites: Phaser.GameObjects.Sprite[] = [];
+private aiTexts: Phaser.GameObjects.Text[] = [];
+private relicContract: any;
 
-  constructor() {
-    super({ key: 'PrepareScene' });
+private updateTeamCounter() {
+  if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+}
+
+private removeFromTeam(slotIndex: number) {
+  const occupant = this.teamSlotOccupants[slotIndex];
+  if (!occupant) return;
+
+  const tokenId = (occupant as any).tokenId;
+  this.team = this.team.filter(id => id !== tokenId);
+
+  const orig = this.originalPositions.get(tokenId);
+  if (orig) {
+    occupant.x = orig.x;
+    occupant.y = orig.y;
+    occupant.setInteractive();
+    occupant.setScale(0.75);
+    (occupant as any).input.draggable = true;   // ← обязательно
   }
 
-  init(data: any) {
-    this.gameContract = data.gameContract;
-    this.nftContract = data.nftContract;
-    this.account = data.account;
-    this.isWalletReady = true;
-  }
+  this.teamSlotOccupants[slotIndex] = null;
+  this.updateTeamCounter();
+}    
 
-          create() {
-    this.addGameUI();
-    this.loadOwnedUnits();
-    this.loadPlayerShop();      // ← теперь инициализирует preview автоматически
-    this.loadCurrentAI();
-    this.updatePlayerProfile();
+private async loadOwnedUnits() {
+  if (!this.account || !this.gameContract || !this.nftContract) return;
 
-    // === HOVER TOOLTIP ===
-    this.tooltip = this.add.text(0, 0, '', {
-      fontSize: '16px',
-      fill: '#ffffff',
-      backgroundColor: '#112233',
-      padding: { x: 12, y: 8 },
-      align: 'left'
-    })
-      .setOrigin(0, 1)
-      .setDepth(100)
-      .setVisible(false);
-  }
+  this.ownedSprites.forEach(s => s.destroy());
+  this.ownedSprites = [];
 
-             private async loadOwnedUnits() {
-    if (!this.account || !this.gameContract || !this.nftContract) return;
+  try {
+    const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
+    console.log('📦 Твои юниты после reload:', ownedIds.length, ownedIds);
 
-    this.ownedSprites.forEach(s => s.destroy());
-    this.ownedSprites = [];
+    this.children.getAll().forEach(child => {
+      if (child instanceof Phaser.GameObjects.Text && child.text.includes('ТВОИ ЮНИТЫ')) child.destroy();
+    });
+    this.add.text(50, 150, `ТВОИ ЮНИТЫ (${ownedIds.length})`, { fontSize: '18px', fill: '#ffff00' });
 
-    try {
-      const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
-      console.log('📦 Твои юниты после reload:', ownedIds.length, ownedIds);
+    if (ownedIds.length === 0) return;
 
-      this.children.getAll().forEach(child => {
-        if (child instanceof Phaser.GameObjects.Text && child.text.includes('ТВОИ ЮНИТЫ')) child.destroy();
+    const unitsData = await Promise.all(
+      ownedIds.map(async (tokenIdBig) => {
+        const tokenId = Number(tokenIdBig);
+        const unit = await this.nftContract.read.getUnit([tokenIdBig]);
+        return { tokenId, unit, rarity: Number(unit.rarity) };
+      })
+    );
+
+    unitsData.forEach(({ tokenId, rarity, unit }, index) => {
+      const col = index % 8;
+      const row = Math.floor(index / 8);
+      const x = 55 + col * 47;
+      const y = 255 + row * 48;
+
+      const rect = this.add.rectangle(x, y, 42, 42, 0x112233)
+        .setStrokeStyle(5, rarity === 2 ? 0xffee00 : rarity === 1 ? 0x00ff77 : 0x00ccff)
+        .setInteractive()
+        .setScale(0.1)
+        .setAlpha(0);
+
+      (rect as any).tokenId = tokenId;
+      (rect as any).unit = unit;
+
+      let scaleMod = 0.75;
+      if (rarity === 1) scaleMod = 0.85;
+      else if (rarity === 2) scaleMod = 0.95;
+
+      this.tweens.add({
+        targets: rect,
+        scale: scaleMod,
+        alpha: 1,
+        duration: 320,
+        ease: 'Back.easeOut',
+        delay: index * 12
       });
-      this.add.text(50, 150, `ТВОИ ЮНИТЫ (${ownedIds.length})`, { fontSize: '18px', fill: '#ffff00' });
 
-      if (ownedIds.length === 0) return;
+      // Hover — добавляем ОДИН РАЗ при создании
+      const showHover = () => {
+        const tooltipText = 
+          `${this.getFactionName(unit.faction)}\n` +
+          `Rarity: ${this.getRarityName(unit.rarity)}\n` +
+          `Class: ${this.getClassName(unit.unitClass)}\n` +
+          `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
+        this.showTooltip(rect.x + 21, rect.y - 10, tooltipText);
+      };
 
-      const unitsData = await Promise.all(
-        ownedIds.map(async (tokenIdBig) => {
-          const tokenId = Number(tokenIdBig);
-          const unit = await this.nftContract.read.getUnit([tokenIdBig]);
-          return { tokenId, unit, rarity: Number(unit.rarity) };
-        })
-      );
+      rect.on('pointerover', showHover);
+      rect.on('pointerout', () => this.hideTooltip());
 
-      unitsData.forEach(({ tokenId, rarity, unit }, index) => {
-        const col = index % 8;
-        const row = Math.floor(index / 8);
-        const x = 55 + col * 47;
-        const y = 255 + row * 48;
+      this.input.setDraggable(rect);
 
-        const rect = this.add.rectangle(x, y, 42, 42, 0x112233)
-          .setStrokeStyle(5, rarity === 2 ? 0xffee00 : rarity === 1 ? 0x00ff77 : 0x00ccff)
-          .setInteractive()
-          .setScale(0.1)
-          .setAlpha(0);
-        (rect as any).tokenId = tokenId;
+      rect.on('dragstart', () => { 
+        rect.setScale(0.9); 
+        this.highlightFreeSlots(); 
+      });
 
-        let scaleMod = 0.75;
-        if (rarity === 1) scaleMod = 0.85;
-        else if (rarity === 2) scaleMod = 0.95;
+      rect.on('drag', (_: any, dragX: number, dragY: number) => { 
+        rect.x = dragX; 
+        rect.y = dragY; 
+      });
 
-        this.tweens.add({
-          targets: rect,
-          scale: scaleMod,
-          alpha: 1,
-          duration: 320,
-          ease: 'Back.easeOut',
-          delay: index * 12
-        });
+      rect.on('dragend', () => {
+        rect.setScale(scaleMod);
+        this.resetSlotHighlights();
 
-        rect.on('pointerover', () => {
-          const tooltipText = 
-            `${this.getFactionName(unit.faction)}\n` +
-            `Rarity: ${this.getRarityName(unit.rarity)}\n` +
-            `Class: ${this.getClassName(unit.unitClass)}\n` +
-            `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
-          this.showTooltip(x + 25, y, tooltipText);
-        });
-        rect.on('pointerout', () => this.hideTooltip());
+        const slotIndex = this.gridSlots.findIndex((s: any) =>
+          Math.abs(s.x - rect.x) < 55 && Math.abs(s.y - rect.y) < 55
+        );
 
-        this.input.setDraggable(rect);
+        if (slotIndex === -1) {
+          const orig = this.originalPositions.get(tokenId);
+          if (orig) rect.setPosition(orig.x, orig.y);
+          return;
+        }
 
-        rect.on('dragstart', () => { rect.setScale(0.9); this.highlightFreeSlots(); });
-        rect.on('drag', (_: any, dragX: number, dragY: number) => { rect.x = dragX; rect.y = dragY; });
-        rect.on('dragend', () => {
-          rect.setScale(0.75);
-          this.resetSlotHighlights();
+        const currentOccupant = this.teamSlotOccupants[slotIndex];
 
-          const slotIndex = this.gridSlots.findIndex((s: any) =>
-            Math.abs(s.x - rect.x) < 55 && Math.abs(s.y - rect.y) < 55
-          );
+        if (currentOccupant && currentOccupant !== rect) {
+          const oldTokenId = (currentOccupant as any).tokenId;
+          this.team = this.team.filter(id => id !== oldTokenId);
 
-          if (slotIndex !== -1 && this.team.length < 8 && !this.team.includes(tokenId)) {
-            this.team.push(tokenId);
-            rect.setPosition(this.gridSlots[slotIndex].x, this.gridSlots[slotIndex].y);
-            rect.disableInteractive();
-            if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
-          } else {
-            rect.x = x;
-            rect.y = y;
+          const origOld = this.originalPositions.get(oldTokenId);
+          if (origOld) {
+            currentOccupant.x = origOld.x;
+            currentOccupant.y = origOld.y;
+            currentOccupant.setInteractive();
+            currentOccupant.setScale(scaleMod);
+            (currentOccupant as any).input.draggable = true;
           }
-        });
-
-        this.ownedSprites.push(rect);
-      });
-    } catch (e) {
-      console.error('loadOwnedUnits error', e);
-    }
-  }
-
-            private async loadPlayerShop() {
-    if (!this.account || !this.gameContract) return;
-    this.shopSprites.forEach(s => s.destroy()); this.shopSprites = [];
-
-    try {
-      const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
-      console.log('🛒 Shop preview RAW:', shopData);
-
-      // Аккуратная очистка только shop-элементов
-      this.children.getAll().forEach(child => {
-        if (child instanceof Phaser.GameObjects.Text && 
-            (child.text.includes('SHOP (5 слотов)') || 
-             (child.text.includes('BUY') && child.y > 200 && child.y < 250))) {
-          child.destroy();
         }
-        if (child instanceof Phaser.GameObjects.Rectangle && 
-            child.x > 650 && child.x < 1200 && child.y < 250) {
-          child.destroy();
+
+        const slot = this.gridSlots[slotIndex];
+        rect.setPosition(slot.x, slot.y);
+        rect.input.draggable = false;   // выключаем drag пока в команде
+
+        this.teamSlotOccupants[slotIndex] = rect;
+        this.enableDoubleClickRemoveOnTeamUnit(rect, tokenId);
+
+        if (!this.team.includes(tokenId)) {
+          this.team.push(tokenId);
         }
+
+        this.updateTeamCounter();
       });
 
-      this.add.text(650, 80, 'SHOP (5 слотов)', { fontSize: '22px', fill: '#ff00ff' });
-
-      const isEmpty = shopData[0] && shopData[0].attack === 0;
-
-      if (isEmpty) {
-        const placeholder = this.add.text(850, 175, 'REROLL SHOP\n(0.0005 STT)\nчтобы увидеть\nпервые предложения', {
-          fontSize: '16px',
-          fill: '#888888',
-          align: 'center',
-          lineSpacing: 8
-        }).setOrigin(0.5);
-        this.shopSprites.push(placeholder as any);
-        return;
-      }
-
-      for (let i = 0; i < 5; i++) {
-        const unit = shopData[i];
-        const x = 680 + i * 100;
-        const y = 140;
-
-        const strokeColor = unit.rarity === 2 ? 0xffaa00 : unit.rarity === 1 ? 0x00ff88 : 0x00ffff;
-
-        this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(4, strokeColor);
-
-        const sprite = this.add.sprite(x, y, 'ship').setInteractive();
-        (sprite as any).shopSlot = i;
-
-        if (unit.rarity === 2) sprite.setScale(1.3);
-        else if (unit.rarity === 1) sprite.setScale(1.15);
-
-        const rarityColor = unit.rarity === 2 ? '#ffff00' : unit.rarity === 1 ? '#00ff00' : '#ffffff';
-        this.add.text(x - 35, y - 45, `${unit.faction} ${unit.rarity} ${unit.unitClass}`, { fontSize: '12px', fill: rarityColor });
-        this.add.text(x - 30, y + 50, `${unit.attack}/${unit.defense}/${unit.speed}`, { fontSize: '14px', fill: '#ffff00' });
-
-        this.add.text(x - 20, y + 80, 'BUY', { fontSize: '18px', fill: '#00ff00' })
-          .setInteractive()
-          .on('pointerdown', () => this.buyFromShopSlot(i));
-
-        sprite.on('pointerover', () => {
-          const tooltipText = 
-            `${this.getFactionName(unit.faction)}\n` +
-            `Rarity: ${this.getRarityName(unit.rarity)}\n` +
-            `Class: ${this.getClassName(unit.unitClass)}\n` +
-            `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
-          this.showTooltip(x + 90, y - 30, tooltipText);
-        });
-
-        sprite.on('pointerout', () => this.hideTooltip());
-
-        this.shopSprites.push(sprite);
-      }
-    } catch (e) { 
-      console.error('loadPlayerShop error', e); 
-    }
+      this.originalPositions.set(tokenId, { x, y });
+      this.ownedSprites.push(rect);
+    });
+  } catch (e) {
+    console.error('loadOwnedUnits error', e);
   }
+}
 
-          private async loadCurrentAI() {
-    if (!this.account || !this.gameContract) return;
+private async loadPlayerShop() {
+  if (!this.account || !this.gameContract) return;
+  this.shopSprites.forEach(s => s.destroy()); 
+  this.shopSprites = [];
 
-    this.aiSprites.forEach(s => s.destroy());
-    this.aiTexts.forEach(t => t.destroy());
-    this.aiSprites = [];
-    this.aiTexts = [];
+  try {
+    const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
 
-    try {
-      const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
-      console.log('🤖 Current AI opponent:', aiData);
-
-      // Заголовок AI
-      this.children.getAll().forEach(child => {
-        if (child instanceof Phaser.GameObjects.Text && 
-            Math.abs((child as any).x - 680) < 100 && (child as any).y === 240) {
-          child.destroy();
-        }
-      });
-
-      this.add.text(680, 240, 'AI OPPONENT', { fontSize: '22px', fill: '#ff3366' });
-
-      if (aiData.length === 0) {
-        const placeholder = this.add.text(720, 285, 'Первый противник\nбудет сгенерирован\nпри старте первого боя', {
-          fontSize: '14px',
-          fill: '#888888',
-          align: 'center',
-          lineSpacing: 4
-        }).setOrigin(0.5, 0);
-        this.aiTexts.push(placeholder);
-        return;
-      }
-
-      for (let i = 0; i < aiData.length; i++) {
-        const unit = aiData[i];
-        const x = 680 + i * 85;
-        const y = 280;
-
-        const strokeColor = unit.rarity === 2 ? 0xffaa00 : unit.rarity === 1 ? 0x00ff88 : 0x00ffff;
-
-        const rect = this.add.rectangle(x, y, 68, 68, 0x112233)
-          .setStrokeStyle(3, strokeColor);
-
-        const sprite = this.add.sprite(x, y, 'ship').setInteractive();
-        if (unit.rarity === 2) sprite.setScale(0.95);
-        else if (unit.rarity === 1) sprite.setScale(0.85);
-
-        const statsText = this.add.text(x - 30, y + 38, 
-          `${unit.attack}/${unit.defense}/${unit.speed}`, 
-          { fontSize: '13px', fill: '#ffff00' });
-
-        this.aiSprites.push(sprite);
-        this.aiTexts.push(statsText);
-
-        // Hover tooltip
-        sprite.on('pointerover', () => {
-          const tooltipText = 
-            `${this.getFactionName(unit.faction)}\n` +
-            `Rarity: ${this.getRarityName(unit.rarity)}\n` +
-            `Class: ${this.getClassName(unit.unitClass)}\n` +
-            `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
-          this.showTooltip(x + 40, y - 20, tooltipText);
-        });
-
-        sprite.on('pointerout', () => this.hideTooltip());
-      }
-    } catch (e) {
-      console.error('loadCurrentAI error', e);
-    }
-  }
-
-      private async buyFromShopSlot(slot: number) {
-    if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
-    try {
-      console.log('🚀 buyFromShopSlot slot', slot);
-      await this.gameContract.write.buyFromShop([BigInt(slot)], { 
-        account: this.account, 
-        value: 1000000000000000n,
-        gas: 1200000n 
-      });
-      const msg = this.add.text(400, 300, `✅ Юнит из слота ${slot} куплен!`, { fontSize: '28px', fill: '#00ff00' });
-      setTimeout(() => { msg.destroy(); }, 2200);
-
-      setTimeout(async () => {
-        await this.loadOwnedUnits();
-        await this.loadPlayerShop();
-      }, 9000);
-    } catch (e: any) {
-      console.error('buyFromShopSlot FULL ERROR:', e);
-      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
-      const errorText = this.add.text(400, 300, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 8000);
-    }
-  }
-
-    private addGameUI() {
-    this.gridSlots = [];
-    for (let i = 0; i < 8; i++) {
-      const x = 420 + (i % 4) * 90;
-      const y = 380 + Math.floor(i / 4) * 90;
-      const slot = this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(3, 0x00ffff);
-      (slot as any).isGridSlot = true;
-      this.gridSlots.push(slot);
-    }
-
-    this.teamCounterText = this.add.text(420, 320, 'TEAM: 0/8', { fontSize: '24px', fill: '#ffff00' });
-
-    this.playerProfileText = this.add.text(50, 40, 'PROFILE: Level 1 | XP 0 | W:0 L:0', {
-      fontSize: '18px', fill: '#00ffff', align: 'left'
+    // Полная очистка старых shop-элементов
+    this.children.getAll().forEach(child => {
+      if (child instanceof Phaser.GameObjects.Text && child.x > 600 && child.y < 220) child.destroy();
+      if (child instanceof Phaser.GameObjects.Rectangle && child.x > 600 && child.y < 220) child.destroy();
     });
 
-    this.add.text(100, 100, 'BUY (0.001 STT)', { fontSize: '22px', fill: '#00ffff' })
-      .setInteractive().on('pointerdown', () => this.buyUnit());
+    this.add.text(650, 80, 'SHOP (ARTEFACTS)', { fontSize: '22px', fill: '#ff00ff' });
 
-    this.add.text(100, 140, 'REROLL SHOP (0.0005 STT)', { fontSize: '22px', fill: '#ff00ff' })
-      .setInteractive().on('pointerdown', () => this.rerollShop());
+    for (let i = 0; i < 5; i++) {
+      const item = shopData[i];
+      const x = 680 + i * 100;
+      const y = 140;
 
-    // Короткая кнопка REFRESH с обратной связью
-    const refreshBtn = this.add.text(100, 180, 'REFRESH', { fontSize: '22px', fill: '#ffff00' })
-      .setInteractive()
-      .on('pointerdown', () => {
-        refreshBtn.setText('REFRESHING...');
-        this.loadOwnedUnits().then(() => {
-          refreshBtn.setText('REFRESH');
-        });
-      });
+      const rect = this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(4, 0xffaa00);
 
-    this.add.text(900, 600, '▶ START BATTLE', { fontSize: '42px', fill: '#ff3333' })
-      .setInteractive().on('pointerdown', () => this.startBattle());
+      let displayName = 'RELIC';
+      let tooltipText = `RELIC SLOT ${i}`;
 
-    const clearBtn = this.add.text(650, 320, 'ОЧИСТИТЬ КОМАНДУ', { fontSize: '22px', fill: '#ff6666', backgroundColor: '#112233', padding: { x: 15, y: 8 } })
-      .setInteractive()
-      .on('pointerdown', () => {
-        this.team = [];
-        if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-        this.loadOwnedUnits();
-      });
+      if (item.isRelic) {
+        const typeNames = [
+          'Quantum Strike', 'Void Shield', 'Nebula Dash',
+          'Echo Core', 'Flux Overload', 'Last Stand'
+        ];
+        const typeName = typeNames[item.relicType] || 'Unknown Relic';
+        displayName = `${typeName} +${item.relicValue}`;
+        tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
+      }
+
+      const sprite = this.add.sprite(x, y, 'ship').setInteractive();
+      (sprite as any).shopSlot = i;
+
+      // Название артефакта под квадратом
+      this.add.text(x, y + 55, displayName, { 
+        fontSize: '13px', 
+        fill: '#ffff00',
+        align: 'center',
+        wordWrap: { width: 90 }
+      }).setOrigin(0.5);
+
+      this.add.text(x - 20, y + 85, 'BUY', { fontSize: '18px', fill: '#00ff00' })
+        .setInteractive()
+        .on('pointerdown', () => this.buyFromShopSlot(i));
+
+      sprite.on('pointerover', () => this.showTooltip(x + 90, y - 30, tooltipText));
+      sprite.on('pointerout', () => this.hideTooltip());
+
+      this.shopSprites.push(sprite);
+    }
+
+    this.loadCurrentAI();
+  } catch (e) { 
+    console.error('loadPlayerShop error', e); 
   }
+}
+
+private async loadPlayerRelics() {
+  if (!this.account || !this.gameContract || !this.relicContract) return;
+
+  try {
+    const relics: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+
+    this.children.getAll().forEach(child => {
+      if ((child as any).isRelicSlot) child.destroy();
+      if (child instanceof Phaser.GameObjects.Text && child.text.includes('RELICS')) child.destroy();
+    });
+
+    this.add.text(50, 520, `RELICS (${relics.length})`, { fontSize: '18px', fill: '#ff00ff' });
+
+    if (relics.length === 0) {
+      this.add.text(55, 560, 'Пока нет артефактов.\nКупи в магазине →', { 
+        fontSize: '16px', fill: '#aaaaaa', align: 'left' 
+      });
+      return;
+    }
+
+    for (let i = 0; i < relics.length; i++) {
+      const relicIdBig = relics[i];
+      const relicData = await this.relicContract.read.getRelic([relicIdBig]);
+
+      const x = 55 + (i % 8) * 55;
+      const y = 560;
+
+      const rect = this.add.rectangle(x, y, 48, 48, 0x112233)
+        .setStrokeStyle(4, 0xffaa00)
+        .setInteractive()
+        .setScale(0.85);
+      (rect as any).isRelicSlot = true;
+      (rect as any).relicId = Number(relicIdBig);
+
+      rect.on('pointerover', () => {
+        this.showTooltip(x + 25, y - 10, 
+          `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
+        );
+      });
+      rect.on('pointerout', () => this.hideTooltip());
+
+      this.ownedSprites.push(rect);
+    }
+  } catch (e) {
+    console.error('loadPlayerRelics error', e);
+  }
+}
+
+private getRelicEffectDescription(relicType: number): string {
+  const desc = [
+    'Увеличивает ATK всем юнитам',
+    'Увеличивает DEF всем юнитам',
+    'Увеличивает SPD всем юнитам',
+    'Увеличивает HP всем юнитам',
+    'Повышает шанс крита (Quantum Flux)',
+    'Последний удар перед смертью (Last Stand)'
+  ];
+  return desc[relicType] || 'Эффект неизвестен';
+}
+
+private async loadCurrentAI() {
+  if (!this.account || !this.gameContract) return;
+
+  this.aiSprites.forEach(s => s.destroy());
+  this.aiTexts.forEach(t => t.destroy());
+  this.aiSprites = [];
+  this.aiTexts = [];
+
+  try {
+    const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+
+    // Удаляем старый заголовок
+    this.children.getAll().forEach(child => {
+      if (child instanceof Phaser.GameObjects.Text && 
+          Math.abs((child as any).x - 680) < 150 && (child as any).y === 240) {
+        child.destroy();
+      }
+    });
+
+    // Новый заголовок и позиция — у правой стенки, посередине
+    this.add.text(1050, 280, 'AI OPPONENT', { fontSize: '22px', fill: '#ff3366' }).setOrigin(0.5);
+
+    if (aiData.length === 0) {
+      const placeholder = this.add.text(1050, 320, 'Первый противник\nбудет сгенерирован\nпри старте боя', {
+        fontSize: '14px',
+        fill: '#888888',
+        align: 'center',
+        lineSpacing: 4
+      }).setOrigin(0.5);
+      this.aiTexts.push(placeholder);
+      return;
+    }
+
+    for (let i = 0; i < aiData.length; i++) {
+      const unit = aiData[i];
+      const x = 950 + i * 85;   // правее
+      const y = 340;            // чуть ниже центра
+
+      const strokeColor = unit.rarity === 2 ? 0xffaa00 : unit.rarity === 1 ? 0x00ff88 : 0x00ffff;
+
+      const rect = this.add.rectangle(x, y, 68, 68, 0x112233)
+        .setStrokeStyle(3, strokeColor);
+
+      const sprite = this.add.sprite(x, y, 'ship').setInteractive();
+      if (unit.rarity === 2) sprite.setScale(0.95);
+      else if (unit.rarity === 1) sprite.setScale(0.85);
+
+      const statsText = this.add.text(x - 30, y + 38, 
+        `${unit.attack}/${unit.defense}/${unit.speed}`, 
+        { fontSize: '13px', fill: '#ffff00' });
+
+      this.aiSprites.push(sprite);
+      this.aiTexts.push(statsText);
+
+      sprite.on('pointerover', () => {
+        const tooltipText = 
+          `${this.getFactionName(unit.faction)}\n` +
+          `Rarity: ${this.getRarityName(unit.rarity)}\n` +
+          `Class: ${this.getClassName(unit.unitClass)}\n` +
+          `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
+        this.showTooltip(x + 40, y - 20, tooltipText);
+      });
+
+      sprite.on('pointerout', () => this.hideTooltip());
+    }
+  } catch (e) {
+    console.error('loadCurrentAI error', e);
+  }
+}
+
+
+
+private enableDoubleClickRemoveOnTeamUnit(rect: Phaser.GameObjects.GameObject, tokenId: number) {
+  let lastClick = 0;
+
+  rect.on('pointerdown', () => {
+    const now = Date.now();
+    if (now - lastClick < 300) {
+      const slotIndex = this.teamSlotOccupants.findIndex(s => s === rect);
+      if (slotIndex !== -1) {
+        this.removeFromTeam(slotIndex);
+      }
+    }
+    lastClick = now;
+  });
+}
+
+private addGameUI() {
+  this.gridSlots = [];
+  this.teamSlotOccupants = new Array(8).fill(null);
+
+    for (let i = 0; i < 8; i++) {
+    const x = 420 + (i % 4) * 90;
+    const y = 380 + Math.floor(i / 4) * 90;
+    const slot = this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(3, 0x00ffff);
+    (slot as any).isGridSlot = true;
+    (slot as any).slotIndex = i;
+    this.gridSlots.push(slot);
+
+    // ОДИНОЧНЫЙ КЛИК по слоту = убрать юнита обратно в owned
+    slot.setInteractive().on('pointerdown', () => {
+      const occupant = this.teamSlotOccupants[i];
+      if (occupant) {
+        this.removeFromTeam(i);
+      }
+    });
+  }
+
+  this.teamCounterText = this.add.text(420, 320, 'TEAM: 0/8', { fontSize: '24px', fill: '#ffff00' });
+
+  this.playerProfileText = this.add.text(50, 40, 'PROFILE: Level 1 | XP 0 | W:0 L:0', {
+    fontSize: '18px', fill: '#00ffff', align: 'left'
+  });
+
+  this.add.text(100, 100, 'BUY (FREE)', { fontSize: '22px', fill: '#00ffff' })
+    .setInteractive().on('pointerdown', () => this.buyUnit());
+
+  this.add.text(100, 140, 'REROLL SHOP (FREE)', { fontSize: '22px', fill: '#ff00ff' })
+    .setInteractive().on('pointerdown', () => this.rerollShop());
+
+  const refreshBtn = this.add.text(100, 180, 'REFRESH', { fontSize: '22px', fill: '#ffff00' })
+    .setInteractive()
+    .on('pointerdown', () => {
+      refreshBtn.setText('REFRESHING...');
+      this.loadOwnedUnits().then(() => refreshBtn.setText('REFRESH'));
+    });
+
+  this.add.text(900, 600, '▶ START BATTLE', { fontSize: '42px', fill: '#ff3333' })
+    .setInteractive().on('pointerdown', () => this.startBattle());
+
+  const clearBtn = this.add.text(650, 320, 'ОЧИСТИТЬ КОМАНДУ', { fontSize: '22px', fill: '#ff6666', backgroundColor: '#112233', padding: { x: 15, y: 8 } })
+    .setInteractive()
+    .on('pointerdown', () => {
+      this.team = [];
+      this.teamSlotOccupants = new Array(8).fill(null);
+      if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
+      this.loadOwnedUnits();
+    });
+}
 
   private async updatePlayerProfile() {
     if (!this.account || !this.gameContract || !this.playerProfileText) return;
@@ -371,9 +458,8 @@ export default class PrepareScene extends Phaser.Scene {
       console.error('updatePlayerProfile error', e);
     }
   }
-      private showTooltip(x: number, y: number, text: string) {
-    // Если tooltip ещё не создан или был уничтожен — создаём заново
-    if (!this.tooltip) {
+  private showTooltip(x: number, y: number, text: string) {
+    if (!this.tooltip || this.tooltip.scene !== this) {
       this.tooltip = this.add.text(0, 0, '', {
         fontSize: '16px',
         fill: '#ffffff',
@@ -381,12 +467,12 @@ export default class PrepareScene extends Phaser.Scene {
         padding: { x: 12, y: 8 },
         align: 'left'
       })
-        .setOrigin(0, 1)
+        .setOrigin(0.5, 1)
         .setDepth(100);
     }
 
     this.tooltip.setText(text);
-    this.tooltip.setPosition(x + 60, y - 10);
+    this.tooltip.setPosition(x, y - 15);
     this.tooltip.setVisible(true);
   }
 
@@ -396,16 +482,6 @@ export default class PrepareScene extends Phaser.Scene {
     }
   }
 
-    private clearTemporaryTexts() {
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.Text) {
-        const t = child.text.toLowerCase();
-        if (t.includes('куплен') || t.includes('rerolled') || t.includes('tx отправлена') || t.includes('победа')) {
-          child.destroy();
-        }
-      }
-    });
-  }
 
     private clearTemporaryTexts() {
     this.children.getAll().forEach(child => {
@@ -422,20 +498,20 @@ export default class PrepareScene extends Phaser.Scene {
   }
 
     private highlightFreeSlots() {
-    this.gridSlots.forEach(slot => {
-      // Проверяем, есть ли в этом слоте реальный юнит (rect)
-      const hasUnit = this.ownedSprites.some((s: any) => 
-        Math.abs(s.x - slot.x) < 20 && Math.abs(s.y - slot.y) < 20
-      );
-      slot.setStrokeStyle(5, hasUnit ? 0xff6666 : 0x00ff88); // красный = занят, зелёный = свободен
-    });
-  }
+  this.gridSlots.forEach(slot => {
+    const hasUnit = this.teamSlotOccupants.some(occupant => occupant && 
+      Math.abs((occupant as any).x - slot.x) < 20 && 
+      Math.abs((occupant as any).y - slot.y) < 20
+    );
+    slot.setStrokeStyle(5, hasUnit ? 0xff6666 : 0x00ff88);
+  });
+}
 
-    private resetSlotHighlights() {
-    this.gridSlots.forEach(slot => {
-      slot.setStrokeStyle(3, 0x00ffff); // обычный цвет
-    });
-  }
+private resetSlotHighlights() {
+  this.gridSlots.forEach(slot => {
+    slot.setStrokeStyle(3, 0x00ffff);
+  });
+}
     private getFactionName(faction: number): string {
     const names = ['Empire', 'Voidborn', 'Mechanoids'];
     return names[faction] || 'Unknown';
@@ -451,139 +527,139 @@ export default class PrepareScene extends Phaser.Scene {
     return names[unitClass] || 'Unknown';
   }
 
-       private async buyUnit() {
-    if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
-    try {
-      console.log('🚀 buyUnit: отправляем tx (0 STT)...');
-      await this.gameContract.write.buyUnit([], { 
-        account: this.account, 
-        value: 0n,           // ← ИЗМЕНЕНО
-        gas: 1200000n 
-      });
-      const msg = this.add.text(400, 300, '✅ Юнит куплен on-chain!', { fontSize: '32px', fill: '#00ff00' });
-      setTimeout(() => { msg.destroy(); }, 2200);
+   private async buyUnit() {
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
+    return alert('Сначала подключи MetaMask');
 
-      setTimeout(async () => {
-        console.log('🔄 Обновляем owned units...');
-        await this.loadOwnedUnits();
-        await this.loadPlayerShop();
-      }, 8000);
-    } catch (e: any) {
-      console.error('buyUnit FULL ERROR:', e);
-      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
-      const errorText = this.add.text(400, 300, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 8000);
-    }
+  try {
+    const hash = await this.gameContract.write.buyUnit([], { account: this.account, value: 0n });
+    const waiting = this.add.text(400, 300, 'TX buyUnit отправлена... ждём on-chain (3 сек)', { fontSize: '24px', fill: '#ffff00' });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    console.log('✅ buyUnit confirmed');
+
+    waiting.destroy();
+    const msg = this.add.text(400, 300, 'Юнит куплен on-chain!', { fontSize: '32px', fill: '#00ff00' });
+    setTimeout(() => { msg.destroy(); }, 2200);
+
+    // 3 секунды задержка перед обновлением UI
+    setTimeout(() => {
+      this.loadOwnedUnits();
+      this.loadPlayerShop();
+      this.loadPlayerRelics();
+    }, 3000);
+  } catch (e: any) {
+    const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
+    const errorText = this.add.text(400, 300, `Ошибка: ${errMsg}`, { fontSize: '24px', fill: '#ff4444' });
+    setTimeout(() => errorText.destroy(), 4000);
   }
+}
 
   private async buyFromShopSlot(slot: number) {
-    if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
-    try {
-      console.log('🚀 buyFromShopSlot slot', slot);
-      await this.gameContract.write.buyFromShop([BigInt(slot)], { 
-        account: this.account, 
-        value: 0n,           // ← ИЗМЕНЕНО
-        gas: 1200000n 
-      });
-      const msg = this.add.text(400, 300, `✅ Юнит из слота ${slot} куплен!`, { fontSize: '28px', fill: '#00ff00' });
-      setTimeout(() => { msg.destroy(); }, 2200);
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
+    return alert('Сначала подключи MetaMask');
 
-      setTimeout(async () => {
-        await this.loadOwnedUnits();
-        await this.loadPlayerShop();
-      }, 8000);
-    } catch (e: any) {
-      console.error('buyFromShopSlot FULL ERROR:', e);
-      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
-      const errorText = this.add.text(400, 300, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 8000);
-    }
+  try {
+    const hash = await this.gameContract.write.buyFromShop([BigInt(slot)], { account: this.account, value: 0n });
+    const waiting = this.add.text(400, 300, `TX buyFromShop [${slot}] отправлена... ждём on-chain (3 сек)`, { fontSize: '24px', fill: '#ffff00' });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    console.log('✅ buyFromShop confirmed');
+
+    waiting.destroy();
+    const msg = this.add.text(400, 300, `Артефакт куплен!`, { fontSize: '28px', fill: '#00ff00' });
+    setTimeout(() => { msg.destroy(); }, 1800);
+
+    // 3 секунды задержка перед обновлением UI
+    setTimeout(() => {
+      this.loadPlayerShop();
+      this.loadPlayerRelics();
+      this.loadCurrentAI();
+    }, 3000);
+  } catch (e: any) {
+    const errMsg = e.shortMessage || e.message || 'Ошибка';
+    const errorText = this.add.text(400, 300, `Ошибка: ${errMsg}`, { fontSize: '24px', fill: '#ff4444' });
+    setTimeout(() => errorText.destroy(), 4000);
   }
+}
 
   private async rerollShop() {
-    if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
-    try {
-      console.log('🚀 rerollShop: отправляем tx (0 STT)...');
-      await this.gameContract.write.rerollShop([], { 
-        account: this.account, 
-        value: 0n,           // ← ИЗМЕНЕНО
-        gas: 350000n 
-      });
-      const msg = this.add.text(400, 340, '✅ Shop rerolled', { fontSize: '28px', fill: '#ffff00' });
-      setTimeout(() => { msg.destroy(); }, 1800);
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
+    return alert('Сначала подключи MetaMask');
 
-      setTimeout(async () => {
-        await this.loadPlayerShop();
-      }, 5000);
-    } catch (e: any) {
-      console.error('rerollShop FULL ERROR:', e);
-      const errMsg = e.shortMessage || e.message || e.details || JSON.stringify(e);
-      const errorText = this.add.text(400, 340, `❌ Ошибка: ${errMsg}`, { fontSize: '22px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 4000);
-    }
+  try {
+    const hash = await this.gameContract.write.rerollShop([], { account: this.account, value: 0n });
+    const waiting = this.add.text(400, 340, 'TX reroll отправлена... ждём on-chain (3 сек)', { fontSize: '28px', fill: '#ffff00' });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    console.log('✅ rerollShop confirmed');
+
+    waiting.destroy();
+    const msg = this.add.text(400, 340, 'Shop rerolled — новые артефакты', { fontSize: '28px', fill: '#ffff00' });
+    setTimeout(() => { msg.destroy(); }, 1800);
+
+    this.clearTemporaryTexts();
+
+    // 3 секунды задержка перед обновлением UI
+    setTimeout(() => {
+      this.loadPlayerShop();
+      this.loadCurrentAI();
+    }, 3000);
+  } catch (e: any) {
+    const errMsg = e.shortMessage || e.message || 'Ошибка rerollShop';
+    const errorText = this.add.text(400, 340, `Ошибка: ${errMsg}`, { fontSize: '24px', fill: '#ff4444' });
+    setTimeout(() => errorText.destroy(), 4000);
+    console.error('rerollShop error:', e);
+  }
+}
+
+    private async startBattle() {
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
+    return alert('Сначала подключи MetaMask');
+
+  console.log('🚀 startBattle: team =', this.team);
+
+  if (this.team.length < 4 || this.team.length > 8) {
+    return this.add.text(500, 500, `Нужно 4-8 юнитов! Сейчас: ${this.team.length}`, { fontSize: '28px', fill: '#ff0000' });
   }
 
-  private async startBattle() {
-    if (!this.isWalletReady || !this.gameContract || !this.account) return alert('Сначала подключи MetaMask');
+  try {
+    const teamBigInt = this.team.map(id => BigInt(id));
+
+    const hash = await this.gameContract.write.startMatch([teamBigInt], { account: this.account });
     
-    console.log('🚀 startBattle: team =', this.team);
+    this.add.text(500, 280, 'TX отправлена... Бой обрабатывается on-chain (5–10 сек)', { fontSize: '24px', fill: '#ffff00' });
 
-    if (this.team.length < 4 || this.team.length > 8) {
-      return this.add.text(500, 500, `Нужно 4-8 юнитов! Сейчас: ${this.team.length}`, { fontSize: '28px', fill: '#ff0000' });
+    this.team = [];
+    if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    await new Promise(resolve => setTimeout(resolve, 6000));
+
+    let playerWon = false;
+    let events: any[] = [];
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await this.gameContract.read.getLastBattleResult([this.account]);
+        playerWon = result[0];
+        events = result[1];
+        console.log(`✅ getLastBattleResult (попытка ${attempt + 1}): ${events.length} событий, победа: ${playerWon}`);
+        if (events.length > 0) break;
+      } catch (e) {
+        console.warn('getLastBattleResult attempt failed', attempt, e);
+      }
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 3000));
     }
 
-    try {
-      const teamBigInt = this.team.map(id => BigInt(id));
+    this.scene.start('BattleScene', { events, playerWon });
 
-      const ownedBefore = await this.gameContract.read.getPlayerUnits([this.account]);
-      this.lastOwnedCount = ownedBefore.length;
-
-      await this.gameContract.write.startMatch([teamBigInt], { 
-        account: this.account,
-        gas: 600000n 
-      });
-      
-      this.add.text(500, 280, 'TX отправлена on-chain...', { fontSize: '24px', fill: '#ffff00' });
-
-      this.scene.start('BattleScene');
-
-      this.team = [];
-      if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-
-      setTimeout(async () => {
-        await this.loadOwnedUnits();
-        await this.loadPlayerShop();
-        await this.loadCurrentAI();
-        
-        const ownedAfter = await this.gameContract.read.getPlayerUnits([this.account]);
-        this.lastRewardsCount = ownedAfter.length - this.lastOwnedCount;
-        this.lastRewardIds = ownedAfter.slice(-this.lastRewardsCount).map(id => Number(id));
-        
-        const rewardText = this.lastRewardsCount > 1 
-          ? `Получено ${this.lastRewardsCount} юнита!` 
-          : `Получено ${this.lastRewardsCount} юнит!`;
-        
-        if (this.rewardNotification) this.rewardNotification.destroy();
-        this.rewardNotification = this.add.text(420, 310, rewardText, { fontSize: '26px', fill: '#ffff00' });
-
-        if (this.lastRewardIds.length > 0) {
-          const idText = this.add.text(420, 340, `ID: ${this.lastRewardIds.join(', ')}`, { fontSize: '18px', fill: '#aaffff' });
-          setTimeout(() => { idText.destroy(); }, 4500);
-        }
-        
-        setTimeout(async () => {
-          await this.updatePlayerProfile();
-        }, 800);
-
-        setTimeout(() => {
-          if (this.rewardNotification) this.rewardNotification.destroy();
-        }, 4500);
-      }, 9000);   // ← увеличено
-    } catch (e: any) {
-      console.error('❌ startMatch error:', e);
-      alert(e.shortMessage || e.message || 'Неизвестная ошибка контракта');
-    }
+  } catch (e: any) {
+    console.error('❌ startMatch error:', e);
+    alert(e.shortMessage || e.message || 'Ошибка контракта');
   }
+}
+
     private playVisualBattle() {
     const cx = 640, cy = 400;
 
@@ -660,5 +736,63 @@ export default class PrepareScene extends Phaser.Scene {
         }
       }, wave * 520);
     }
+  }
+    shutdown() {
+    // Полная очистка при уходе со сцены (важно для возврата из BattleScene)
+    if (this.tooltip) {
+      this.tooltip.destroy();
+      this.tooltip = null;
+    }
+    this.hideTooltip();
+
+    // Очищаем все спрайты, чтобы не оставались старые listeners
+    this.ownedSprites.forEach(s => s.destroy());
+    this.shopSprites.forEach(s => s.destroy());
+    this.aiSprites.forEach(s => s.destroy());
+    this.aiTexts.forEach(t => t.destroy());
+
+    console.log('✅ PrepareScene shutdown — очистка перед выходом');
+  }
+
+    init(data: any) {
+    this.gameContract = data.gameContract;
+    this.nftContract = data.nftContract;
+    this.relicContract = data.relicContract;
+    this.account = data.account;
+    this.publicClient = data.publicClient;
+    this.isWalletReady = true;
+    console.log('✅ PrepareScene init — данные от BootScene получены');
+  }
+
+  create() {
+    // Полная очистка при создании новой сцены (важно после BattleScene)
+    if (this.tooltip) {
+      this.tooltip.destroy();
+      this.tooltip = null;
+    }
+
+    this.children.getAll().forEach(child => {
+      if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
+    });
+
+    this.team = [];
+    this.teamSlotOccupants = new Array(8).fill(null);
+    this.originalPositions.clear();
+    this.ownedSprites = [];
+    this.shopSprites = [];
+    this.aiSprites = [];
+    this.aiTexts = [];
+
+    this.add.image(640, 360, 'bg'); // фон
+
+    this.addGameUI();
+    this.updatePlayerProfile();
+
+    // Загружаем всё после полной очистки
+    this.loadOwnedUnits();
+    this.loadPlayerShop();
+    this.loadPlayerRelics();
+
+    console.log('✅ PrepareScene полностью создана (после боя)');
   }
 }

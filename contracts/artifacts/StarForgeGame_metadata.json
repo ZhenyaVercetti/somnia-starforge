@@ -76,7 +76,7 @@
 				"anonymous": false,
 				"inputs": [
 					{
-						"indexed": false,
+						"indexed": true,
 						"internalType": "address",
 						"name": "player",
 						"type": "address"
@@ -84,20 +84,51 @@
 					{
 						"indexed": false,
 						"internalType": "bool",
-						"name": "won",
+						"name": "playerWon",
 						"type": "bool"
 					},
 					{
+						"components": [
+							{
+								"internalType": "uint8",
+								"name": "round",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bool",
+								"name": "isPlayerSide",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint16",
+								"name": "damage",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "remainingHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "string",
+								"name": "specialEffect",
+								"type": "string"
+							}
+						],
 						"indexed": false,
-						"internalType": "uint256",
-						"name": "playerScore",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "aiScore",
-						"type": "uint256"
+						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
+						"name": "events",
+						"type": "tuple[]"
 					},
 					{
 						"indexed": false,
@@ -106,7 +137,7 @@
 						"type": "uint256[]"
 					}
 				],
-				"name": "MatchPlayed",
+				"name": "MatchResolved",
 				"type": "event"
 			},
 			{
@@ -139,6 +170,25 @@
 					}
 				],
 				"name": "Paused",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "relicId",
+						"type": "uint256"
+					}
+				],
+				"name": "RelicBought",
 				"type": "event"
 			},
 			{
@@ -233,13 +283,6 @@
 				"type": "function"
 			},
 			{
-				"inputs": [],
-				"name": "generateAIOpponent",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -251,6 +294,16 @@
 				"outputs": [
 					{
 						"components": [
+							{
+								"internalType": "bool",
+								"name": "isRelic",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
 							{
 								"internalType": "enum StarForgeUnitNFT.Faction",
 								"name": "faction",
@@ -280,11 +333,101 @@
 								"internalType": "uint8",
 								"name": "speed",
 								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "relicType",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "relicValue",
+								"type": "uint8"
 							}
 						],
-						"internalType": "struct StarForgeGame.ShopUnit[]",
+						"internalType": "struct StarForgeBattleLibrary.ShopItem[]",
 						"name": "",
 						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "getLastBattleResult",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					},
+					{
+						"components": [
+							{
+								"internalType": "uint8",
+								"name": "round",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bool",
+								"name": "isPlayerSide",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint16",
+								"name": "damage",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "remainingHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "string",
+								"name": "specialEffect",
+								"type": "string"
+							}
+						],
+						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
+						"name": "",
+						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "getPlayerRelics",
+				"outputs": [
+					{
+						"internalType": "uint256[]",
+						"name": "",
+						"type": "uint256[]"
 					}
 				],
 				"stateMutability": "view",
@@ -303,6 +446,16 @@
 					{
 						"components": [
 							{
+								"internalType": "bool",
+								"name": "isRelic",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
 								"internalType": "enum StarForgeUnitNFT.Faction",
 								"name": "faction",
 								"type": "uint8"
@@ -331,9 +484,19 @@
 								"internalType": "uint8",
 								"name": "speed",
 								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "relicType",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "relicValue",
+								"type": "uint8"
 							}
 						],
-						"internalType": "struct StarForgeGame.ShopUnit[5]",
+						"internalType": "struct StarForgeBattleLibrary.ShopItem[5]",
 						"name": "",
 						"type": "tuple[5]"
 					}
@@ -361,10 +524,76 @@
 				"type": "function"
 			},
 			{
-				"inputs": [],
-				"name": "initializeShopPreview",
-				"outputs": [],
-				"stateMutability": "nonpayable",
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "lastBattleEvents",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "round",
+						"type": "uint8"
+					},
+					{
+						"internalType": "bool",
+						"name": "isPlayerSide",
+						"type": "bool"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerIndex",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetIndex",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint16",
+						"name": "damage",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "remainingHp",
+						"type": "uint16"
+					},
+					{
+						"internalType": "string",
+						"name": "specialEffect",
+						"type": "string"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "lastPlayerWon",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
@@ -416,6 +645,16 @@
 				"name": "playerCurrentAI",
 				"outputs": [
 					{
+						"internalType": "bool",
+						"name": "isRelic",
+						"type": "bool"
+					},
+					{
+						"internalType": "uint256",
+						"name": "id",
+						"type": "uint256"
+					},
+					{
 						"internalType": "enum StarForgeUnitNFT.Faction",
 						"name": "faction",
 						"type": "uint8"
@@ -444,6 +683,40 @@
 						"internalType": "uint8",
 						"name": "speed",
 						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "relicType",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "relicValue",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "playerRelics",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
 					}
 				],
 				"stateMutability": "view",
@@ -465,6 +738,16 @@
 				"name": "playerShopPreview",
 				"outputs": [
 					{
+						"internalType": "bool",
+						"name": "isRelic",
+						"type": "bool"
+					},
+					{
+						"internalType": "uint256",
+						"name": "id",
+						"type": "uint256"
+					},
+					{
 						"internalType": "enum StarForgeUnitNFT.Faction",
 						"name": "faction",
 						"type": "uint8"
@@ -492,6 +775,16 @@
 					{
 						"internalType": "uint8",
 						"name": "speed",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "relicType",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "relicValue",
 						"type": "uint8"
 					}
 				],
@@ -558,6 +851,19 @@
 			},
 			{
 				"inputs": [],
+				"name": "relicContract",
+				"outputs": [
+					{
+						"internalType": "contract StarForgeRelic",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
 				"name": "renounceOwnership",
 				"outputs": [],
 				"stateMutability": "nonpayable",
@@ -568,6 +874,19 @@
 				"name": "rerollShop",
 				"outputs": [],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_relicContract",
+						"type": "address"
+					}
+				],
+				"name": "setRelicContract",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -706,10 +1025,11 @@
 			"bytecodeHash": "ipfs"
 		},
 		"optimizer": {
-			"enabled": false,
+			"enabled": true,
 			"runs": 200
 		},
-		"remappings": []
+		"remappings": [],
+		"viaIR": true
 	},
 	"sources": {
 		"@openzeppelin/contracts/access/Ownable.sol": {
@@ -726,6 +1046,46 @@
 			"urls": [
 				"bzz-raw://89393bb3212da1c0889601b9706a07b39419ddc4d2faab9eaf6e7f9152cf6a1c",
 				"dweb:/ipfs/QmcCfzzxv1Bkdz1c1yF4gQCeYb6Us5BJANnzTFqawfd1HL"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC1155/ERC1155.sol": {
+			"keccak256": "0x405aba2c4c654f9ee77437739109afc694bec03a074f978733c11205927d774b",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://4f573eec7a4e9f9155e23cc593e1cf1c90f8d0b737aa11c50aab35f26b377af5",
+				"dweb:/ipfs/Qmbg8NLfyicH2fQjnzCkdTT3zt2xt8zjdCZMz1eZdMfcGV"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC1155/IERC1155.sol": {
+			"keccak256": "0xf189f9b417fe1931e1ab706838aff1128528694a9fcdb5ff7665197f2ca57d09",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://2ff0143c836c8c9f85d13708733c09e21251395847fccfb518bf3b556726a840",
+				"dweb:/ipfs/QmP69sjjrQrhYAsvCSSB69Bx66SiUPdQUqdzMYnf4wANHm"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol": {
+			"keccak256": "0x6ec6d7fce29668ede560c7d2e10f9d10de3473f5298e431e70a5767db42fa620",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://ac0139e51874aeec0730d040e57993187541777eb01d5939c06d5d2b986a54e8",
+				"dweb:/ipfs/QmZbMbdPzusXuX9FGkyArV8hgzKLBZaL5RzMtCdCawtwPF"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC1155/extensions/IERC1155MetadataURI.sol": {
+			"keccak256": "0x98c32de9b02f43eba7c0aba9fadf331cffb35a8d2076dce1d556c8f2cad704aa",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://38f68f76e741cce3ca4e0f8ece5ab9d69a203829311a403bafc8f7b95a7e6d63",
+				"dweb:/ipfs/QmZ8PrDXU5DiZ7fzEoRN7vHMQdemtsqvYVV5AdvAnScS4o"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC1155/utils/ERC1155Utils.sol": {
+			"keccak256": "0xaeca1511f7da49bdb16e44aa0f09dca76b51ba079bd068b2f80b8fe6d22b5fa1",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://542fe084e72e14f4298954f70c407d5795c1207a02c049f9b91e15f3b9a525a5",
+				"dweb:/ipfs/QmbPQMVUVZBE9R9Va6FNfZBTrUY51nrjm8qxpeoAoRrPrQ"
 			]
 		},
 		"@openzeppelin/contracts/token/ERC721/ERC721.sol": {
@@ -768,6 +1128,14 @@
 				"dweb:/ipfs/Qmb42XSd8MKsEitp42sZkSFGqDRigk6QgGXtiJyJqUZJJ6"
 			]
 		},
+		"@openzeppelin/contracts/utils/Arrays.sol": {
+			"keccak256": "0xb3b81029526a4c3acf39e57cc446407141ebce338cc99585942af1340e1a69e0",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://3857ce97e8f7a51ad78ea5419b3386e18fcc8af73b65803eedd8193ab7abc9df",
+				"dweb:/ipfs/QmSQi6x2cYsUy76mfMNwuq151bVmh4kAND141kjume51Aq"
+			]
+		},
 		"@openzeppelin/contracts/utils/Base64.sol": {
 			"keccak256": "0xe802369c4d2d254590d371eca16c8d247d7e0782ad2faaaa0180159ea8e736af",
 			"license": "MIT",
@@ -782,6 +1150,14 @@
 			"urls": [
 				"bzz-raw://6430007255ac11c6e9c4331a418f3af52ff66fbbae959f645301d025b20aeb08",
 				"dweb:/ipfs/QmQE5fjmBBRw9ndnzJuC2uskYss1gbaR7JdazoCf1FGoBj"
+			]
+		},
+		"@openzeppelin/contracts/utils/Comparators.sol": {
+			"keccak256": "0x302eecd8cf323b4690e3494a7d960b3cbce077032ab8ef655b323cdd136cec58",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://49ba706f1bc476d68fe6c1fad75517acea4e9e275be0989b548e292eb3a3eacd",
+				"dweb:/ipfs/QmeBpvcdGWzWMKTQESUCEhHgnEQYYATVwPxLMxa6vMT7jC"
 			]
 		},
 		"@openzeppelin/contracts/utils/Context.sol": {
@@ -814,6 +1190,14 @@
 			"urls": [
 				"bzz-raw://1e1d079e8edfb58efd23a311e315a4807b01b5d1cf153f8fa2d0608b9dec3e99",
 				"dweb:/ipfs/QmTBExeX2SDTkn5xbk5ssbYSx7VqRp9H4Ux1CY4uQM4b9N"
+			]
+		},
+		"@openzeppelin/contracts/utils/SlotDerivation.sol": {
+			"keccak256": "0x94045fd4f268edf2b2d01ef119268548c320366d6f5294ad30c1b8f9d4f5225f",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://edfda81f426f8948b3834115c21e83c48180e6db0d2a8cd2debb2185ed349337",
+				"dweb:/ipfs/QmdYZneFyDAux1BuWQxLAdqtABrGS2k9WYCa7C9dvpKkWv"
 			]
 		},
 		"@openzeppelin/contracts/utils/StorageSlot.sol": {
@@ -872,12 +1256,28 @@
 				"dweb:/ipfs/QmVUSvooZKEdEdap619tcJjTLcAuH6QBdZqAzWwnAXZAWJ"
 			]
 		},
-		"StarForgeGame.sol": {
-			"keccak256": "0x8499d905cde45e9ec58ffba20baa9a1a960aba57c2b465c5b2fae510e97b468b",
+		"StarForgeBattleLibrary.sol": {
+			"keccak256": "0x29b13118bcc2df36d94103a398992bf114e4c51b1016f0d9afe62497f282610b",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://fc53abed3601e3e21d6252306be135d91f25aa75d6f6f0c65e063598f519b85a",
-				"dweb:/ipfs/QmXoBszxruWTKqYCDQJFGfzGMusH296wHPGnTQPZMGJpH1"
+				"bzz-raw://50b1175693fc347cc452f9da0f0085f6344e152fe75e1935dbc8d581ff8765ab",
+				"dweb:/ipfs/QmSnnkF3p2gBGHcnsEYXTgntrF57oQ9NmgtZTW1jWkxbi3"
+			]
+		},
+		"StarForgeGame.sol": {
+			"keccak256": "0x47d3c1d9e646ef1e7f24ca8a1b0376bf515a838d009676d02a912bcc546e14c8",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://643e501341d2e761adaf67459b1ebf4fc6ee52b11b928cd638d5906487d941bd",
+				"dweb:/ipfs/QmPS3kojpE5B9QNTQVHE83gsbnJVdi7WXC4d5Uv7B6h4QR"
+			]
+		},
+		"StarForgeRelic.sol": {
+			"keccak256": "0xeeee8538a4c1c6184e0b5340cbd8980b75513f41110674b3326ed25e73568be3",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://69811ed1ead16a7900d60df61f3917829c061f8f2b025eabc7f359596ed7c136",
+				"dweb:/ipfs/Qma8RiRc9cVVxdXqgTRkpFJw4mrHriv95qBkduRRTxahvY"
 			]
 		},
 		"StarForgeUnitNFT.sol": {
