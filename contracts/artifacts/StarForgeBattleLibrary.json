@@ -34,18 +34,18 @@
 			"functionDebugData": {},
 			"generatedSources": [],
 			"linkReferences": {},
-			"object": "6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea2646970667358221220bf3f7101447de211342703b9c6b4506135293e4a7b0dcc2835c6ca72d1d1150b64736f6c634300081e0033",
-			"opcodes": "PUSH1 0x80 DUP1 PUSH1 0x40 MSTORE CALLVALUE PUSH1 0x17 JUMPI PUSH1 0x39 SWAP1 DUP2 PUSH1 0x1C DUP3 CODECOPY ADDRESS DUP2 POP POP RETURN JUMPDEST PUSH0 DUP1 REVERT INVALID PUSH0 DUP1 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 0xBF EXTCODEHASH PUSH18 0x1447DE211342703B9C6B4506135293E4A7B 0xD 0xCC 0x28 CALLDATALOAD 0xC6 0xCA PUSH19 0xD1D1150B64736F6C634300081E003300000000 ",
-			"sourceMap": "129:7263:26:-:0;;;;;;;;;;;;;;;;;;;;;"
+			"object": "6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea264697066735822122054e3b9b309b508ec0bbb05e229653a6869a621f14a02f32d9f1e0f10df282f1a64736f6c634300081e0033",
+			"opcodes": "PUSH1 0x80 DUP1 PUSH1 0x40 MSTORE CALLVALUE PUSH1 0x17 JUMPI PUSH1 0x39 SWAP1 DUP2 PUSH1 0x1C DUP3 CODECOPY ADDRESS DUP2 POP POP RETURN JUMPDEST PUSH0 DUP1 REVERT INVALID PUSH0 DUP1 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 SLOAD CALLF 0xB9B3 MULMOD 0xB5 ADDMOD EOFCREATE 0xB 0xBB SDIV 0xE2 0x29 PUSH6 0x3A6869A621F1 BLOBBASEFEE MUL RETURN 0x2D SWAP16 0x1E 0xF LT 0xDF 0x28 0x2F BYTE PUSH5 0x736F6C6343 STOP ADDMOD 0x1E STOP CALLER ",
+			"sourceMap": "129:14944:26:-:0;;;;;;;;;;;;;;;;;;;;;"
 		},
 		"deployedBytecode": {
 			"functionDebugData": {},
 			"generatedSources": [],
 			"immutableReferences": {},
 			"linkReferences": {},
-			"object": "5f80fdfea2646970667358221220bf3f7101447de211342703b9c6b4506135293e4a7b0dcc2835c6ca72d1d1150b64736f6c634300081e0033",
-			"opcodes": "PUSH0 DUP1 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 0xBF EXTCODEHASH PUSH18 0x1447DE211342703B9C6B4506135293E4A7B 0xD 0xCC 0x28 CALLDATALOAD 0xC6 0xCA PUSH19 0xD1D1150B64736F6C634300081E003300000000 ",
-			"sourceMap": "129:7263:26:-:0;;"
+			"object": "5f80fdfea264697066735822122054e3b9b309b508ec0bbb05e229653a6869a621f14a02f32d9f1e0f10df282f1a64736f6c634300081e0033",
+			"opcodes": "PUSH0 DUP1 REVERT INVALID LOG2 PUSH5 0x6970667358 0x22 SLT KECCAK256 SLOAD CALLF 0xB9B3 MULMOD 0xB5 ADDMOD EOFCREATE 0xB 0xBB SDIV 0xE2 0x29 PUSH6 0x3A6869A621F1 BLOBBASEFEE MUL RETURN 0x2D SWAP16 0x1E 0xF LT 0xDF 0x28 0x2F BYTE PUSH5 0x736F6C6343 STOP ADDMOD 0x1E STOP CALLER ",
+			"sourceMap": "129:14944:26:-:0;;"
 		},
 		"gasEstimates": {
 			"creation": {
@@ -54,10 +54,21 @@
 				"totalCost": "infinite"
 			},
 			"internal": {
-				"_applyRelics(struct StarForgeBattleLibrary.CombatUnit memory[] memory,address,contract StarForgeRelic,uint256[] memory)": "infinite",
-				"_doAttack(struct StarForgeBattleLibrary.CombatUnit memory[] memory,struct StarForgeBattleLibrary.CombatUnit memory[] memory,bool,uint8,uint256,struct StarForgeBattleLibrary.BattleEvent memory[] memory,uint256)": "infinite",
-				"_getPlayerTeamStats(uint256[] memory,contract StarForgeUnitNFT)": "infinite",
-				"_simulateBattle(uint256[] memory,struct StarForgeBattleLibrary.ShopItem memory[] memory,uint256,address,contract StarForgeUnitNFT,contract StarForgeRelic,uint256[] memory)": "infinite"
+				"_addInitiative(struct StarForgeBattleLibrary.CombatUnit memory[] memory)": "infinite",
+				"_applyFactionSynergy(struct StarForgeBattleLibrary.CombatUnit memory[] memory)": "infinite",
+				"_applyLevelBonus(struct StarForgeBattleLibrary.CombatUnit memory[] memory,uint16)": "infinite",
+				"_applyRelics(struct StarForgeBattleLibrary.CombatUnit memory[] memory,contract StarForgeRelic,uint256[] memory)": "infinite",
+				"_calculateDamage(uint8,uint8,uint8,uint8,uint256)": "infinite",
+				"_calculateHP(uint16,uint8)": "infinite",
+				"_doAttack(struct StarForgeBattleLibrary.CombatUnit memory[] memory,struct StarForgeBattleLibrary.CombatUnit memory[] memory,bool,uint8,uint8,uint256,struct StarForgeBattleLibrary.BattleEvent memory[] memory,uint256)": "infinite",
+				"_findHighestInitiative(struct StarForgeBattleLibrary.CombatUnit memory[] memory,struct StarForgeBattleLibrary.CombatUnit memory[] memory,uint256,uint8)": "infinite",
+				"_getAITeam(struct StarForgeBattleLibrary.ShopItem memory[] memory)": "infinite",
+				"_getBaseHP(enum StarForgeUnitNFT.Rarity)": "infinite",
+				"_getCritChance(enum StarForgeUnitNFT.Rarity)": "infinite",
+				"_getDodgeChance(enum StarForgeUnitNFT.Rarity,uint8)": "infinite",
+				"_getPlayerTeam(uint256[] memory,contract StarForgeUnitNFT,uint16,contract StarForgeRelic,uint256[] memory)": "infinite",
+				"_isTeamAlive(struct StarForgeBattleLibrary.CombatUnit memory[] memory)": "infinite",
+				"_simulateBattle(uint256[] memory,struct StarForgeBattleLibrary.ShopItem memory[] memory,uint256,address,contract StarForgeUnitNFT,contract StarForgeRelic,uint256[] memory,uint16)": "infinite"
 			}
 		},
 		"methodIdentifiers": {}

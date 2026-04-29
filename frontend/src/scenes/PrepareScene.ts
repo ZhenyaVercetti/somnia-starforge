@@ -12,7 +12,9 @@ export default class PrepareScene extends Phaser.Scene {
   private nftContract: any;
   private account: `0x${string}` | undefined;
 
-  private team: number[] = [];
+private team: number[] = [];
+private equippedTexts: Phaser.GameObjects.Text[] = [];
+private equippedRelics: number[] = [0, 0, 0];
 private isWalletReady = false;
 private ownedSprites: Phaser.GameObjects.GameObject[] = [];
 private shopSprites: Phaser.GameObjects.Sprite[] = [];
@@ -29,6 +31,9 @@ private teamSlotOccupants: (Phaser.GameObjects.GameObject | null)[] = [];
 private originalPositions: Map<number, {x: number, y: number}> = new Map();
 private aiSprites: Phaser.GameObjects.Sprite[] = [];
 private aiTexts: Phaser.GameObjects.Text[] = [];
+private equippedRelics: number[] = [0, 0, 0];
+private equippedSlotRects: Phaser.GameObjects.Rectangle[] = [];
+private equippedSprites: Phaser.GameObjects.GameObject[] = [];
 private relicContract: any;
 
 private updateTeamCounter() {
@@ -177,9 +182,10 @@ private async loadOwnedUnits() {
         this.updateTeamCounter();
       });
 
-      this.originalPositions.set(tokenId, { x, y });
+            this.originalPositions.set(tokenId, { x, y });
       this.ownedSprites.push(rect);
     });
+
   } catch (e) {
     console.error('loadOwnedUnits error', e);
   }
@@ -193,17 +199,20 @@ private async loadPlayerShop() {
   try {
     const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
 
-    // Полная очистка старых shop-элементов
+    // Удаляем старые shop-элементы
     this.children.getAll().forEach(child => {
       if (child instanceof Phaser.GameObjects.Text && child.x > 600 && child.y < 220) child.destroy();
       if (child instanceof Phaser.GameObjects.Rectangle && child.x > 600 && child.y < 220) child.destroy();
     });
 
-    this.add.text(650, 80, 'SHOP (ARTEFACTS)', { fontSize: '22px', fill: '#ff00ff' });
+    this.add.text(720, 80, 'SHOP (3 ARTEFACTS)', { fontSize: '22px', fill: '#ff00ff' });
 
-    for (let i = 0; i < 5; i++) {
+    const startX = 680;
+    const spacing = 130; // удобное расстояние между 3 слотами
+
+    for (let i = 0; i < 3; i++) {                    // ← теперь строго 3
       const item = shopData[i];
-      const x = 680 + i * 100;
+      const x = startX + i * spacing;
       const y = 140;
 
       const rect = this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(4, 0xffaa00);
@@ -224,12 +233,12 @@ private async loadPlayerShop() {
       const sprite = this.add.sprite(x, y, 'ship').setInteractive();
       (sprite as any).shopSlot = i;
 
-      // Название артефакта под квадратом
+      // Название артефакта — теперь ПОД квадратом
       this.add.text(x, y + 55, displayName, { 
         fontSize: '13px', 
         fill: '#ffff00',
         align: 'center',
-        wordWrap: { width: 90 }
+        wordWrap: { width: 110 }
       }).setOrigin(0.5);
 
       this.add.text(x - 20, y + 85, 'BUY', { fontSize: '18px', fill: '#00ff00' })
@@ -248,39 +257,116 @@ private async loadPlayerShop() {
   }
 }
 
+// ====================== RELIC SYSTEM v1.4.5 — СТАБИЛЬНЫЙ DRAG & DROP ======================
+private async refreshRelics() {
+  await this.loadPlayerRelics();
+  await this.loadEquippedRelics();
+}
+
+// Загружаем начальное состояние equipped с on-chain ТОЛЬКО один раз
+private async initEquippedState() {
+  if (!this.account || !this.gameContract) return;
+  try {
+    const equipped: bigint[] = await this.gameContract.read.getEquippedRelics([this.account]);
+    this.equippedRelics = equipped.map(id => Number(id));
+    console.log('✅ initEquippedState loaded:', this.equippedRelics);
+  } catch (e) {
+    console.error('initEquippedState error', e);
+  }
+}
+
 private async loadPlayerRelics() {
   if (!this.account || !this.gameContract || !this.relicContract) return;
 
   try {
     const relics: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+    const equippedSet = new Set(this.equippedRelics); // ← теперь используем локальное состояние
 
+    // Полная очистка старых owned relics
     this.children.getAll().forEach(child => {
       if ((child as any).isRelicSlot) child.destroy();
       if (child instanceof Phaser.GameObjects.Text && child.text.includes('RELICS')) child.destroy();
     });
 
-    this.add.text(50, 520, `RELICS (${relics.length})`, { fontSize: '18px', fill: '#ff00ff' });
+    this.add.text(50, 620, `RELICS (${relics.length})`, { fontSize: '18px', fill: '#ff00ff' });
 
     if (relics.length === 0) {
-      this.add.text(55, 560, 'Пока нет артефактов.\nКупи в магазине →', { 
+      this.add.text(55, 660, 'Пока нет артефактов.\nКупи в магазине →', { 
         fontSize: '16px', fill: '#aaaaaa', align: 'left' 
       });
       return;
     }
 
+    let displayedCount = 0;
     for (let i = 0; i < relics.length; i++) {
-      const relicIdBig = relics[i];
-      const relicData = await this.relicContract.read.getRelic([relicIdBig]);
+      const relicIdNum = Number(relics[i]);
+      if (equippedSet.has(relicIdNum)) continue;
 
-      const x = 55 + (i % 8) * 55;
-      const y = 560;
+      const relicData = await this.relicContract.read.getRelic([relics[i]]);
+
+      const x = 55 + (displayedCount % 8) * 55;
+      const y = 660 + Math.floor(displayedCount / 8) * 58; // вертикальный отступ
 
       const rect = this.add.rectangle(x, y, 48, 48, 0x112233)
         .setStrokeStyle(4, 0xffaa00)
         .setInteractive()
-        .setScale(0.85);
+        .setScale(0.85)
+        .setDepth(5);
+
       (rect as any).isRelicSlot = true;
-      (rect as any).relicId = Number(relicIdBig);
+      (rect as any).relicId = relicIdNum;
+      (rect as any).originalX = x;
+      (rect as any).originalY = y;
+
+      this.input.setDraggable(rect);
+
+      rect.on('dragstart', () => {
+        rect.setScale(1.05);
+        rect.setDepth(20);
+      });
+
+      rect.on('drag', (_: any, dragX: number, dragY: number) => {
+        rect.x = dragX;
+        rect.y = dragY;
+      });
+
+      rect.on('dragend', () => {
+        rect.setScale(0.85);
+        rect.setDepth(5);
+
+        // Находим БЛИЖАЙШИЙ слот
+        let closestIndex = -1;
+        let minDistance = Infinity;
+        for (let s = 0; s < this.equippedSlotRects.length; s++) {
+          const slot = this.equippedSlotRects[s];
+          if (!slot) continue;
+          const dx = slot.x - rect.x;
+          const dy = slot.y - rect.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestIndex = s;
+          }
+        }
+
+        console.log(`🟡 Drop relic ${relicIdNum} → slot ${closestIndex}, dist=${minDistance.toFixed(1)}px`);
+
+        if (closestIndex !== -1 && minDistance < 95) { // увеличенный threshold
+          // мгновенный visual snap
+          rect.x = this.equippedSlotRects[closestIndex].x;
+          rect.y = this.equippedSlotRects[closestIndex].y;
+
+          const currentInSlot = this.equippedRelics[closestIndex];
+          if (currentInSlot !== 0) {
+            this.unequipRelic(closestIndex);
+          }
+          this.equipRelic(relicIdNum, closestIndex);
+          // destroy произойдёт в refreshRelics
+        } else {
+          rect.x = (rect as any).originalX;
+          rect.y = (rect as any).originalY;
+        }
+      });
 
       rect.on('pointerover', () => {
         this.showTooltip(x + 25, y - 10, 
@@ -290,11 +376,124 @@ private async loadPlayerRelics() {
       rect.on('pointerout', () => this.hideTooltip());
 
       this.ownedSprites.push(rect);
+      displayedCount++;
     }
   } catch (e) {
     console.error('loadPlayerRelics error', e);
   }
 }
+
+private async loadEquippedRelics() {
+  if (!this.account || !this.gameContract || !this.relicContract) return;
+
+  try {
+    // Уничтожаем старые спрайты и ТЕКСТЫ
+    this.equippedSprites.forEach(s => s.destroy());
+    this.equippedSprites = [];
+
+    this.equippedTexts.forEach(t => t.destroy());
+    this.equippedTexts = [];
+
+    for (let i = 0; i < 3; i++) {
+      const slot = this.equippedSlotRects[i];
+      if (!slot) continue;
+
+      const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
+      if (oldRect) oldRect.destroy();
+
+      if (this.equippedRelics[i] === 0) {
+        slot.setData('equippedRect', null);
+        continue;
+      }
+
+      const relicId = this.equippedRelics[i];
+      const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
+
+      const rect = this.add.rectangle(slot.x, slot.y, 72, 72, 0x112233)
+        .setStrokeStyle(6, 0xffff00)
+        .setInteractive()
+        .setDepth(15);
+
+      (rect as any).relicId = relicId;
+      (rect as any).isEquipped = true;
+      (rect as any).slotIndex = i;
+
+      slot.setData('equippedRect', rect);
+
+      // ТЕКСТ теперь хранится в equippedTexts
+      const nameText = this.add.text(slot.x, slot.y + 58, relicData.name, { 
+        fontSize: '12px', 
+        fill: '#ffff00',
+        align: 'center',
+        wordWrap: { width: 90 }
+      }).setOrigin(0.5).setDepth(15);
+
+      this.equippedTexts.push(nameText);
+
+      // DRAG НА EQUIPPED RELICS
+      this.input.setDraggable(rect);
+
+      rect.on('dragstart', () => {
+        rect.setScale(1.1);
+        rect.setDepth(30);
+      });
+
+      rect.on('drag', (_: any, dragX: number, dragY: number) => {
+        rect.x = dragX;
+        rect.y = dragY;
+      });
+
+      rect.on('dragend', () => {
+        rect.setScale(1.0);
+
+        let stillInEquipped = false;
+        for (let s = 0; s < 3; s++) {
+          const slotRect = this.equippedSlotRects[s];
+          const dx = slotRect.x - rect.x;
+          const dy = slotRect.y - rect.y;
+          if (Math.sqrt(dx * dx + dy * dy) < 80) {
+            stillInEquipped = true;
+            break;
+          }
+        }
+
+        if (!stillInEquipped) {
+          console.log(`🔄 Unequip relic ${relicId} drag'ом`);
+          this.unequipRelic(i);
+        } else {
+          rect.x = this.equippedSlotRects[i].x;
+          rect.y = this.equippedSlotRects[i].y;
+        }
+      });
+
+      rect.on('pointerover', () => {
+        this.showTooltip(slot.x + 40, slot.y - 30, 
+          `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
+        );
+      });
+      rect.on('pointerout', () => this.hideTooltip());
+
+      this.equippedSprites.push(rect);
+    }
+  } catch (e) {
+    console.error('loadEquippedRelics error', e);
+  }
+}
+
+private async equipRelic(relicId: number, slotIndex: number) {
+  if (slotIndex < 0 || slotIndex > 2) return;
+  this.equippedRelics[slotIndex] = relicId;
+  console.log(`✅ Equipped relic ${relicId} → слот ${slotIndex}`);
+  await this.refreshRelics();
+}
+
+private async unequipRelic(slotIndex: number) {
+  if (slotIndex < 0 || slotIndex > 2) return;
+  this.equippedRelics[slotIndex] = 0;
+  console.log(`✅ Unequipped слот ${slotIndex}`);
+  await this.refreshRelics();
+}
+
 
 private getRelicEffectDescription(relicType: number): string {
   const desc = [
@@ -322,16 +521,16 @@ private async loadCurrentAI() {
     // Удаляем старый заголовок
     this.children.getAll().forEach(child => {
       if (child instanceof Phaser.GameObjects.Text && 
-          Math.abs((child as any).x - 680) < 150 && (child as any).y === 240) {
+          Math.abs((child as any).x - 1150) < 200 && (child as any).y < 350) {
         child.destroy();
       }
     });
 
-    // Новый заголовок и позиция — у правой стенки, посередине
-    this.add.text(1050, 280, 'AI OPPONENT', { fontSize: '22px', fill: '#ff3366' }).setOrigin(0.5);
+    // Заголовок — максимально справа и чуть выше Team
+    this.add.text(1150, 310, 'AI OPPONENT', { fontSize: '22px', fill: '#ff3366' }).setOrigin(0.5);
 
     if (aiData.length === 0) {
-      const placeholder = this.add.text(1050, 320, 'Первый противник\nбудет сгенерирован\nпри старте боя', {
+      const placeholder = this.add.text(1150, 380, 'Первый противник\nбудет сгенерирован\nпри старте боя', {
         fontSize: '14px',
         fill: '#888888',
         align: 'center',
@@ -341,10 +540,15 @@ private async loadCurrentAI() {
       return;
     }
 
+    // === 2 РЯДА ПО 4 СЛОТА, максимально близко к правому краю ===
     for (let i = 0; i < aiData.length; i++) {
       const unit = aiData[i];
-      const x = 950 + i * 85;   // правее
-      const y = 340;            // чуть ниже центра
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+
+      // Сдвиг вправо: начинаем с x=950, чтобы последний слот был почти у края
+      const x = 950 + col * 85;
+      const y = 380 + row * 90;   // точно на уровне Team
 
       const strokeColor = unit.rarity === 2 ? 0xffaa00 : unit.rarity === 1 ? 0x00ff88 : 0x00ffff;
 
@@ -355,9 +559,9 @@ private async loadCurrentAI() {
       if (unit.rarity === 2) sprite.setScale(0.95);
       else if (unit.rarity === 1) sprite.setScale(0.85);
 
-      const statsText = this.add.text(x - 30, y + 38, 
+      const statsText = this.add.text(x, y + 45, 
         `${unit.attack}/${unit.defense}/${unit.speed}`, 
-        { fontSize: '13px', fill: '#ffff00' });
+        { fontSize: '13px', fill: '#ffff00' }).setOrigin(0.5);
 
       this.aiSprites.push(sprite);
       this.aiTexts.push(statsText);
@@ -398,8 +602,10 @@ private enableDoubleClickRemoveOnTeamUnit(rect: Phaser.GameObjects.GameObject, t
 private addGameUI() {
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
+  this.equippedSlotRects = [];
 
-    for (let i = 0; i < 8; i++) {
+  // Team grid
+  for (let i = 0; i < 8; i++) {
     const x = 420 + (i % 4) * 90;
     const y = 380 + Math.floor(i / 4) * 90;
     const slot = this.add.rectangle(x, y, 80, 80, 0x112233).setStrokeStyle(3, 0x00ffff);
@@ -407,57 +613,201 @@ private addGameUI() {
     (slot as any).slotIndex = i;
     this.gridSlots.push(slot);
 
-    // ОДИНОЧНЫЙ КЛИК по слоту = убрать юнита обратно в owned
     slot.setInteractive().on('pointerdown', () => {
       const occupant = this.teamSlotOccupants[i];
-      if (occupant) {
-        this.removeFromTeam(i);
-      }
+      if (occupant) this.removeFromTeam(i);
     });
   }
 
   this.teamCounterText = this.add.text(420, 320, 'TEAM: 0/8', { fontSize: '24px', fill: '#ffff00' });
 
-  this.playerProfileText = this.add.text(50, 40, 'PROFILE: Level 1 | XP 0 | W:0 L:0', {
+  // Кнопка АВТОВЫБОР (оставляем как было)
+  this.add.text(650, 280, 'АВТОВЫБОР', {
+    fontSize: '22px',
+    fill: '#00ffff',
+    backgroundColor: '#112233',
+    padding: { x: 15, y: 8 }
+  })
+    .setInteractive()
+    .on('pointerdown', () => this.autoSelectTeam());
+
+  // === ИСПРАВЛЕННАЯ КНОПКА ОЧИСТИТЬ КОМАНДУ ===
+  const clearBtn = this.add.text(650, 320, 'ОЧИСТИТЬ КОМАНДУ', {
+    fontSize: '22px',
+    fill: '#ff6666',
+    backgroundColor: '#112233',
+    padding: { x: 15, y: 8 }
+  })
+    .setInteractive()
+    .on('pointerdown', () => this.clearTeam());
+
+  // EQUIPPED RELICS
+  this.add.text(420, 500, 'EQUIPPED RELICS (max 3)', { fontSize: '20px', fill: '#ff00ff' });
+
+  for (let i = 0; i < 3; i++) {
+    const x = 420 + i * 110;
+    const y = 550;
+    const slot = this.add.rectangle(x, y, 80, 80, 0x112233)
+      .setStrokeStyle(4, 0xffaa00)
+      .setInteractive()
+      .setData('equippedIndex', i);
+    this.equippedSlotRects.push(slot);
+
+    slot.on('pointerdown', () => this.unequipRelic(i));
+  }
+
+  // PROGRESS-BAR
+  this.playerProfileText = this.add.text(50, 40, 'PROFILE: Level 1 | XP 0/100', {
     fontSize: '18px', fill: '#00ffff', align: 'left'
   });
 
+  const progressBg = this.add.rectangle(50, 70, 220, 14, 0x112233).setStrokeStyle(2, 0x00ffff);
+  const progressBar = this.add.rectangle(50, 70, 0, 14, 0x00ff88).setOrigin(0, 0.5);
+  (this as any).levelProgressBar = progressBar;
+  (this as any).levelProgressBg = progressBg;
+
+  // Кнопки
   this.add.text(100, 100, 'BUY (FREE)', { fontSize: '22px', fill: '#00ffff' })
     .setInteractive().on('pointerdown', () => this.buyUnit());
 
   this.add.text(100, 140, 'REROLL SHOP (FREE)', { fontSize: '22px', fill: '#ff00ff' })
     .setInteractive().on('pointerdown', () => this.rerollShop());
 
-  const refreshBtn = this.add.text(100, 180, 'REFRESH', { fontSize: '22px', fill: '#ffff00' })
+  const refreshBtn = this.add.text(100, 180, 'REFRESH ALL', { fontSize: '22px', fill: '#ffff00' })
     .setInteractive()
     .on('pointerdown', () => {
       refreshBtn.setText('REFRESHING...');
-      this.loadOwnedUnits().then(() => refreshBtn.setText('REFRESH'));
+      Promise.all([
+        this.loadOwnedUnits(),
+        this.loadPlayerShop(),
+        this.loadPlayerRelics()
+      ]).then(() => {
+        refreshBtn.setText('REFRESH ALL');
+        this.updatePlayerProfile();
+      });
     });
 
   this.add.text(900, 600, '▶ START BATTLE', { fontSize: '42px', fill: '#ff3333' })
     .setInteractive().on('pointerdown', () => this.startBattle());
-
-  const clearBtn = this.add.text(650, 320, 'ОЧИСТИТЬ КОМАНДУ', { fontSize: '22px', fill: '#ff6666', backgroundColor: '#112233', padding: { x: 15, y: 8 } })
-    .setInteractive()
-    .on('pointerdown', () => {
-      this.team = [];
-      this.teamSlotOccupants = new Array(8).fill(null);
-      if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-      this.loadOwnedUnits();
-    });
 }
 
-  private async updatePlayerProfile() {
-    if (!this.account || !this.gameContract || !this.playerProfileText) return;
-    try {
-      const profile = await this.gameContract.read.profiles([this.account]);
-      const text = `PROFILE: Level ${profile.level} | XP ${profile.xp} | W:${profile.wins} L:${profile.losses}`;
-      this.playerProfileText.setText(text);
-    } catch (e) {
-      console.error('updatePlayerProfile error', e);
+
+private autoSelectTeam() {
+  if (this.ownedSprites.length === 0) return;
+
+  // Очищаем текущую команду
+  this.team = [];
+  this.teamSlotOccupants = new Array(8).fill(null);
+
+  // ФИЛЬТРУЕМ ТОЛЬКО НАСТОЯЩИЕ ЮНИТЫ (у которых есть .unit)
+  const onlyUnits = this.ownedSprites.filter(sprite => {
+    const unit = (sprite as any).unit;
+    return unit && typeof unit.rarity !== 'undefined';
+  });
+
+  if (onlyUnits.length === 0) return;
+
+  // Сортируем по приоритету: Legendary (2) → Rare (1) → Common (0)
+  const sorted = [...onlyUnits].sort((a, b) => {
+    const rarityA = (a as any).unit.rarity;
+    const rarityB = (b as any).unit.rarity;
+
+    if (rarityA !== rarityB) return rarityB - rarityA; // более редкие первыми
+
+    // При равном rarity — по общей силе (attack + defense + speed)
+    const powerA = (a as any).unit.attack + (a as any).unit.defense + (a as any).unit.speed;
+    const powerB = (b as any).unit.attack + (b as any).unit.defense + (b as any).unit.speed;
+    return powerB - powerA;
+  });
+
+  // Берём максимум 8 юнитов
+  const toSelect = sorted.slice(0, 8);
+
+  // Заполняем team и слоты
+  for (let i = 0; i < toSelect.length; i++) {
+    const rect = toSelect[i] as any;
+    const tokenId = rect.tokenId;
+
+    const slotIndex = i;
+    const slot = this.gridSlots[slotIndex];
+
+    if (slot) {
+      rect.setPosition(slot.x, slot.y);
+      rect.input.draggable = false;
+      this.teamSlotOccupants[slotIndex] = rect;
+      this.enableDoubleClickRemoveOnTeamUnit(rect, tokenId);
+
+      this.team.push(tokenId);
     }
   }
+
+  this.updateTeamCounter();
+  console.log(`✅ Автовыбор: выбрано ${this.team.length} юнитов (из ${onlyUnits.length} доступных)`);
+}
+
+private clearTeam() {
+  if (this.team.length === 0) return;
+
+  // Возвращаем все юниты из команды обратно в коллекцию «ТВОИ ЮНИТЫ»
+  for (let i = 0; i < this.teamSlotOccupants.length; i++) {
+    const occupant = this.teamSlotOccupants[i];
+    if (!occupant) continue;
+
+    const tokenId = (occupant as any).tokenId;
+    const orig = this.originalPositions.get(tokenId);
+
+    if (orig) {
+      occupant.x = orig.x;
+      occupant.y = orig.y;
+      occupant.setScale(0.75);
+      occupant.setInteractive();
+      (occupant as any).input.draggable = true;
+    }
+
+    this.teamSlotOccupants[i] = null;
+  }
+
+  this.team = [];
+  if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
+
+  console.log('✅ Команда очищена, юниты возвращены в коллекцию');
+}
+
+
+ private async updatePlayerProfile() {
+  if (!this.account || !this.gameContract || !this.playerProfileText) return;
+  try {
+    const profile = await this.gameContract.read.profiles([this.account]);
+    const level = Number(profile.level);
+    const xp = Number(profile.xp);
+    const nextXp = level * 90 + 120;                    // ← новая формула
+    const text = `PROFILE: Level ${level} | XP ${xp}/${nextXp} | W:${profile.wins} L:${profile.losses}`;
+    this.playerProfileText.setText(text);
+
+    // Прогресс-бар
+    const progress = Math.min(xp / nextXp, 1);
+    const bar = (this as any).levelProgressBar as Phaser.GameObjects.Rectangle;
+    if (bar) bar.width = 220 * progress;
+
+    // Уведомление Level Up
+    if (xp === 0 && level > 1) {
+      const levelUpText = this.add.text(400, 200, `LEVEL UP! → ${level}`, {
+        fontSize: '42px', fill: '#ffff00', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      this.tweens.add({
+        targets: levelUpText,
+        y: levelUpText.y - 80,
+        alpha: 0,
+        duration: 2200,
+        onComplete: () => levelUpText.destroy()
+      });
+    }
+  } catch (e) {
+    console.error('updatePlayerProfile error', e);
+  }
+}
+
+
   private showTooltip(x: number, y: number, text: string) {
     if (!this.tooltip || this.tooltip.scene !== this) {
       this.tooltip = this.add.text(0, 0, '', {
@@ -613,54 +963,97 @@ private resetSlotHighlights() {
   }
 }
 
-    private async startBattle() {
+private async startBattle() {
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
     return alert('Сначала подключи MetaMask');
 
-  console.log('🚀 startBattle: team =', this.team);
+  console.log('🚀 startBattle: team =', this.team, 'equipped =', this.equippedRelics);
 
   if (this.team.length < 4 || this.team.length > 8) {
     return this.add.text(500, 500, `Нужно 4-8 юнитов! Сейчас: ${this.team.length}`, { fontSize: '28px', fill: '#ff0000' });
   }
 
+  const tempTeam = [...this.team];
+
   try {
     const teamBigInt = this.team.map(id => BigInt(id));
+    const equippedBigInt = this.equippedRelics.map(id => BigInt(id));
 
-    const hash = await this.gameContract.write.startMatch([teamBigInt], { account: this.account });
+    const hash = await this.gameContract.write.startMatch([teamBigInt, equippedBigInt], { account: this.account });
     
-    this.add.text(500, 280, 'TX отправлена... Бой обрабатывается on-chain (5–10 сек)', { fontSize: '24px', fill: '#ffff00' });
+    const waitingText = this.add.text(500, 280, 'TX отправлена... Бой обрабатывается on-chain (5–10 сек)', { fontSize: '24px', fill: '#ffff00' });
 
+    const receipt = await this.publicClient.waitForTransactionReceipt({ 
+      hash, 
+      confirmations: 1 
+    });
+
+    console.log('✅ receipt получен, status:', receipt.status);
+
+    if (receipt.status !== 'success') {
+      throw new Error(`Транзакция не прошла (status = ${receipt.status})`);
+    }
+
+    waitingText.destroy();
+
+    // Очищаем команду ТОЛЬКО после успеха
     this.team = [];
     if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-    await new Promise(resolve => setTimeout(resolve, 6000));
+    await new Promise(resolve => setTimeout(resolve, 7000));
 
+    // ← НОВЫЙ РАЗБОР РЕЗУЛЬТАТА (4 значения)
     let playerWon = false;
     let events: any[] = [];
+    let playerMaxHp: number[] = [];
+    let aiMaxHp: number[] = [];
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const result = await this.gameContract.read.getLastBattleResult([this.account]);
         playerWon = result[0];
-        events = result[1];
-        console.log(`✅ getLastBattleResult (попытка ${attempt + 1}): ${events.length} событий, победа: ${playerWon}`);
+        events = result[1] || [];
+        playerMaxHp = result[2] ? result[2].map((v: bigint) => Number(v)) : [];
+        aiMaxHp = result[3] ? result[3].map((v: bigint) => Number(v)) : [];
+        console.log(`📡 getLastBattleResult attempt ${attempt + 1}: events=${events.length}, playerMaxHp=${playerMaxHp.length}, aiMaxHp=${aiMaxHp.length}`);
         if (events.length > 0) break;
       } catch (e) {
         console.warn('getLastBattleResult attempt failed', attempt, e);
       }
-      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 3000));
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 3500));
     }
 
-    this.scene.start('BattleScene', { events, playerWon });
+    if (events.length === 0) {
+      throw new Error('Бой прошёл, но результат не получен с on-chain');
+    }
+
+    console.log('✅ Бой успешно подтверждён, переходим в BattleScene');
+    this.scene.start('BattleScene', { 
+      events, 
+      playerWon, 
+      playerMaxHp, 
+      aiMaxHp 
+    });
 
   } catch (e: any) {
     console.error('❌ startMatch error:', e);
-    alert(e.shortMessage || e.message || 'Ошибка контракта');
+    
+    this.team = tempTeam;
+    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+
+    const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
+    const errorText = this.add.text(400, 300, `ОШИБКА: ${errMsg}\nБой отменён.\nКоманда восстановлена.`, { 
+      fontSize: '24px', 
+      fill: '#ff4444',
+      align: 'center',
+      wordWrap: { width: 700 }
+    });
+    setTimeout(() => errorText.destroy(), 6000);
   }
 }
 
-    private playVisualBattle() {
+
+private playVisualBattle() {
     const cx = 640, cy = 400;
 
     this.children.getAll().forEach(child => {
@@ -750,8 +1143,10 @@ private resetSlotHighlights() {
     this.shopSprites.forEach(s => s.destroy());
     this.aiSprites.forEach(s => s.destroy());
     this.aiTexts.forEach(t => t.destroy());
+    this.equippedTexts.forEach(t => t.destroy());
+    this.equippedTexts = [];
 
-    console.log('✅ PrepareScene shutdown — очистка перед выходом');
+  console.log('✅ PrepareScene shutdown — очистка перед выходом');
   }
 
     init(data: any) {
@@ -764,35 +1159,38 @@ private resetSlotHighlights() {
     console.log('✅ PrepareScene init — данные от BootScene получены');
   }
 
-  create() {
-    // Полная очистка при создании новой сцены (важно после BattleScene)
-    if (this.tooltip) {
-      this.tooltip.destroy();
-      this.tooltip = null;
-    }
-
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
-    });
-
-    this.team = [];
-    this.teamSlotOccupants = new Array(8).fill(null);
-    this.originalPositions.clear();
-    this.ownedSprites = [];
-    this.shopSprites = [];
-    this.aiSprites = [];
-    this.aiTexts = [];
-
-    this.add.image(640, 360, 'bg'); // фон
-
-    this.addGameUI();
-    this.updatePlayerProfile();
-
-    // Загружаем всё после полной очистки
-    this.loadOwnedUnits();
-    this.loadPlayerShop();
-    this.loadPlayerRelics();
-
-    console.log('✅ PrepareScene полностью создана (после боя)');
+        create() {
+  if (this.tooltip) {
+    this.tooltip.destroy();
+    this.tooltip = null;
   }
+
+  this.children.getAll().forEach(child => {
+    if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
+  });
+
+  this.team = [];
+  this.teamSlotOccupants = new Array(8).fill(null);
+  this.originalPositions.clear();
+  this.ownedSprites = [];
+  this.shopSprites = [];
+  this.aiSprites = [];
+  this.aiTexts = [];
+  this.equippedRelics = [0, 0, 0];
+
+  this.add.image(640, 360, 'bg');
+
+  this.addGameUI();
+  
+  // ← ИСПРАВЛЕНИЕ: без await (fire-and-forget, как и все остальные вызовы)
+  this.initEquippedState();
+  this.refreshRelics();
+  this.updatePlayerProfile();
+
+  this.loadOwnedUnits();
+  this.loadPlayerShop();
+  this.loadPlayerRelics();
+
+  console.log('✅ PrepareScene создана (после боя)');
+}
 }

@@ -1,13 +1,13 @@
 # DEPLOYMENT.md
-**Актуально на 27 апреля 2026 — единственный источник правды по адресам**
+**Актуально на 29 апреля 2026 — единственный источник правды по адресам**
 
 ## Актуальные адреса (testnet)
 
 - **StarForgeUnitNFT**: `0x9D00dB7fb6faF315C9c63971ae34380d5b831a56`
-- **StarForgeGame**: `0x1cfB6c6fe1775cD9a324684f6C426f206368Eb59`
+- **StarForgeGame**: `0x52C428Ec735ef6fEb46334E626600ec31120cC80`   ← **актуальный**
 - **StarForgeRelic**: `0x83930224Ced8cEB6350fC9F41202B8fAA0033173`
 
-## Порядок обновления контрактов (важно!)
+## Порядок обновления контрактов
 
 **При обновлении StarForgeGame.sol:**
 1. Деплоим **НОВЫЙ** StarForgeGame с параметром `_unitNFT = 0x9D00dB7fb6faF315C9c63971ae34380d5b831a56`
@@ -23,9 +23,3 @@
 ## RPC и Chain ID
 - Testnet RPC: `https://dream-rpc.somnia.network`
 - Chain ID: `50312`
-
-**После любого обновления** обязательно проверяй в Remix:
-- `gameContract()` в Relic → должен возвращать адрес Game
-- `relicContract()` в Game → должен возвращать адрес Relic
-
-Сохрани файл.

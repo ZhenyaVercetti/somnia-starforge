@@ -5,7 +5,7 @@ import { createWalletClient, custom, createPublicClient, http } from 'viem';
 import { somniaTestnet } from 'viem/chains';
 import { getContract } from 'viem';
 
-const GAME_CONTRACT = '0x1cfB6c6fe1775cD9a324684f6C426f206368Eb59';
+const GAME_CONTRACT = '0x52C428Ec735ef6fEb46334E626600ec31120cC80';   // ← новый адрес
 const NFT_CONTRACT = '0x9D00dB7fb6faF315C9c63971ae34380d5b831a56';
 const RELIC_CONTRACT = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
 
@@ -56,7 +56,10 @@ export default class BootScene extends Phaser.Scene {
       { "inputs": [], "name": "buyUnit", "outputs": [], "stateMutability": "payable", "type": "function" },
       { "inputs": [], "name": "rerollShop", "outputs": [], "stateMutability": "payable", "type": "function" },
       { "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }], "name": "buyFromShop", "outputs": [], "stateMutability": "payable", "type": "function" },
-      { "inputs": [{ "internalType": "uint256[]", "name": "team", "type": "uint256[]" }], "name": "startMatch", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+      { "inputs": [
+        { "internalType": "uint256[]", "name": "team", "type": "uint256[]" },
+        { "internalType": "uint256[]", "name": "equipped", "type": "uint256[]" }
+      ], "name": "startMatch", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerUnits", "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }], "stateMutability": "view", "type": "function" },
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerRelics", "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }], "stateMutability": "view", "type": "function" },
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerShop", "outputs": [{ "components": [
@@ -70,7 +73,7 @@ export default class BootScene extends Phaser.Scene {
         { "internalType": "uint8", "name": "speed", "type": "uint8" },
         { "internalType": "uint8", "name": "relicType", "type": "uint8" },
         { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
-      ], "internalType": "struct StarForgeGame.ShopItem[5]", "name": "", "type": "tuple[5]" }], "stateMutability": "view", "type": "function" },
+      ], "internalType": "struct StarForgeGame.ShopItem[3]", "name": "", "type": "tuple[3]" }], "stateMutability": "view", "type": "function" },
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getCurrentAI", "outputs": [{ "components": [
         { "internalType": "bool", "name": "isRelic", "type": "bool" },
         { "internalType": "uint256", "name": "id", "type": "uint256" },
@@ -83,25 +86,38 @@ export default class BootScene extends Phaser.Scene {
         { "internalType": "uint8", "name": "relicType", "type": "uint8" },
         { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
       ], "internalType": "struct StarForgeGame.ShopItem[]", "name": "", "type": "tuple[]" }], "stateMutability": "view", "type": "function" },
+      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getEquippedRelics", "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }], "stateMutability": "view", "type": "function" },
+
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getLastBattleResult", "outputs": [
-        { "internalType": "bool", "name": "", "type": "bool" },
-        { "internalType": "tuple[]", "name": "", "type": "tuple[]", "components": [
+        { "internalType": "bool", "name": "playerWon", "type": "bool" },
+        { "internalType": "tuple[]", "name": "events", "type": "tuple[]", "components": [
           { "internalType": "uint8", "name": "round", "type": "uint8" },
           { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
           { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
           { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
           { "internalType": "uint16", "name": "damage", "type": "uint16" },
+          { "internalType": "uint16", "name": "damageDealt", "type": "uint16" },
+          { "internalType": "uint16", "name": "initialHp", "type": "uint16" },
           { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
-          { "internalType": "string", "name": "specialEffect", "type": "string" }
-        ]}
+          { "internalType": "string", "name": "specialEffect", "type": "string" },
+          { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
+          { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
+          { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
+          { "internalType": "uint8", "name": "targetClass", "type": "uint8" }
+        ]},
+        { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" },
+        { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }
       ], "stateMutability": "view", "type": "function" },
+
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "profiles", "outputs": [{ "components": [
         { "internalType": "uint16", "name": "level", "type": "uint16" },
         { "internalType": "uint32", "name": "xp", "type": "uint32" },
         { "internalType": "uint256", "name": "wins", "type": "uint256" },
-        { "internalType": "uint256", "name": "losses", "type": "uint256" }
+        { "internalType": "uint256", "name": "losses", "type": "uint256" },
+        { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }
       ], "internalType": "struct StarForgeGame.PlayerProfile", "name": "", "type": "tuple" }], "stateMutability": "view", "type": "function" }
     ];
+
     const nftAbi = [{
       "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
       "name": "getUnit",

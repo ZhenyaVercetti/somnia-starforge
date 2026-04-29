@@ -67,6 +67,12 @@
 						"internalType": "uint16",
 						"name": "aiLevel",
 						"type": "uint16"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint16",
+						"name": "tier",
+						"type": "uint16"
 					}
 				],
 				"name": "AIOpponentGenerated",
@@ -116,6 +122,16 @@
 							},
 							{
 								"internalType": "uint16",
+								"name": "damageDealt",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "initialHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
 								"name": "remainingHp",
 								"type": "uint16"
 							},
@@ -123,18 +139,32 @@
 								"internalType": "string",
 								"name": "specialEffect",
 								"type": "string"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerClass",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetClass",
+								"type": "uint8"
 							}
 						],
 						"indexed": false,
 						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
 						"name": "events",
 						"type": "tuple[]"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256[]",
-						"name": "rewards",
-						"type": "uint256[]"
 					}
 				],
 				"name": "MatchResolved",
@@ -263,6 +293,19 @@
 				"type": "function"
 			},
 			{
+				"inputs": [],
+				"name": "SHOP_SLOTS",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "uint256",
@@ -280,6 +323,30 @@
 				"name": "buyUnit",
 				"outputs": [],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "equippedRelics",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
@@ -361,11 +428,30 @@
 						"type": "address"
 					}
 				],
+				"name": "getEquippedRelics",
+				"outputs": [
+					{
+						"internalType": "uint256[3]",
+						"name": "",
+						"type": "uint256[3]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
 				"name": "getLastBattleResult",
 				"outputs": [
 					{
 						"internalType": "bool",
-						"name": "",
+						"name": "playerWon",
 						"type": "bool"
 					},
 					{
@@ -397,6 +483,16 @@
 							},
 							{
 								"internalType": "uint16",
+								"name": "damageDealt",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "initialHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
 								"name": "remainingHp",
 								"type": "uint16"
 							},
@@ -404,11 +500,41 @@
 								"internalType": "string",
 								"name": "specialEffect",
 								"type": "string"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerClass",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetClass",
+								"type": "uint8"
 							}
 						],
 						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
-						"name": "",
+						"name": "events",
 						"type": "tuple[]"
+					},
+					{
+						"internalType": "uint16[]",
+						"name": "playerMaxHp",
+						"type": "uint16[]"
+					},
+					{
+						"internalType": "uint16[]",
+						"name": "aiMaxHp",
+						"type": "uint16[]"
 					}
 				],
 				"stateMutability": "view",
@@ -496,9 +622,9 @@
 								"type": "uint8"
 							}
 						],
-						"internalType": "struct StarForgeBattleLibrary.ShopItem[5]",
+						"internalType": "struct StarForgeBattleLibrary.ShopItem[3]",
 						"name": "",
-						"type": "tuple[5]"
+						"type": "tuple[3]"
 					}
 				],
 				"stateMutability": "view",
@@ -518,6 +644,30 @@
 						"internalType": "uint256[]",
 						"name": "",
 						"type": "uint256[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "lastAIMaxHp",
+				"outputs": [
+					{
+						"internalType": "uint16",
+						"name": "",
+						"type": "uint16"
 					}
 				],
 				"stateMutability": "view",
@@ -565,6 +715,16 @@
 					},
 					{
 						"internalType": "uint16",
+						"name": "damageDealt",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "initialHp",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
 						"name": "remainingHp",
 						"type": "uint16"
 					},
@@ -572,6 +732,50 @@
 						"internalType": "string",
 						"name": "specialEffect",
 						"type": "string"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerRarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerClass",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetRarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetClass",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "lastPlayerMaxHp",
+				"outputs": [
+					{
+						"internalType": "uint16",
+						"name": "",
+						"type": "uint16"
 					}
 				],
 				"stateMutability": "view",
@@ -844,6 +1048,16 @@
 						"internalType": "uint256",
 						"name": "losses",
 						"type": "uint256"
+					},
+					{
+						"internalType": "uint16",
+						"name": "currentAITier",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint8",
+						"name": "winStreak",
+						"type": "uint8"
 					}
 				],
 				"stateMutability": "view",
@@ -907,6 +1121,11 @@
 					{
 						"internalType": "uint256[]",
 						"name": "team",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "equipped",
 						"type": "uint256[]"
 					}
 				],
@@ -1257,19 +1476,19 @@
 			]
 		},
 		"StarForgeBattleLibrary.sol": {
-			"keccak256": "0x29b13118bcc2df36d94103a398992bf114e4c51b1016f0d9afe62497f282610b",
+			"keccak256": "0xfb6bfe1612fc0e8f583d75203f8e10928492798400816e5d3a78f688ba06d246",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://50b1175693fc347cc452f9da0f0085f6344e152fe75e1935dbc8d581ff8765ab",
-				"dweb:/ipfs/QmSnnkF3p2gBGHcnsEYXTgntrF57oQ9NmgtZTW1jWkxbi3"
+				"bzz-raw://d025e1dd64b5ef7b60832fba94e86a09437827db5a5d74711e6d30c6789d9d2b",
+				"dweb:/ipfs/QmZxcgPeyd3ZXGLrMMWFALJDXfJmV7oA1i4raefY5Yxc8J"
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0x47d3c1d9e646ef1e7f24ca8a1b0376bf515a838d009676d02a912bcc546e14c8",
+			"keccak256": "0xb27958a7dd4ffa0414442550d8348a6908f8dff276b860aacd355891ec8c3abc",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://643e501341d2e761adaf67459b1ebf4fc6ee52b11b928cd638d5906487d941bd",
-				"dweb:/ipfs/QmPS3kojpE5B9QNTQVHE83gsbnJVdi7WXC4d5Uv7B6h4QR"
+				"bzz-raw://cc46f0bbceea8219470dc3b3f00b8da71cf471b2207c79331f658c001646c503",
+				"dweb:/ipfs/QmX2SCSt4MyVE9zWCuiU5WDzqWqKtAj2uKhMzyDTipKv4c"
 			]
 		},
 		"StarForgeRelic.sol": {
