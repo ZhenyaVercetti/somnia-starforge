@@ -28,16 +28,28 @@ export default class PrepareScene extends Phaser.Scene {
   private aiGridSlots: Phaser.GameObjects.Rectangle[] = [];
   private relicContract: any;
   private collectionButton: Phaser.GameObjects.Text | null = null;
+    private playerLevelText: Phaser.GameObjects.Text | null = null;
+  private playerStatsText: Phaser.GameObjects.Text | null = null;
+    private teamOperationLock = false;
+    private lastKnownLevel: number = 0;
+
+
 
   constructor() {
     super({ key: 'PrepareScene' });
   }
 
   private getRarityTintAndScale(rarity: number) {
-    if (rarity === 2) return { tint: 0xffee00, scale: 1.22 };
-    if (rarity === 1) return { tint: 0x00ff77, scale: 1.10 };
-    return { tint: 0x44aaff, scale: 0.96 };
+    if (rarity === 2) { // Legendary
+      return { tint: 0xffee00, scale: 0.89 };
+    }
+    if (rarity === 1) { // Rare
+      return { tint: 0x00ff77, scale: 0.84 };
+    }
+    // Common
+    return { tint: 0x44aaff, scale: 0.78 };
   }
+
 
   private updateTeamCounter() {
     if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
@@ -146,8 +158,11 @@ export default class PrepareScene extends Phaser.Scene {
   }
 
   private async refreshRelics() {
+    // Только equipped relics. Неэкипированные — только в CollectionScene
     await this.loadEquippedRelics();
   }
+
+
 
   private async initEquippedState() {
     if (!this.account || !this.gameContract) return;
@@ -160,107 +175,8 @@ export default class PrepareScene extends Phaser.Scene {
     }
   }
 
-  private async loadPlayerRelics() {
-    if (!this.account || !this.gameContract || !this.relicContract) return;
 
-    try {
-      const relics: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
-      const equippedSet = new Set(this.equippedRelics);
 
-      this.children.getAll().forEach(child => {
-        if ((child as any).isRelicSlot) child.destroy();
-        if (child instanceof Phaser.GameObjects.Text && child.text.includes('RELICS')) child.destroy();
-      });
-
-      this.add.text(75, 930, `RELICS (${relics.length})`, { fontSize: '27px', fill: '#ff00ff' });
-
-      if (relics.length === 0) {
-        this.add.text(82, 990, 'Пока нет артефактов.\nКупи в магазине →', { 
-          fontSize: '24px', fill: '#aaaaaa', align: 'left' 
-        });
-        return;
-      }
-
-      let displayedCount = 0;
-      for (let i = 0; i < relics.length; i++) {
-        const relicIdNum = Number(relics[i]);
-        if (equippedSet.has(relicIdNum)) continue;
-
-        const relicData = await this.relicContract.read.getRelic([relics[i]]);
-
-        const x = 82 + (displayedCount % 8) * 82;
-        const y = 990 + Math.floor(displayedCount / 8) * 87;
-
-        const rect = this.add.rectangle(x, y, 72, 72, 0x112233)
-          .setStrokeStyle(4, 0xffaa00)
-          .setInteractive()
-          .setScale(0.85)
-          .setDepth(5);
-
-        (rect as any).isRelicSlot = true;
-        (rect as any).relicId = relicIdNum;
-        (rect as any).originalX = x;
-        (rect as any).originalY = y;
-
-        this.input.setDraggable(rect);
-
-        rect.on('dragstart', () => {
-          rect.setScale(1.05);
-          rect.setDepth(20);
-        });
-
-        rect.on('drag', (_: any, dragX: number, dragY: number) => {
-          rect.x = dragX;
-          rect.y = dragY;
-        });
-
-        rect.on('dragend', () => {
-          rect.setScale(0.85);
-          rect.setDepth(5);
-
-          let closestIndex = -1;
-          let minDistance = Infinity;
-          for (let s = 0; s < this.equippedSlotRects.length; s++) {
-            const slot = this.equippedSlotRects[s];
-            if (!slot) continue;
-            const dx = slot.x - rect.x;
-            const dy = slot.y - rect.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < minDistance) {
-              minDistance = dist;
-              closestIndex = s;
-            }
-          }
-
-          if (closestIndex !== -1 && minDistance < 142) {
-            rect.x = this.equippedSlotRects[closestIndex].x;
-            rect.y = this.equippedSlotRects[closestIndex].y;
-
-            const currentInSlot = this.equippedRelics[closestIndex];
-            if (currentInSlot !== 0) {
-              this.unequipRelic(closestIndex);
-            }
-            this.equipRelic(relicIdNum, closestIndex);
-          } else {
-            rect.x = (rect as any).originalX;
-            rect.y = (rect as any).originalY;
-          }
-        });
-
-        rect.on('pointerover', () => {
-          this.showTooltip(x + 37, y - 15, 
-            `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
-          );
-        });
-        rect.on('pointerout', () => this.hideTooltip());
-
-        this.ownedSprites.push(rect);
-        displayedCount++;
-      }
-    } catch (e) {
-      console.error('loadPlayerRelics error', e);
-    }
-  }
 
   private async loadEquippedRelics() {
     if (!this.account || !this.gameContract || !this.relicContract) return;
@@ -427,60 +343,88 @@ export default class PrepareScene extends Phaser.Scene {
   }
 
   private async autoSelectTeam() {
-    if (this.playerUnitIds.length === 0) {
-      await this.loadOwnedUnits();
-    }
-    if (this.playerUnitIds.length === 0) return;
+    if (this.teamOperationLock) return;
+    this.teamOperationLock = true;
 
-    this.clearTeam();
+    try {
+      if (this.playerUnitIds.length === 0) {
+        await this.loadOwnedUnits();
+      }
+      if (this.playerUnitIds.length === 0) return;
 
-    const toSelect = this.playerUnitIds.slice(0, 8);
-    for (let i = 0; i < toSelect.length; i++) {
-      const id = toSelect[i];
-      if (!this.team.includes(id)) {
-        const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
-        if (freeSlotIndex !== -1) {
-          this.team.push(id);
-          await this.createTeamUnitVisual(id, freeSlotIndex);
+      this.clearTeam(); // гарантированная очистка перед заполнением
+
+      const toSelect = this.playerUnitIds.slice(0, 8);
+      for (let i = 0; i < toSelect.length; i++) {
+        const id = toSelect[i];
+        if (this.team.length >= 8) break;
+        if (!this.team.includes(id)) {
+          const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
+          if (freeSlotIndex !== -1) {
+            this.team.push(id);
+            await this.createTeamUnitVisual(id, freeSlotIndex);
+          }
         }
       }
-    }
 
-    this.updateTeamCounter();
-    console.log(`✅ Автовыбор: выбрано ${this.team.length} юнитов`);
+      this.updateTeamCounter();
+      console.log(`✅ Автовыбор завершён: ${this.team.length} юнитов`);
+    } finally {
+      this.teamOperationLock = false; // снимаем блокировку в любом случае
+    }
   }
 
+
   private clearTeam() {
-    if (this.team.length === 0) return;
+    if (this.teamOperationLock) return; // защита от спама
 
     for (let i = 0; i < this.teamSlotOccupants.length; i++) {
       const occupant = this.teamSlotOccupants[i];
-      if (!occupant) continue;
-
-      occupant.destroy();
-      this.teamSlotOccupants[i] = null;
+      if (occupant) {
+        occupant.destroy();
+        this.teamSlotOccupants[i] = null;
+      }
     }
 
     this.team = [];
+    this.originalPositions.clear();
     if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-    console.log('✅ Команда очищена');
+
+    console.log('✅ Команда полностью очищена (визуально + данные)');
   }
 
   private async updatePlayerProfile() {
-    if (!this.account || !this.gameContract || !this.playerProfileText) return;
+    if (!this.account || !this.gameContract) return;
     try {
       const profile = await this.gameContract.read.profiles([this.account]);
       const level = Number(profile.level);
       const xp = Number(profile.xp);
       const nextXp = level * 55 + 90;
-      const text = `PROFILE: Level ${level} | XP ${xp}/${nextXp} | W:${profile.wins} L:${profile.losses}`;
-      this.playerProfileText.setText(text);
 
+      // Строка 1
+      if (this.playerLevelText) {
+        this.playerLevelText.setText(`PROFILE Level ${level}`);
+      }
+
+      // Строка 2
+      if (this.playerStatsText) {
+        this.playerStatsText.setText(`XP ${xp}/${nextXp} | W:${profile.wins} L:${profile.losses}`);
+      }
+
+      // Прогресс-бар с плавной анимацией
       const progress = Math.min(xp / nextXp, 1);
       const bar = (this as any).levelProgressBar as Phaser.GameObjects.Rectangle;
-      if (bar) bar.width = 330 * progress;
+      if (bar) {
+        this.tweens.add({
+          targets: bar,
+          width: 330 * progress,
+          duration: 900,
+          ease: 'Sine.easeOut'
+        });
+      }
 
-      if (xp === 0 && level > 1) {
+      // LEVEL UP! — только при реальном повышении уровня
+      if (this.lastKnownLevel > 0 && level > this.lastKnownLevel) {
         const levelUpText = this.add.text(600, 300, `LEVEL UP! → ${level}`, {
           fontSize: '63px', fill: '#ffff00', fontStyle: 'bold'
         }).setOrigin(0.5);
@@ -492,10 +436,13 @@ export default class PrepareScene extends Phaser.Scene {
           onComplete: () => levelUpText.destroy()
         });
       }
+      this.lastKnownLevel = level;
     } catch (e) {
       console.error('updatePlayerProfile error', e);
     }
   }
+
+
 
   private showTooltip(x: number, y: number, text: string) {
     if (!this.tooltip || this.tooltip.scene !== this) {
@@ -568,7 +515,6 @@ export default class PrepareScene extends Phaser.Scene {
       setTimeout(() => {
         this.loadOwnedUnits();
         this.loadPlayerShop();
-        this.loadPlayerRelics();
       }, 3000);
     } catch (e: any) {
       const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
@@ -594,7 +540,6 @@ export default class PrepareScene extends Phaser.Scene {
 
       setTimeout(() => {
         this.loadPlayerShop();
-        this.loadPlayerRelics();
         this.loadCurrentAI();
       }, 3000);
     } catch (e: any) {
@@ -720,15 +665,30 @@ export default class PrepareScene extends Phaser.Scene {
   private addGameUI() {
     this.add.image(960, 540, 'bg');
 
-    this.playerProfileText = this.add.text(75, 60, 'PROFILE: Level 1 | XP 0/100', {
-      fontSize: '27px', fill: '#00ffff', align: 'left'
-    });
+  // === PROFILE BAR — ДВЕ СТРОКИ + РЕАЛЬНЫЙ ПРОГРЕСС-БАР ===
+  this.playerLevelText = this.add.text(75, 52, 'PROFILE Level 1', {
+    fontSize: '34px',
+    fill: '#00ffff',
+    fontStyle: 'bold'
+  });
 
-    const progressBg = this.add.rectangle(75, 105, 330, 21, 0x112233).setStrokeStyle(2, 0x00ffff);
-    const progressBar = this.add.rectangle(75, 105, 0, 21, 0x00ff88).setOrigin(0, 0.5);
-    (this as any).levelProgressBar = progressBar;
+  this.playerStatsText = this.add.text(75, 88, 'XP 0/100 | W:0 L:0', {
+    fontSize: '24px',
+    fill: '#aaffff',
+    align: 'left'
+  });
 
-    this.gridSlots = [];
+  const progressBg = this.add.rectangle(75, 128, 330, 22, 0x112233)
+    .setStrokeStyle(3, 0x00ffff)
+    .setOrigin(0, 0.5);
+
+  const progressBar = this.add.rectangle(75, 128, 0, 22, 0x00ff88)
+    .setOrigin(0, 0.5);
+
+  (this as any).levelProgressBar = progressBar;
+  
+  
+  this.gridSlots = [];
     this.teamSlotOccupants = new Array(8).fill(null);
     const teamCenterX = 917;
     const teamCenterY = 560;
@@ -751,28 +711,39 @@ export default class PrepareScene extends Phaser.Scene {
       this.gridSlots.push(slot);
     }
 
-    this.teamCounterText = this.add.text(teamCenterX - 150, teamStartY - 45, 'TEAM: 0/8', { fontSize: '36px', fill: '#ffff00' });
+  this.teamCounterText = this.add.text(840, 670, 'TEAM: 0/8', { 
+    fontSize: '36px', 
+    fill: '#ffff00' 
+  }).setOrigin(0.5);
 
-    this.add.text(teamStartX + 180, teamStartY - 85, 'AUTO SELECT', {
-      fontSize: '28px',
-      fill: '#00ff88',
-      backgroundColor: '#112233',
-      padding: { x: 20, y: 8 }
-    })
-      .setOrigin(0.5)
-      .setInteractive()
-      .on('pointerdown', () => this.autoSelectTeam());
+  // === КНОПКИ НАД TEAM (точные координаты по ТЗ) ===
+  this.add.text(680, 310, 'AUTO SELECT', {
+    fontSize: '28px',
+    fill: '#00ff88',
+    backgroundColor: '#112233',
+    padding: { x: 20, y: 8 }
+  })
+    .setOrigin(0.5)
+    .setInteractive()
+    .on('pointerdown', () => this.autoSelectTeam());
 
-    this.add.text(teamStartX + totalWidth - 180, teamStartY - 85, 'CLEAR TEAM', {
-      fontSize: '28px',
-      fill: '#ff6666',
-      backgroundColor: '#112233',
-      padding: { x: 20, y: 8 }
-    })
-      .setOrigin(0.5)
-      .setInteractive()
-      .on('pointerdown', () => this.clearTeam());
+  this.add.text(990, 310, 'CLEAR TEAM', {
+    fontSize: '28px',
+    fill: '#ff6666',
+    backgroundColor: '#112233',
+    padding: { x: 20, y: 8 }
+  })
+    .setOrigin(0.5)
+    .setInteractive()
+    .on('pointerdown', () => this.clearTeam());
 
+  // === AI OPPONENT ===
+  this.add.text(1570, 425, 'AI OPPONENT', { 
+    fontSize: '36px', 
+    fill: '#ff3366' 
+  }).setOrigin(0.5);
+
+    
     this.equippedSlotRects = [];
     const equippedY = teamCenterY + totalHeight / 2 + 80;
     const equippedTotalWidth = 3 * 128 + 2 * 40;
@@ -813,29 +784,35 @@ export default class PrepareScene extends Phaser.Scene {
       this.shopSprites.push(slotRect);
     }
 
-    this.aiGridSlots = [];
-    const aiCenterX = 1640;
-    const aiCenterY = 610;
-    const aiSlotSize = 95;
-    const aiHSpacing = 15;
-    const aiVSpacing = 15;
-    const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
-    const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
-    const aiStartX = aiCenterX - aiTotalWidth / 2;
-    const aiStartY = aiCenterY - aiTotalHeight / 2;
+  // === AI OPPONENT GRID ===
+  this.aiGridSlots = [];
+  const aiCenterX = 1640;
+  const aiCenterY = 610;
+  const aiSlotSize = 95;
+  const aiHSpacing = 15;
+  const aiVSpacing = 15;
+  const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
+  const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
+  const aiStartX = aiCenterX - aiTotalWidth / 2;
+  const aiStartY = aiCenterY - aiTotalHeight / 2;
 
-    for (let i = 0; i < 8; i++) {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      const x = aiStartX + col * (aiSlotSize + aiHSpacing);
-      const y = aiStartY + row * (aiSlotSize + aiVSpacing);
-      const slot = this.add.rectangle(x, y, aiSlotSize, aiSlotSize, 0x112233)
-        .setStrokeStyle(3, 0xff5588)
-        .setInteractive();
-      this.aiGridSlots.push(slot);
-    }
+  for (let i = 0; i < 8; i++) {
+    const col = i % 4;
+    const row = Math.floor(i / 4);
+    const x = aiStartX + col * (aiSlotSize + aiHSpacing);
+    const y = aiStartY + row * (aiSlotSize + aiVSpacing);
+    const slot = this.add.rectangle(x, y, aiSlotSize, aiSlotSize, 0x112233)
+      .setStrokeStyle(3, 0xff5588)
+      .setInteractive();
+    this.aiGridSlots.push(slot);
+  }
 
-    this.add.text(aiCenterX, aiCenterY - 130, 'AI OPPONENT', { fontSize: '36px', fill: '#ff3366' }).setOrigin(0.5);
+  // ТОЛЬКО ОДНА надпись AI OPPONENT (верхняя, по твоим координатам)
+  this.add.text(1570, 425, 'AI OPPONENT', { 
+    fontSize: '36px', 
+    fill: '#ff3366' 
+  }).setOrigin(0.5);
+
 
     this.collectionButton = this.add.text(75, 870, 'МОЯ КОЛЛЕКЦИЯ', {
       fontSize: '42px', 
@@ -865,24 +842,30 @@ export default class PrepareScene extends Phaser.Scene {
   }
 
   public async addMultipleUnitsToTeam(newIds: number[]) {
-    if (!newIds || newIds.length === 0) return;
+    if (this.teamOperationLock || !newIds || newIds.length === 0) return;
+    this.teamOperationLock = true;
 
-    let added = 0;
-    for (const id of newIds) {
-      if (this.team.length >= 8) break;
-      if (!this.team.includes(id)) {
-        const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
-        if (freeSlotIndex !== -1) {
-          this.team.push(id);
-          await this.createTeamUnitVisual(id, freeSlotIndex);
-          added++;
+    try {
+      let added = 0;
+      for (const id of newIds) {
+        if (this.team.length >= 8) break;
+        if (!this.team.includes(id)) {
+          const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
+          if (freeSlotIndex !== -1) {
+            this.team.push(id);
+            await this.createTeamUnitVisual(id, freeSlotIndex);
+            added++;
+          }
         }
       }
+      this.updateTeamCounter();
+      console.log(`✅ Добавлено ${added} юнитов из CollectionScene`);
+    } finally {
+      this.teamOperationLock = false;
     }
-
-    this.updateTeamCounter();
-    console.log(`✅ Добавлено ${added} юнитов из CollectionScene`);
   }
+
+
 
   private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     if (!this.nftContract || !this.gridSlots[slotIndex]) return;
@@ -961,6 +944,8 @@ export default class PrepareScene extends Phaser.Scene {
     this.aiSprites = [];
     this.aiTexts = [];
     this.equippedRelics = [0, 0, 0];
+    this.lastKnownLevel = 0;           // сброс
+    this.teamOperationLock = false;    // сброс блокировки
 
     this.addGameUI();
     
@@ -970,11 +955,11 @@ export default class PrepareScene extends Phaser.Scene {
 
     this.loadOwnedUnits();
     this.loadPlayerShop();
-    this.refreshRelics();
-    this.updatePlayerProfile();
+    this.updatePlayerProfile();   // второй вызов — для актуальных данных
 
     console.log('✅ PrepareScene создана (после боя)');
   }
+
 
   shutdown() {
     if (this.tooltip) {
@@ -989,7 +974,8 @@ export default class PrepareScene extends Phaser.Scene {
     this.aiTexts.forEach(t => t.destroy());
     this.equippedTexts.forEach(t => t.destroy());
     this.equippedTexts = [];
-
+    if (this.playerLevelText) this.playerLevelText.destroy();
+    if (this.playerStatsText) this.playerStatsText.destroy();
     console.log('✅ PrepareScene shutdown — очистка перед выходом');
   }
 }
