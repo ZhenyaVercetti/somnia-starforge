@@ -5,7 +5,7 @@ import { createWalletClient, custom, createPublicClient, http } from 'viem';
 import { somniaTestnet } from 'viem/chains';
 import { getContract } from 'viem';
 
-const GAME_CONTRACT = '0x52C428Ec735ef6fEb46334E626600ec31120cC80';   // ← новый адрес
+const GAME_CONTRACT = '0x52C428Ec735ef6fEb46334E626600ec31120cC80';
 const NFT_CONTRACT = '0x9D00dB7fb6faF315C9c63971ae34380d5b831a56';
 const RELIC_CONTRACT = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
 
@@ -25,13 +25,13 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.image(640, 360, 'bg');
+    this.add.image(960, 540, 'bg');
 
-    const connectBtn = this.add.text(500, 300, 'ПОДКЛЮЧИТЬ METAMASK', {
-      fontSize: '36px',
+    const connectBtn = this.add.text(750, 450, 'ПОДКЛЮЧИТЬ METAMASK', {
+      fontSize: '54px',
       fill: '#00ff00',
       backgroundColor: '#112233',
-      padding: { x: 20, y: 10 }
+      padding: { x: 30, y: 15 }
     })
       .setInteractive()
       .on('pointerdown', () => this.initWalletAndButtons());
@@ -87,7 +87,6 @@ export default class BootScene extends Phaser.Scene {
         { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
       ], "internalType": "struct StarForgeGame.ShopItem[]", "name": "", "type": "tuple[]" }], "stateMutability": "view", "type": "function" },
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getEquippedRelics", "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }], "stateMutability": "view", "type": "function" },
-
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getLastBattleResult", "outputs": [
         { "internalType": "bool", "name": "playerWon", "type": "bool" },
         { "internalType": "tuple[]", "name": "events", "type": "tuple[]", "components": [
@@ -108,7 +107,6 @@ export default class BootScene extends Phaser.Scene {
         { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" },
         { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }
       ], "stateMutability": "view", "type": "function" },
-
       { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "profiles", "outputs": [{ "components": [
         { "internalType": "uint16", "name": "level", "type": "uint16" },
         { "internalType": "uint32", "name": "xp", "type": "uint32" },
