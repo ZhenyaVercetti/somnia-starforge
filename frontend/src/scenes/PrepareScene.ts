@@ -28,12 +28,11 @@ export default class PrepareScene extends Phaser.Scene {
   private aiGridSlots: Phaser.GameObjects.Rectangle[] = [];
   private relicContract: any;
   private collectionButton: Phaser.GameObjects.Text | null = null;
-    private playerLevelText: Phaser.GameObjects.Text | null = null;
+  private playerLevelText: Phaser.GameObjects.Text | null = null;
   private playerStatsText: Phaser.GameObjects.Text | null = null;
-    private teamOperationLock = false;
-    private lastKnownLevel: number = 0;
-
-
+  private teamCounterText: Phaser.GameObjects.Text | null = null;
+  private teamOperationLock = false;
+  private lastKnownLevel: number = 0;
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -49,7 +48,6 @@ export default class PrepareScene extends Phaser.Scene {
     // Common
     return { tint: 0x44aaff, scale: 0.78 };
   }
-
 
   private updateTeamCounter() {
     if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
@@ -84,85 +82,112 @@ export default class PrepareScene extends Phaser.Scene {
     }
   }
 
-  private async loadPlayerShop() {
-    if (!this.account || !this.gameContract) return;
+private async loadPlayerShop() {
+  if (!this.account || !this.gameContract) return;
 
-    this.shopSprites.forEach(s => s.destroy());
-    this.shopSprites = [];
-
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.Text) {
-        const txt = child as Phaser.GameObjects.Text;
-        if (txt.y > 500 && txt.y < 700 && txt.x > 100 && txt.x < 520 && txt.text !== 'REROLL SHOP') {
-          txt.destroy();
-        }
-      }
-      if (child instanceof Phaser.GameObjects.Rectangle && child.x > 100 && child.x < 520 && child.y > 500 && child.y < 700) {
-        child.destroy();
-      }
-    });
-
-    try {
-      const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
-
-      const shopCenterX = 310;
-      const shopY = 560;
-      const shopSlotSize = 120;
-      const shopSpacing = 55;
-      const shopStartX = shopCenterX - (3 * shopSlotSize + 2 * shopSpacing) / 2;
-
-      for (let i = 0; i < 3; i++) {
-        const item = shopData[i];
-        const x = shopStartX + i * (shopSlotSize + shopSpacing);
-        const y = shopY;
-
-        const rect = this.add.rectangle(x, y, shopSlotSize, shopSlotSize, 0x112233).setStrokeStyle(4, 0xffaa00);
-
-        let displayName = 'RELIC';
-        let tooltipText = `RELIC SLOT ${i}`;
-
-        if (item.isRelic) {
-          const typeNames = [
-            'Quantum Strike', 'Void Shield', 'Nebula Dash',
-            'Echo Core', 'Flux Overload', 'Last Stand'
-          ];
-          const typeName = typeNames[item.relicType] || 'Unknown Relic';
-          displayName = `${typeName} +${item.relicValue}`;
-          tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
-        }
-
-        const sprite = this.add.sprite(x, y, 'ship').setInteractive().setScale(1.1); // оставлено, если позже добавишь текстуру
-        (sprite as any).shopSlot = i;
-
-        this.add.text(x, y + 82, displayName, { 
-          fontSize: '19px', 
-          fill: '#ffff00',
-          align: 'center',
-          wordWrap: { width: 165 }
-        }).setOrigin(0.5);
-
-        this.add.text(x - 30, y + 128, 'BUY', { fontSize: '27px', fill: '#00ff00' })
-          .setInteractive()
-          .on('pointerdown', () => this.buyFromShopSlot(i));
-
-        sprite.on('pointerover', () => this.showTooltip(x + 135, y - 45, tooltipText));
-        sprite.on('pointerout', () => this.hideTooltip());
-
-        this.shopSprites.push(sprite);
-      }
-
-      this.loadCurrentAI();
-    } catch (e) { 
-      console.error('loadPlayerShop error', e); 
+  // Уничтожаем всё старое в области магазина
+this.children.getAll().forEach(child => {
+  if (child instanceof Phaser.GameObjects.Text) {
+    const txt = child as Phaser.GameObjects.Text;
+    if (txt.y > 480 && txt.y < 720 && txt.x > 80 && txt.x < 600 && txt.text !== 'REROLL SHOP') {
+      txt.destroy();
     }
   }
+  if ((child instanceof Phaser.GameObjects.Rectangle || child instanceof Phaser.GameObjects.Image) &&
+      child.x > 80 && child.x < 600 && child.y > 480 && child.y < 720) {
+    child.destroy();
+  }
+});
+
+
+  this.shopSprites = [];
+
+  try {
+    const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
+
+    const shopCenterX = 340;
+    const shopY = 560;
+    const shopSlotSize = 120;
+    const shopSpacing = 55;
+    const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
+    const shopStartX = shopCenterX - shopTotalWidth / 2;
+
+    for (let i = 0; i < 3; i++) {
+      const item = shopData[i];
+      const x = shopStartX + i * (shopSlotSize + shopSpacing);
+      const y = shopY;
+
+      // Создаём ТОЛЬКО картинку-рамку
+      const slotImage = this.add.image(x, y, 'slot_shop')
+        .setInteractive()
+        .setDisplaySize(120, 120);
+
+      let displayName = 'RELIC';
+      let tooltipText = `RELIC SLOT ${i}`;
+
+      if (item.isRelic) {
+        const typeNames = [
+          'Quantum Strike', 'Void Shield', 'Nebula Dash',
+          'Echo Core', 'Flux Overload', 'Last Stand'
+        ];
+        const typeName = typeNames[item.relicType] || 'Unknown Relic';
+        displayName = `${typeName} +${item.relicValue}`;
+        tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
+      }
+
+      const sprite = this.add.sprite(x, y, 'ship').setInteractive().setScale(1.1);
+      (sprite as any).shopSlot = i;
+
+      this.add.text(x, y + 82, displayName, { 
+        fontSize: '22px', 
+        fill: '#ffff00',
+        align: 'center',
+        wordWrap: { width: 165 }
+      }).setOrigin(0.5);
+
+      this.add.text(x - 30, y + 128, 'BUY', { fontSize: '30px', fill: '#00ff00' })
+        .setInteractive()
+        .on('pointerdown', () => this.buyFromShopSlot(i));
+
+      sprite.on('pointerover', () => this.showTooltip(x + 135, y - 45, tooltipText));
+      sprite.on('pointerout', () => this.hideTooltip());
+
+      this.shopSprites.push(sprite);
+      // === AI OPPONENT GRID ===
+this.aiGridSlots = [];
+const aiCenterX = 1640;
+const aiCenterY = 610;
+const aiSlotSize = 95;
+const aiHSpacing = 15;
+const aiVSpacing = 15;
+const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
+const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
+const aiStartX = aiCenterX - aiTotalWidth / 2;
+const aiStartY = aiCenterY - aiTotalHeight / 2;
+
+for (let i = 0; i < 8; i++) {
+  const col = i % 4;
+  const row = Math.floor(i / 4);
+  const x = aiStartX + col * (aiSlotSize + aiHSpacing);
+  const y = aiStartY + row * (aiSlotSize + aiVSpacing);
+  const slot = this.add.image(x, y, 'slot_ai')
+    .setInteractive()
+    .setDisplaySize(95, 95);
+  this.aiGridSlots.push(slot);
+  this.addButtonEffects(slot);
+}
+    }
+
+    this.loadCurrentAI();
+  } catch (e) { 
+    console.error('loadPlayerShop error', e); 
+  }
+}
+
 
   private async refreshRelics() {
-    // Только equipped relics. Неэкипированные — только в CollectionScene
     await this.loadEquippedRelics();
   }
-
-
 
   private async initEquippedState() {
     if (!this.account || !this.gameContract) return;
@@ -174,9 +199,6 @@ export default class PrepareScene extends Phaser.Scene {
       console.error('initEquippedState error', e);
     }
   }
-
-
-
 
   private async loadEquippedRelics() {
     if (!this.account || !this.gameContract || !this.relicContract) return;
@@ -215,7 +237,7 @@ export default class PrepareScene extends Phaser.Scene {
         slot.setData('equippedRect', rect);
 
         const nameText = this.add.text(slot.x, slot.y + 87, relicData.name, { 
-          fontSize: '18px', 
+          fontSize: '20px', 
           fill: '#ffff00',
           align: 'center',
           wordWrap: { width: 135 }
@@ -352,7 +374,7 @@ export default class PrepareScene extends Phaser.Scene {
       }
       if (this.playerUnitIds.length === 0) return;
 
-      this.clearTeam(); // гарантированная очистка перед заполнением
+      this.clearTeam();
 
       const toSelect = this.playerUnitIds.slice(0, 8);
       for (let i = 0; i < toSelect.length; i++) {
@@ -370,13 +392,12 @@ export default class PrepareScene extends Phaser.Scene {
       this.updateTeamCounter();
       console.log(`✅ Автовыбор завершён: ${this.team.length} юнитов`);
     } finally {
-      this.teamOperationLock = false; // снимаем блокировку в любом случае
+      this.teamOperationLock = false;
     }
   }
 
-
   private clearTeam() {
-    if (this.teamOperationLock) return; // защита от спама
+    if (this.teamOperationLock) return;
 
     for (let i = 0; i < this.teamSlotOccupants.length; i++) {
       const occupant = this.teamSlotOccupants[i];
@@ -395,35 +416,31 @@ export default class PrepareScene extends Phaser.Scene {
 
   private async updatePlayerProfile() {
     if (!this.account || !this.gameContract) return;
+
+    if (!this.playerLevelText || !this.playerStatsText) {
+      console.warn('updatePlayerProfile: тексты профиля ещё не созданы');
+      return;
+    }
+
     try {
       const profile = await this.gameContract.read.profiles([this.account]);
       const level = Number(profile.level);
       const xp = Number(profile.xp);
       const nextXp = level * 55 + 90;
 
-      // Строка 1
-      if (this.playerLevelText) {
-        this.playerLevelText.setText(`PROFILE Level ${level}`);
-      }
+      this.playerLevelText.setText(`PROFILE Level ${level}`);
+      this.playerStatsText.setText(`XP ${xp}/${nextXp} | W:${profile.wins} L:${profile.losses}`);
 
-      // Строка 2
-      if (this.playerStatsText) {
-        this.playerStatsText.setText(`XP ${xp}/${nextXp} | W:${profile.wins} L:${profile.losses}`);
-      }
-
-      // Прогресс-бар с плавной анимацией
-      const progress = Math.min(xp / nextXp, 1);
       const bar = (this as any).levelProgressBar as Phaser.GameObjects.Rectangle;
-      if (bar) {
+      if (bar && bar.scene) {
         this.tweens.add({
           targets: bar,
-          width: 330 * progress,
+          width: 330 * Math.min(xp / nextXp, 1),
           duration: 900,
           ease: 'Sine.easeOut'
         });
       }
 
-      // LEVEL UP! — только при реальном повышении уровня
       if (this.lastKnownLevel > 0 && level > this.lastKnownLevel) {
         const levelUpText = this.add.text(600, 300, `LEVEL UP! → ${level}`, {
           fontSize: '63px', fill: '#ffff00', fontStyle: 'bold'
@@ -441,8 +458,6 @@ export default class PrepareScene extends Phaser.Scene {
       console.error('updatePlayerProfile error', e);
     }
   }
-
-
 
   private showTooltip(x: number, y: number, text: string) {
     if (!this.tooltip || this.tooltip.scene !== this) {
@@ -662,18 +677,19 @@ export default class PrepareScene extends Phaser.Scene {
     }
   }
 
-  private addGameUI() {
-    this.add.image(960, 540, 'bg');
+private addGameUI() {
+  const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
+  bg.setDisplaySize(1920, 1080);
 
-  // === PROFILE BAR — ДВЕ СТРОКИ + РЕАЛЬНЫЙ ПРОГРЕСС-БАР ===
+  // === PROFILE BAR ===
   this.playerLevelText = this.add.text(75, 52, 'PROFILE Level 1', {
-    fontSize: '34px',
+    fontSize: '42px',
     fill: '#00ffff',
     fontStyle: 'bold'
   });
 
   this.playerStatsText = this.add.text(75, 88, 'XP 0/100 | W:0 L:0', {
-    fontSize: '24px',
+    fontSize: '26px',
     fill: '#aaffff',
     align: 'left'
   });
@@ -686,152 +702,101 @@ export default class PrepareScene extends Phaser.Scene {
     .setOrigin(0, 0.5);
 
   (this as any).levelProgressBar = progressBar;
-  
-  
+
+  // === TEAM GRID ===
   this.gridSlots = [];
-    this.teamSlotOccupants = new Array(8).fill(null);
-    const teamCenterX = 917;
-    const teamCenterY = 560;
-    const slotSize = 142;
-    const hSpacing = 23;
-    const vSpacing = 23;
-    const totalWidth = 4 * slotSize + 3 * hSpacing;
-    const totalHeight = 2 * slotSize + vSpacing;
-    const teamStartX = teamCenterX - totalWidth / 2;
-    const teamStartY = teamCenterY - totalHeight / 2;
-
-    for (let i = 0; i < 8; i++) {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      const x = teamStartX + col * (slotSize + hSpacing);
-      const y = teamStartY + row * (slotSize + vSpacing);
-      const slot = this.add.rectangle(x, y, slotSize, slotSize, 0x112233)
-        .setStrokeStyle(3, 0x00ffff)
-        .setInteractive();
-      this.gridSlots.push(slot);
-    }
-
-  this.teamCounterText = this.add.text(840, 670, 'TEAM: 0/8', { 
-    fontSize: '36px', 
-    fill: '#ffff00' 
-  }).setOrigin(0.5);
-
-  // === КНОПКИ НАД TEAM (точные координаты по ТЗ) ===
-  this.add.text(680, 310, 'AUTO SELECT', {
-    fontSize: '28px',
-    fill: '#00ff88',
-    backgroundColor: '#112233',
-    padding: { x: 20, y: 8 }
-  })
-    .setOrigin(0.5)
-    .setInteractive()
-    .on('pointerdown', () => this.autoSelectTeam());
-
-  this.add.text(990, 310, 'CLEAR TEAM', {
-    fontSize: '28px',
-    fill: '#ff6666',
-    backgroundColor: '#112233',
-    padding: { x: 20, y: 8 }
-  })
-    .setOrigin(0.5)
-    .setInteractive()
-    .on('pointerdown', () => this.clearTeam());
-
-  // === AI OPPONENT ===
-  this.add.text(1570, 425, 'AI OPPONENT', { 
-    fontSize: '36px', 
-    fill: '#ff3366' 
-  }).setOrigin(0.5);
-
-    
-    this.equippedSlotRects = [];
-    const equippedY = teamCenterY + totalHeight / 2 + 80;
-    const equippedTotalWidth = 3 * 128 + 2 * 40;
-    const equippedStartX = teamCenterX - equippedTotalWidth / 2;
-
-    for (let i = 0; i < 3; i++) {
-      const x = equippedStartX + i * (128 + 40);
-      const slot = this.add.rectangle(x, equippedY, 128, 128, 0x112233)
-        .setStrokeStyle(4, 0xffff00)
-        .setInteractive();
-      this.equippedSlotRects.push(slot);
-    }
-
-    const shopCenterX = 310;
-    const shopCenterY = 560;
-    const shopSlotSize = 120;
-    const shopSpacing = 55;
-    const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
-    const shopStartX = shopCenterX - shopTotalWidth / 2;
-    const shopY = shopCenterY;
-
-    this.add.text(shopCenterX, shopY - 95, 'REROLL SHOP', {
-      fontSize: '33px',
-      fill: '#ff00ff',
-      backgroundColor: '#112233',
-      padding: { x: 25, y: 12 }
-    })
-      .setOrigin(0.5)
-      .setInteractive()
-      .on('pointerdown', () => this.rerollShop());
-
-    this.shopSprites = [];
-    for (let i = 0; i < 3; i++) {
-      const x = shopStartX + i * (shopSlotSize + shopSpacing);
-      const slotRect = this.add.rectangle(x, shopY, shopSlotSize, shopSlotSize, 0x112233)
-        .setStrokeStyle(4, 0xffaa00)
-        .setInteractive();
-      this.shopSprites.push(slotRect);
-    }
-
-  // === AI OPPONENT GRID ===
-  this.aiGridSlots = [];
-  const aiCenterX = 1640;
-  const aiCenterY = 610;
-  const aiSlotSize = 95;
-  const aiHSpacing = 15;
-  const aiVSpacing = 15;
-  const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
-  const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
-  const aiStartX = aiCenterX - aiTotalWidth / 2;
-  const aiStartY = aiCenterY - aiTotalHeight / 2;
+  this.teamSlotOccupants = new Array(8).fill(null);
+  const teamCenterX = 1000;
+  const teamCenterY = 560;
+  const slotSize = 142;
+  const hSpacing = 23;
+  const vSpacing = 23;
+  const totalWidth = 4 * slotSize + 3 * hSpacing;
+  const totalHeight = 2 * slotSize + vSpacing;
+  const teamStartX = teamCenterX - totalWidth / 2;
+  const teamStartY = teamCenterY - totalHeight / 2;
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const x = aiStartX + col * (aiSlotSize + aiHSpacing);
-    const y = aiStartY + row * (aiSlotSize + aiVSpacing);
-    const slot = this.add.rectangle(x, y, aiSlotSize, aiSlotSize, 0x112233)
-      .setStrokeStyle(3, 0xff5588)
-      .setInteractive();
-    this.aiGridSlots.push(slot);
+    const x = teamStartX + col * (slotSize + hSpacing);
+    const y = teamStartY + row * (slotSize + vSpacing);
+    const slot = this.add.image(x, y, 'slot_team')
+      .setInteractive()
+      .setDisplaySize(142, 142);
+    this.gridSlots.push(slot);
+    this.addButtonEffects(slot);
   }
 
-  // ТОЛЬКО ОДНА надпись AI OPPONENT (верхняя, по твоим координатам)
-  this.add.text(1570, 425, 'AI OPPONENT', { 
-    fontSize: '36px', 
-    fill: '#ff3366' 
+  this.teamCounterText = this.add.text(920, 670, 'TEAM: 0/8', { 
+    fontSize: '38px', 
+    fill: '#ffff00' 
   }).setOrigin(0.5);
 
+// === КНОПКИ НАД TEAM ===
+const btnAuto = this.add.image(770, 300, 'button_base')
+  .setInteractive()
+  .setDisplaySize(220, 52);
+const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' }).setOrigin(0.5);
+(btnAuto as any).linkedText = textAuto;
+(textAuto as any).originalFill = '#00ff88';
+btnAuto.on('pointerdown', () => this.autoSelectTeam());
+this.addButtonEffects(btnAuto);
 
-    this.collectionButton = this.add.text(75, 870, 'МОЯ КОЛЛЕКЦИЯ', {
-      fontSize: '42px', 
-      fill: '#ffff00', 
-      backgroundColor: '#112233', 
-      padding: { x: 30, y: 18 }
-    })
-      .setInteractive()
-      .on('pointerdown', () => this.openCollectionScene());
+const btnClear = this.add.image(1080, 300, 'button_base')
+  .setInteractive()
+  .setDisplaySize(220, 52);
+const textClear = this.add.text(1080, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
+(btnClear as any).linkedText = textClear;
+(textClear as any).originalFill = '#ff6666';
+btnClear.on('pointerdown', () => this.clearTeam());
+this.addButtonEffects(btnClear);
 
-    this.add.text(150, 720, 'BUY (FREE)', { fontSize: '33px', fill: '#00ffff' })
-      .setInteractive().on('pointerdown', () => this.buyUnit());
+// === REROLL SHOP ===
+const btnReroll = this.add.image(285, 460, 'button_base')
+  .setInteractive()
+  .setDisplaySize(220, 50);
+const textReroll = this.add.text(285, 460, 'REROLL SHOP', { fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' }).setOrigin(0.5);
+(btnReroll as any).linkedText = textReroll;
+(textReroll as any).originalFill = '#ff00ff';
+btnReroll.on('pointerdown', () => this.rerollShop());
+this.addButtonEffects(btnReroll);
 
-    this.add.text(1350, 900, '▶ START BATTLE', { fontSize: '63px', fill: '#ff3333' })
-      .setInteractive().on('pointerdown', () => this.startBattle());
-  }
+// === МОЯ КОЛЛЕКЦИЯ ===
+const btnCollection = this.add.image(285, 900, 'button_base')
+  .setInteractive()
+  .setDisplaySize(270, 70);
+const textCollection = this.add.text(285, 900, 'МОЯ КОЛЛЕКЦИЯ', { fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+(btnCollection as any).linkedText = textCollection;
+(textCollection as any).originalFill = '#ffff00';
+btnCollection.on('pointerdown', () => this.openCollectionScene());
+this.addButtonEffects(btnCollection);
+
+// === BUY (FREE) ===
+const btnBuy = this.add.image(285, 820, 'button_base')
+  .setInteractive()
+  .setDisplaySize(180, 46);
+const textBuy = this.add.text(285, 820, 'BUY (FREE)', { fontSize: '22px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
+(btnBuy as any).linkedText = textBuy;
+(textBuy as any).originalFill = '#00ffff';
+btnBuy.on('pointerdown', () => this.buyUnit());
+this.addButtonEffects(btnBuy);
+
+// === START BATTLE (используем setScale!) ===
+const btnStart = this.add.image(1600, 900, 'button_start')
+  .setInteractive()
+  .setDisplaySize(400, 90);
+const textStart = this.add.text(1600, 900, '▶ START BATTLE', { fontSize: '36px', fill: '#ff3333', fontStyle: 'bold' }).setOrigin(0.5);
+(btnStart as any).linkedText = textStart;
+(textStart as any).originalFill = '#ff3333';
+btnStart.on('pointerdown', () => this.startBattle());
+this.addButtonEffects(btnStart);
+}
+
+
 
   private openCollectionScene() {
-    this.scene.start('CollectionScene', {
+    this.scene.launch('CollectionScene', {
       gameContract: this.gameContract,
       nftContract: this.nftContract,
       relicContract: this.relicContract,
@@ -865,7 +830,34 @@ export default class PrepareScene extends Phaser.Scene {
     }
   }
 
+  public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
+    if (!newRelicIds || newRelicIds.length === 0 || newRelicIds.length > 3) return;
 
+    let equippedCopy = [...this.equippedRelics];
+    let idx = 0;
+
+    for (let i = 0; i < equippedCopy.length && idx < newRelicIds.length; i++) {
+      if (equippedCopy[i] === 0) {
+        equippedCopy[i] = newRelicIds[idx++];
+      }
+    }
+
+    for (let i = 0; idx < newRelicIds.length && i < equippedCopy.length; i++) {
+      equippedCopy[i] = newRelicIds[idx++];
+    }
+
+    this.equippedRelics = equippedCopy;
+
+    console.log(`✅ Активировано ${newRelicIds.length} реликвий →`, this.equippedRelics);
+
+    await this.refreshRelics();
+
+    const msg = this.add.text(600, 450, `РЕЛИКВИИ АКТИВИРОВАНЫ (${newRelicIds.length})`, {
+      fontSize: '42px',
+      fill: '#00ff88'
+    }).setOrigin(0.5);
+    setTimeout(() => msg.destroy(), 2200);
+  }
 
   private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     if (!this.nftContract || !this.gridSlots[slotIndex]) return;
@@ -926,6 +918,16 @@ export default class PrepareScene extends Phaser.Scene {
     console.log('✅ PrepareScene init — данные от BootScene получены');
   }
 
+preload() {
+  this.load.image('mainbackground', 'assets/mainbackground.jpg');
+  this.load.image('slot_team', 'assets/slot_team.png');
+  this.load.image('slot_shop', 'assets/slot_shop.png');
+  this.load.image('slot_equipped', 'assets/slot_equipped.png');
+  this.load.image('slot_ai', 'assets/slot_ai.png');
+  this.load.image('button_base', 'assets/button_base.png');
+  this.load.image('button_start', 'assets/button_start.png');
+}
+
   create() {
     if (this.tooltip) {
       this.tooltip.destroy();
@@ -935,7 +937,7 @@ export default class PrepareScene extends Phaser.Scene {
     this.children.getAll().forEach(child => {
       if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
     });
-
+    
     this.team = [];
     this.teamSlotOccupants = new Array(8).fill(null);
     this.originalPositions.clear();
@@ -944,8 +946,8 @@ export default class PrepareScene extends Phaser.Scene {
     this.aiSprites = [];
     this.aiTexts = [];
     this.equippedRelics = [0, 0, 0];
-    this.lastKnownLevel = 0;           // сброс
-    this.teamOperationLock = false;    // сброс блокировки
+    this.lastKnownLevel = 0;
+    this.teamOperationLock = false;
 
     this.addGameUI();
     
@@ -955,11 +957,10 @@ export default class PrepareScene extends Phaser.Scene {
 
     this.loadOwnedUnits();
     this.loadPlayerShop();
-    this.updatePlayerProfile();   // второй вызов — для актуальных данных
+    this.updatePlayerProfile();
 
-    console.log('✅ PrepareScene создана (после боя)');
+    console.log('✅ PrepareScene создана (дубли убраны, шрифты увеличены)');
   }
-
 
   shutdown() {
     if (this.tooltip) {
@@ -978,4 +979,65 @@ export default class PrepareScene extends Phaser.Scene {
     if (this.playerStatsText) this.playerStatsText.destroy();
     console.log('✅ PrepareScene shutdown — очистка перед выходом');
   }
+private addButtonEffects(obj: Phaser.GameObjects.GameObject) {
+  const img = obj as Phaser.GameObjects.Image;
+  const originalWidth = img.displayWidth;
+  const originalHeight = img.displayHeight;
+
+  const hoverWidth = originalWidth * 1.08;
+  const hoverHeight = originalHeight * 1.08;
+
+  obj.on('pointerover', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: hoverWidth,
+      displayHeight: hoverHeight,
+      duration: 120,
+      ease: 'Sine.easeOut'
+    });
+
+    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
+    if (text) {
+      text.setFill('#ffff88');
+      this.tweens.add({ targets: text, scale: 1.1, duration: 120 });
+    }
+  });
+
+  obj.on('pointerout', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: originalWidth,
+      displayHeight: originalHeight,
+      duration: 120,
+      ease: 'Sine.easeOut'
+    });
+
+    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
+    if (text) {
+      text.setFill((text as any).originalFill || '#ffffff');
+      this.tweens.add({ targets: text, scale: 1, duration: 120 });
+    }
+  });
+
+  obj.on('pointerdown', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: originalWidth * 0.95,
+      displayHeight: originalHeight * 0.95,
+      duration: 60,
+      ease: 'Sine.easeOut'
+    });
+  });
+
+  obj.on('pointerup', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: hoverWidth,
+      displayHeight: hoverHeight,
+      duration: 80,
+      ease: 'Sine.easeOut'
+    });
+  });
+}
+
 }
