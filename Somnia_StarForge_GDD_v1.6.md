@@ -38,7 +38,26 @@ Somnia StarForge — полностью on-chain auto-battler (TFT / Auto Chess 
 On-chain: Solidity 0.8.27+, UUPS-ready, ReentrancyGuard, Pausable, библиотеки.  
 Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + @somniaforge/sdk + Sequence SDK (gasless в планах).
 
-## 5. Roadmap
+## 5. Визуал
+UI Asset Generation — Reference Prompt
+Эталонный промпт для всех UI-рамок и кнопок:
+textHigh quality realistic metallic sci-fi HUD frame, exact size [WIDTH]x[HEIGHT] pixels, thick sharp dark purple and blue metallic border with subtle brushed metal texture and a few clean tech details, less curves, mostly straight lines, premium dark technological style, full solid bright green background #00FF00, flat realistic design, no glow, no soft edges, no pixel art, no cartoon look, isolated asset, chroma key perfect, professional AAA game UI quality
+Использовать для:
+
+Всех слотов (Team, Shop, Equipped, AI)
+Кнопок
+Profile frame
+Любых новых HUD-элементов
+
+Ключевые характеристики стиля:
+
+Реалистичный металлический вид (brushed metal texture)
+Тёмно-фиолетовый + синий цветовая схема
+Минимальные tech-детали, прямые линии
+Полный chroma key зелёный фон (#00FF00)
+Премиум AAA качество, без пиксельного/мультяшного вида
+
+## 6. Roadmap
 
 **v1.5 — завершён (29 апреля 2026)**  
 - Полностью рабочий core loop  

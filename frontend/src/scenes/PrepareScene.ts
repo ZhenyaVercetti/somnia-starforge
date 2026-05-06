@@ -86,19 +86,18 @@ private async loadPlayerShop() {
   if (!this.account || !this.gameContract) return;
 
   // Уничтожаем всё старое в области магазина
-this.children.getAll().forEach(child => {
-  if (child instanceof Phaser.GameObjects.Text) {
-    const txt = child as Phaser.GameObjects.Text;
-    if (txt.y > 480 && txt.y < 720 && txt.x > 80 && txt.x < 600 && txt.text !== 'REROLL SHOP') {
-      txt.destroy();
+  this.children.getAll().forEach(child => {
+    if (child instanceof Phaser.GameObjects.Text) {
+      const txt = child as Phaser.GameObjects.Text;
+      if (txt.y > 480 && txt.y < 720 && txt.x > 80 && txt.x < 600 && txt.text !== 'REROLL SHOP') {
+        txt.destroy();
+      }
     }
-  }
-  if ((child instanceof Phaser.GameObjects.Rectangle || child instanceof Phaser.GameObjects.Image) &&
-      child.x > 80 && child.x < 600 && child.y > 480 && child.y < 720) {
-    child.destroy();
-  }
-});
-
+    if ((child instanceof Phaser.GameObjects.Rectangle || child instanceof Phaser.GameObjects.Image) &&
+        child.x > 80 && child.x < 600 && child.y > 480 && child.y < 720) {
+      child.destroy();
+    }
+  });
 
   this.shopSprites = [];
 
@@ -117,10 +116,17 @@ this.children.getAll().forEach(child => {
       const x = shopStartX + i * (shopSlotSize + shopSpacing);
       const y = shopY;
 
-      // Создаём ТОЛЬКО картинку-рамку
+      // Тёмный фон внутри слота
+      this.add.rectangle(x, y, shopSlotSize - 10, shopSlotSize - 10, 0x0a1122)
+        .setDepth(1);
+
+      // Рамка слота
       const slotImage = this.add.image(x, y, 'slot_shop')
         .setInteractive()
-        .setDisplaySize(120, 120);
+        .setDisplaySize(120, 120)
+        .setDepth(2);
+
+      this.addButtonEffects(slotImage);   // ← анимация hover/click
 
       let displayName = 'RELIC';
       let tooltipText = `RELIC SLOT ${i}`;
@@ -153,29 +159,38 @@ this.children.getAll().forEach(child => {
       sprite.on('pointerout', () => this.hideTooltip());
 
       this.shopSprites.push(sprite);
-      // === AI OPPONENT GRID ===
-this.aiGridSlots = [];
-const aiCenterX = 1640;
-const aiCenterY = 610;
-const aiSlotSize = 95;
-const aiHSpacing = 15;
-const aiVSpacing = 15;
-const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
-const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
-const aiStartX = aiCenterX - aiTotalWidth / 2;
-const aiStartY = aiCenterY - aiTotalHeight / 2;
+    }
 
-for (let i = 0; i < 8; i++) {
-  const col = i % 4;
-  const row = Math.floor(i / 4);
-  const x = aiStartX + col * (aiSlotSize + aiHSpacing);
-  const y = aiStartY + row * (aiSlotSize + aiVSpacing);
-  const slot = this.add.image(x, y, 'slot_ai')
-    .setInteractive()
-    .setDisplaySize(95, 95);
-  this.aiGridSlots.push(slot);
-  this.addButtonEffects(slot);
-}
+
+    // === AI OPPONENT GRID (вынесено из цикла) ===
+    this.aiGridSlots = [];
+    const aiCenterX = 1640;
+    const aiCenterY = 610;
+    const aiSlotSize = 95;
+    const aiHSpacing = 15;
+    const aiVSpacing = 15;
+    const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
+    const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
+    const aiStartX = aiCenterX - aiTotalWidth / 2;
+    const aiStartY = aiCenterY - aiTotalHeight / 2;
+
+    for (let i = 0; i < 8; i++) {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const x = aiStartX + col * (aiSlotSize + aiHSpacing);
+      const y = aiStartY + row * (aiSlotSize + aiVSpacing);
+
+      // Тёмный фон внутри AI слота
+      this.add.rectangle(x, y, aiSlotSize - 6, aiSlotSize - 6, 0x0a1122)
+        .setDepth(1);
+
+      const slot = this.add.image(x, y, 'slot_ai')
+        .setInteractive()
+        .setDisplaySize(aiSlotSize, aiSlotSize)
+        .setDepth(2);
+
+      this.aiGridSlots.push(slot);
+      this.addButtonEffects(slot);
     }
 
     this.loadCurrentAI();
@@ -183,6 +198,7 @@ for (let i = 0; i < 8; i++) {
     console.error('loadPlayerShop error', e); 
   }
 }
+
 
 
   private async refreshRelics() {
@@ -210,25 +226,30 @@ for (let i = 0; i < 8; i++) {
       this.equippedTexts.forEach(t => t.destroy());
       this.equippedTexts = [];
 
-      for (let i = 0; i < 3; i++) {
-        const slot = this.equippedSlotRects[i];
-        if (!slot) continue;
+for (let i = 0; i < 3; i++) {
+  const slot = this.equippedSlotRects[i];
+  if (!slot) continue;
 
-        const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
-        if (oldRect) oldRect.destroy();
+  const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
+  if (oldRect) oldRect.destroy();
 
-        if (this.equippedRelics[i] === 0) {
-          slot.setData('equippedRect', null);
-          continue;
-        }
+  // === ТЁМНЫЙ ФОН (добавлено для v1.6) ===
+  this.add.rectangle(slot.x, slot.y, 108, 108, 0x0a1122)
+    .setDepth(14);
 
-        const relicId = this.equippedRelics[i];
-        const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
+  if (this.equippedRelics[i] === 0) {
+    slot.setData('equippedRect', null);
+    continue;
+  }
 
-        const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
-          .setStrokeStyle(6, 0xffff00)
-          .setInteractive()
-          .setDepth(15);
+  const relicId = this.equippedRelics[i];
+  const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
+
+  const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
+    .setStrokeStyle(6, 0xffff00)
+    .setInteractive()
+    .setDepth(15);
+
 
         (rect as any).relicId = relicId;
         (rect as any).isEquipped = true;
@@ -236,12 +257,13 @@ for (let i = 0; i < 8; i++) {
 
         slot.setData('equippedRect', rect);
 
-        const nameText = this.add.text(slot.x, slot.y + 87, relicData.name, { 
-          fontSize: '20px', 
-          fill: '#ffff00',
-          align: 'center',
-          wordWrap: { width: 135 }
-        }).setOrigin(0.5).setDepth(15);
+const cleanName = relicData.name.replace(/\s*\+\d+/, ''); // убираем +X
+const nameText = this.add.text(slot.x, slot.y + 87, cleanName, { 
+  fontSize: '20px', 
+  fill: '#ffff00',
+  align: 'center',
+  wordWrap: { width: 135 }
+}).setOrigin(0.5).setDepth(15);
 
         this.equippedTexts.push(nameText);
 
@@ -681,57 +703,101 @@ private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
   bg.setDisplaySize(1920, 1080);
 
-  // === PROFILE BAR ===
-  this.playerLevelText = this.add.text(75, 52, 'PROFILE Level 1', {
-    fontSize: '42px',
+// === PROFILE BAR v1.6 (520×180, тексты сдвинуты вправо и вниз) ===
+const profileX = 45;
+const profileY = 28;
+
+// Кастомная рамка
+const profileFrame = this.add.image(profileX, profileY, 'profile_frame')
+    .setOrigin(0, 0)
+    .setDisplaySize(520, 180)
+    .setDepth(5);
+
+// Level (сдвинут вправо +6 и вниз +8)
+this.playerLevelText = this.add.text(profileX + 32, profileY + 26, 'Level 1', {
+    fontSize: '46px',
     fill: '#00ffff',
     fontStyle: 'bold'
-  });
+}).setDepth(10);
 
-  this.playerStatsText = this.add.text(75, 88, 'XP 0/100 | W:0 L:0', {
-    fontSize: '26px',
-    fill: '#aaffff',
-    align: 'left'
-  });
+// Статистика (сдвинут вправо +6 и вниз +8)
+this.playerStatsText = this.add.text(profileX + 32, profileY + 84, 'XP 0/90  •  W:0 L:0', {
+    fontSize: '23px',
+    fill: '#aaffff'
+}).setDepth(10);
 
-  const progressBg = this.add.rectangle(75, 128, 330, 22, 0x112233)
-    .setStrokeStyle(3, 0x00ffff)
-    .setOrigin(0, 0.5);
+// Прогресс-бар (фон) — ширина 464, чтобы красиво вписался
+const progressBg = this.add.rectangle(profileX + 32, profileY + 122, 454, 16, 0x112233)
+    .setStrokeStyle(2, 0x00ffff)
+    .setOrigin(0, 0)
+    .setDepth(8);
 
-  const progressBar = this.add.rectangle(75, 128, 0, 22, 0x00ff88)
-    .setOrigin(0, 0.5);
+// Прогресс-бар (заполнение)
+const progressBar = this.add.rectangle(profileX + 32, profileY + 122, 0, 16, 0x00ff88)
+    .setOrigin(0, 0)
+    .setDepth(9);
 
-  (this as any).levelProgressBar = progressBar;
+(this as any).levelProgressBar = progressBar;
 
-  // === TEAM GRID ===
-  this.gridSlots = [];
-  this.teamSlotOccupants = new Array(8).fill(null);
-  const teamCenterX = 1000;
-  const teamCenterY = 560;
-  const slotSize = 142;
-  const hSpacing = 23;
-  const vSpacing = 23;
-  const totalWidth = 4 * slotSize + 3 * hSpacing;
-  const totalHeight = 2 * slotSize + vSpacing;
-  const teamStartX = teamCenterX - totalWidth / 2;
-  const teamStartY = teamCenterY - totalHeight / 2;
 
-  for (let i = 0; i < 8; i++) {
-    const col = i % 4;
-    const row = Math.floor(i / 4);
-    const x = teamStartX + col * (slotSize + hSpacing);
-    const y = teamStartY + row * (slotSize + vSpacing);
-    const slot = this.add.image(x, y, 'slot_team')
-      .setInteractive()
-      .setDisplaySize(142, 142);
-    this.gridSlots.push(slot);
-    this.addButtonEffects(slot);
-  }
+// === TEAM GRID (с тёмным фоном внутри слотов) ===
+this.gridSlots = [];
+this.teamSlotOccupants = new Array(8).fill(null);
+const teamCenterX = 1000;
+const teamCenterY = 560;
+const slotSize = 142;
+const hSpacing = 23;
+const vSpacing = 23;
+const totalWidth = 4 * slotSize + 3 * hSpacing;
+const totalHeight = 2 * slotSize + vSpacing;
+const teamStartX = teamCenterX - totalWidth / 2;
+const teamStartY = teamCenterY - totalHeight / 2;
+
+for (let i = 0; i < 8; i++) {
+  const col = i % 4;
+  const row = Math.floor(i / 4);
+  const x = teamStartX + col * (slotSize + hSpacing);
+  const y = teamStartY + row * (slotSize + vSpacing);
+
+  // Тёмный фон внутри слота
+  this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122)
+    .setDepth(1);
+
+  // Сама рамка слота
+  const slot = this.add.image(x, y, 'slot_team')
+    .setInteractive()
+    .setDisplaySize(slotSize, slotSize)
+    .setDepth(2);
+
+  this.gridSlots.push(slot);
+  this.addButtonEffects(slot);
+  // === ВНЕШНЯЯ РАМКА ЭКРАНА (добавлено v1.6) ===
+this.add.image(960, 540, 'outer_frame')
+  .setDisplaySize(1920, 1080)
+  .setDepth(200);   // высокая глубина, чтобы была поверх всего
+  
+}
+
 
   this.teamCounterText = this.add.text(920, 670, 'TEAM: 0/8', { 
     fontSize: '38px', 
     fill: '#ffff00' 
   }).setOrigin(0.5);
+
+  // === EQUIPPED RELICS ===
+this.equippedSlotRects = [];
+const equippedY = teamCenterY + totalHeight / 2 + 80;
+const equippedTotalWidth = 3 * 128 + 2 * 40;
+const equippedStartX = teamCenterX - equippedTotalWidth / 2;
+
+for (let i = 0; i < 3; i++) {
+  const x = equippedStartX + i * (128 + 40);
+  const slot = this.add.image(x, equippedY, 'slot_equipped')
+    .setInteractive()
+    .setDisplaySize(128, 128);
+  this.equippedSlotRects.push(slot);
+  this.addButtonEffects(slot, 1.05);
+}
 
 // === КНОПКИ НАД TEAM ===
 const btnAuto = this.add.image(770, 300, 'button_base')
@@ -766,7 +832,11 @@ this.addButtonEffects(btnReroll);
 const btnCollection = this.add.image(285, 900, 'button_base')
   .setInteractive()
   .setDisplaySize(270, 70);
-const textCollection = this.add.text(285, 900, 'МОЯ КОЛЛЕКЦИЯ', { fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+const textCollection = this.add.text(285, 900, 'Collection', { 
+  fontSize: '26px', 
+  fill: '#ffff00', 
+  fontStyle: 'bold' 
+}).setOrigin(0.5);
 (btnCollection as any).linkedText = textCollection;
 (textCollection as any).originalFill = '#ffff00';
 btnCollection.on('pointerdown', () => this.openCollectionScene());
@@ -926,6 +996,8 @@ preload() {
   this.load.image('slot_ai', 'assets/slot_ai.png');
   this.load.image('button_base', 'assets/button_base.png');
   this.load.image('button_start', 'assets/button_start.png');
+  this.load.image('profile_frame', 'assets/profile_frame.png');
+  this.load.image('outer_frame', 'assets/outer_frame.png');
 }
 
   create() {
@@ -1027,6 +1099,17 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject) {
       duration: 60,
       ease: 'Sine.easeOut'
     });
+
+    // Текст тоже нажимается
+    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
+    if (text) {
+      this.tweens.add({
+        targets: text,
+        scale: 0.92,
+        duration: 60,
+        ease: 'Sine.easeOut'
+      });
+    }
   });
 
   obj.on('pointerup', () => {
@@ -1037,6 +1120,17 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject) {
       duration: 80,
       ease: 'Sine.easeOut'
     });
+
+    // Текст возвращается
+    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
+    if (text) {
+      this.tweens.add({
+        targets: text,
+        scale: 1.1,
+        duration: 80,
+        ease: 'Sine.easeOut'
+      });
+    }
   });
 }
 

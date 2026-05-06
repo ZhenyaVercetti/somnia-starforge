@@ -100,14 +100,21 @@ private createTabs() {
 }
 
 
-  private switchTab(tab: 'units' | 'relics') {
-    this.currentTab = tab;
-    this.selectedUnitIds = [];
-    if (this.unitsUnderline) {
-      this.unitsUnderline.setPosition(tab === 'units' ? 720 : 1070, 172);
+private switchTab(tab: 'units' | 'relics') {
+  this.currentTab = tab;
+  this.selectedUnitIds = [];
+  this.selectedRelicIds = [];
+
+  if (this.unitsUnderline) {
+    if (tab === 'units') {
+      this.unitsUnderline.setPosition(330, 172); // центр под "ЮНИТЫ"
+    } else {
+      this.unitsUnderline.setPosition(550, 172); // центр под "РЕЛИКВИИ" (390 + ~160)
     }
-    this.refreshGrid();
   }
+  this.refreshGrid();
+}
+
 
 private createFilters() {
   this.add.text(40, 175, 'ФИЛЬТРЫ (клик для смены):', { 
@@ -295,19 +302,6 @@ private refreshGrid() {
     else this.relicSprites.push(sprite);
   });
 }
-
-
-  private toggleUnitSelection(id: number, sprite: any) {
-    const idx = this.selectedUnitIds.indexOf(id);
-    if (idx > -1) {
-      this.selectedUnitIds.splice(idx, 1);
-    } else {
-      this.selectedUnitIds.push(id);
-    }
-    this.refreshGrid();
-    this.showFloatingMultiSelectPanel();
-    this.showPreview(id, true);
-  }
 
 
   private toggleUnitSelection(id: number, sprite: any) {
