@@ -149,6 +149,56 @@ export default class CollectionScene extends Phaser.Scene {
     });
   }
 
+  private createSearchAndSort() {
+  // Поиск
+  const searchInput = this.add.text(40, 310, '🔍 Поиск: _______________', {
+    fontSize: '22px',
+    fill: '#00ffff',
+    backgroundColor: '#112233',
+    padding: { x: 12, y: 6 }
+  }).setInteractive();
+
+  searchInput.on('pointerdown', () => {
+    const term = prompt('Введите текст для поиска (имя, тип, фракция):', '');
+    if (term !== null) {
+      (this as any).searchTerm = term.toLowerCase();
+      this.applyFiltersAndSort();
+    }
+  });
+
+  // Сортировка
+  const sortBtn = this.add.text(280, 310, 'Сортировка: Редкость ↓', {
+    fontSize: '20px',
+    fill: '#ffff00',
+    backgroundColor: '#112233',
+    padding: { x: 10, y: 5 }
+  }).setInteractive();
+
+  let sortModes = ['rarity-desc', 'level-desc', 'type', 'name', 'newest'];
+  let sortLabels = ['Редкость ↓', 'Уровень ↓', 'Тип', 'Имя A-Z', 'Новые'];
+  let currentSort = 0;
+
+  sortBtn.on('pointerdown', () => {
+    currentSort = (currentSort + 1) % sortModes.length;
+    (this as any).sortMode = sortModes[currentSort];
+    sortBtn.setText('Сортировка: ' + sortLabels[currentSort]);
+    this.applyFiltersAndSort();
+  });
+
+  // Кнопка сброса фильтров
+  this.add.text(520, 310, 'СБРОСИТЬ', {
+    fontSize: '18px',
+    fill: '#ff6666',
+    backgroundColor: '#331111',
+    padding: { x: 10, y: 4 }
+  }).setInteractive().on('pointerdown', () => {
+    (this as any).searchTerm = '';
+    (this as any).sortMode = 'rarity-desc';
+    this.filters = { rarity: 'all', faction: 'all', unitClass: 'all', status: 'all' };
+    this.applyFiltersAndSort();
+  });
+}
+
   private createGridContainer() {
     this.gridContainer = this.add.container(48, 370);
     const maskGraphics = this.make.graphics();
@@ -256,16 +306,31 @@ private refreshGrid() {
       (sprite as any).isUnit = true;
 
       // === ОБРАБОТКА КЛИКОВ (ДВОЙНОЙ = добавить, ОДИНОЧНЫЙ = выбрать) ===
-      sprite.on('pointerdown', () => {
-        const now = Date.now();
-        if (now - this.lastClickTime < 280) {
-          this.addSingleUnitToTeam(item.id);
-          this.lastClickTime = 0;
-          return;
-        }
-        this.toggleUnitSelection(item.id, sprite as any);
-        this.lastClickTime = now;
-      });
+sprite.on('pointerdown', () => {
+  const now = Date.now();
+
+  // Защита от спама и от работы когда команда заполнена
+  if (now - this.lastClickTime < 380) {
+    const prepareScene = this.scene.get('PrepareScene') as any;
+
+    // Жёсткая проверка: если команда уже полная — ничего не делаем
+    if (prepareScene && prepareScene.team && prepareScene.team.length >= 8) {
+      this.lastClickTime = 0;
+      return;
+    }
+
+    if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
+      const success = prepareScene.addSingleUnitToTeam(item.id);
+      if (success) {
+        this.lastClickTime = 0;
+      }
+    }
+    return;
+  }
+
+  this.lastClickTime = now;
+});
+
 
       sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
       sprite.on('pointerout', () => this.hideTooltip());
@@ -282,16 +347,21 @@ private refreshGrid() {
       (sprite as any).isRelic = true;
 
       // === ОБРАБОТКА КЛИКОВ (ДВОЙНОЙ = активировать, ОДИНОЧНЫЙ = выбрать) ===
-      sprite.on('pointerdown', () => {
-        const now = Date.now();
-        if (now - this.lastClickTime < 280) {
-          this.equipSingleRelic(item.id);
-          this.lastClickTime = 0;
-          return;
-        }
-        this.toggleRelicSelection(item.id, sprite as any);
-        this.lastClickTime = now;
-      });
+sprite.on('pointerdown', () => {
+  const now = Date.now();
+  if (now - this.lastClickTime < 400) {
+    const prepare = this.scene.get('PrepareScene') as any;
+    if (prepare && typeof prepare.equipSingleRelic === 'function') {
+      prepare.equipSingleRelic(item.id);
+      this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
+      this.refreshGrid();
+    }
+    this.lastClickTime = 0;
+    return;
+  }
+  this.lastClickTime = now;
+});
+
 
       sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
       sprite.on('pointerout', () => this.hideTooltip());

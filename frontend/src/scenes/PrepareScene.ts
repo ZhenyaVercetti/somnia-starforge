@@ -34,7 +34,7 @@ export default class PrepareScene extends Phaser.Scene {
   private teamCounterText: Phaser.GameObjects.Text | null = null;
   private teamOperationLock = false;
   private lastKnownLevel: number = 0;
-  private lastClickTime = 0;
+  
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -61,22 +61,28 @@ private removeFromTeam(slotIndex: number) {
 
   const tokenId = (occupant as any).tokenId;
 
+  // Удаляем из команды
   this.team = this.team.filter(id => id !== tokenId);
   occupant.destroy();
   this.teamSlotOccupants[slotIndex] = null;
   this.originalPositions.delete(tokenId);
   this.updateTeamCounter();
 
-  // === Возвращаем ТОЛЬКО ЭТОТ юнит в коллекцию ===
+  // Возвращаем ТОЛЬКО этот юнит в коллекцию (улучшенная версия v1.6)
   const collectionScene = this.scene.get('CollectionScene') as any;
   if (collectionScene && collectionScene.scene.isActive()) {
     const alreadyExists = collectionScene.unitsData.some((u: any) => u.id === tokenId);
     if (!alreadyExists) {
       collectionScene.unitsData.push({
         id: tokenId,
-        unit: null
+        unit: (occupant as any).unit || null,
+        inTeam: false
       });
-      collectionScene.refreshGrid();
+      if (typeof collectionScene.applyFiltersAndSort === 'function') {
+        collectionScene.applyFiltersAndSort();
+      } else if (typeof collectionScene.refreshGrid === 'function') {
+        collectionScene.refreshGrid();
+      }
     }
   }
 }
@@ -249,101 +255,101 @@ private async loadEquippedRelics() {
     this.equippedTexts.forEach(t => t.destroy());
     this.equippedTexts = [];
 
-    for (let i = 0; i < 3; i++) {
-      const slot = this.equippedSlotRects[i];
-      if (!slot) continue;
+for (let i = 0; i < 3; i++) {
+  const slot = this.equippedSlotRects[i];
+  if (!slot) continue;
 
-      const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
-      if (oldRect) oldRect.destroy();
+  const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
+  if (oldRect) oldRect.destroy();
 
-      if (this.equippedRelics[i] === 0) {
-        slot.setData('equippedRect', null);
-        continue;
-      }
+  if (this.equippedRelics[i] === 0) {
+    slot.setData('equippedRect', null);
+    continue;
+  }
 
-      const relicId = this.equippedRelics[i];
-      const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
+  const relicId = this.equippedRelics[i];
+  const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
 
-      const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
-        .setStrokeStyle(6, 0xffff00)
-        .setInteractive()
-        .setDepth(15);
+  const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
+    .setStrokeStyle(6, 0xffff00)
+    .setInteractive()
+    .setDepth(15);
 
-      (rect as any).relicId = relicId;
-      (rect as any).isEquipped = true;
-      (rect as any).slotIndex = i;
+  (rect as any).relicId = relicId;
+  (rect as any).isEquipped = true;
+  (rect as any).slotIndex = i;
 
-      slot.setData('equippedRect', rect);
+  slot.setData('equippedRect', rect);
 
-      const nameText = this.add.text(slot.x, slot.y + 87, relicData.name, { 
-        fontSize: '20px', fill: '#ffff00', align: 'center', wordWrap: { width: 135 }
-      }).setOrigin(0.5).setDepth(15);
+  const nameText = this.add.text(slot.x, slot.y + 87, relicData.name, { 
+    fontSize: '20px', fill: '#ffff00', align: 'center', wordWrap: { width: 135 }
+  }).setOrigin(0.5).setDepth(15);
 
-      this.equippedTexts.push(nameText);
-      this.input.setDraggable(rect);
+  this.equippedTexts.push(nameText);
 
-      // === DOUBLE CLICK — снять реликвию ===
-      rect.on('pointerdown', () => {
-        const now = Date.now();
-        if (now - this.lastClickTime < 300) {
-          this.unequipRelic(i);
-        }
-        this.lastClickTime = now;
-      });
-
-      // === DRAG ===
-      rect.on('dragstart', () => {
-        rect.setScale(1.15);
-        rect.setDepth(30);
-      });
-
-      rect.on('drag', (_: any, dragX: number, dragY: number) => {
-        rect.x = dragX;
-        rect.y = dragY;
-      });
-
-      rect.on('dragend', () => {
-        rect.setScale(1.0);
-
-        let droppedOnSlot = false;
-
-        // Проверяем, попали ли в другой слот
-        for (let s = 0; s < 3; s++) {
-          if (s === i) continue;
-          const targetSlot = this.equippedSlotRects[s];
-          const dx = targetSlot.x - rect.x;
-          const dy = targetSlot.y - rect.y;
-
-          if (Math.sqrt(dx * dx + dy * dy) < 80) {
-            // Обмен реликвиями
-            const temp = this.equippedRelics[i];
-            this.equippedRelics[i] = this.equippedRelics[s];
-            this.equippedRelics[s] = temp;
-
-            this.refreshRelics();
-            droppedOnSlot = true;
-            break;
-          }
-        }
-
-        if (!droppedOnSlot) {
-          // Сняли реликвию (перетащили за пределы)
-          this.unequipRelic(i);
-        } else {
-          rect.x = this.equippedSlotRects[i].x;
-          rect.y = this.equippedSlotRects[i].y;
-        }
-      });
-
-      rect.on('pointerover', () => {
-        this.showTooltip(slot.x + 60, slot.y - 45, 
-          `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
-        );
-      });
-      rect.on('pointerout', () => this.hideTooltip());
-
-      this.equippedSprites.push(rect);
+  // === DOUBLE CLICK (отдельная логика, без конфликта с drag) ===
+  let clickCount = 0;
+  rect.on('pointerdown', () => {
+    clickCount++;
+    if (clickCount === 2) {
+      this.unequipRelic(i);
+      clickCount = 0;
     }
+    setTimeout(() => { clickCount = 0; }, 400);
+  });
+
+  // === DRAG (только для перемещения между слотами) ===
+  this.input.setDraggable(rect);
+
+  rect.on('dragstart', () => {
+    rect.setScale(1.15);
+    rect.setDepth(30);
+  });
+
+  rect.on('drag', (_: any, dragX: number, dragY: number) => {
+    rect.x = dragX;
+    rect.y = dragY;
+  });
+
+  rect.on('dragend', () => {
+    rect.setScale(1.0);
+
+    let droppedOnSlot = false;
+
+    for (let s = 0; s < 3; s++) {
+      if (s === i) continue;
+      const targetSlot = this.equippedSlotRects[s];
+      const dx = targetSlot.x - rect.x;
+      const dy = targetSlot.y - rect.y;
+
+      if (Math.sqrt(dx * dx + dy * dy) < 80) {
+        const temp = this.equippedRelics[i];
+        this.equippedRelics[i] = this.equippedRelics[s];
+        this.equippedRelics[s] = temp;
+
+        this.refreshRelics();
+        droppedOnSlot = true;
+        break;
+      }
+    }
+
+    if (!droppedOnSlot) {
+      this.unequipRelic(i);
+    } else {
+      rect.x = this.equippedSlotRects[i].x;
+      rect.y = this.equippedSlotRects[i].y;
+    }
+  });
+
+  rect.on('pointerover', () => {
+    this.showTooltip(slot.x + 60, slot.y - 45, 
+      `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
+    );
+  });
+  rect.on('pointerout', () => this.hideTooltip());
+
+  this.equippedSprites.push(rect);
+}
   } catch (e) {
     console.error('loadEquippedRelics error', e);
   }
@@ -364,10 +370,11 @@ private async unequipRelic(slotIndex: number) {
   const relicId = this.equippedRelics[slotIndex];
   if (relicId === 0) return;
 
+  // Снимаем реликвию
   this.equippedRelics[slotIndex] = 0;
   await this.refreshRelics();
 
-  // === Возвращаем ТОЛЬКО ЭТУ реликвию в коллекцию ===
+  // === Возвращаем ТОЛЬКО эту реликвию в коллекцию (по той же логике, что и юниты) ===
   const collectionScene = this.scene.get('CollectionScene') as any;
   if (collectionScene && collectionScene.scene.isActive()) {
     const alreadyExists = collectionScene.relicsData.some((r: any) => r.id === relicId);
@@ -376,7 +383,11 @@ private async unequipRelic(slotIndex: number) {
         id: relicId,
         relic: null
       });
-      collectionScene.refreshGrid();
+      if (typeof collectionScene.applyFiltersAndSort === 'function') {
+        collectionScene.applyFiltersAndSort();
+      } else if (typeof collectionScene.refreshGrid === 'function') {
+        collectionScene.refreshGrid();
+      }
     }
   }
 }
@@ -1225,41 +1236,48 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.0
 }
 
 
-public addSingleUnitToTeam(unitId: number) {
-  if (this.team.length >= 8) return;
-  if (this.team.includes(unitId)) return;
+public addSingleUnitToTeam(unitId: number): boolean {
+  if (this.team.length >= 8) {
+    console.log('Команда заполнена (8/8)');
+    return false;
+  }
+  if (this.team.includes(unitId)) {
+    return false;
+  }
 
   const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
-  if (freeSlotIndex !== -1) {
-    this.team.push(unitId);
-    this.createTeamUnitVisual(unitId, freeSlotIndex);
-    this.updateTeamCounter();
+  if (freeSlotIndex === -1) return false;
 
-    // Удаляем юнит из коллекции (если она открыта)
-    const collectionScene = this.scene.get('CollectionScene') as any;
-    if (collectionScene && collectionScene.scene.isActive()) {
-      collectionScene.unitsData = collectionScene.unitsData.filter((u: any) => u.id !== unitId);
+  this.team.push(unitId);
+  this.createTeamUnitVisual(unitId, freeSlotIndex);
+  this.updateTeamCounter();
+
+  // Удаляем из коллекции только если реально добавили
+  const collectionScene = this.scene.get('CollectionScene') as any;
+  if (collectionScene && collectionScene.scene.isActive()) {
+    collectionScene.unitsData = collectionScene.unitsData.filter((u: any) => u.id !== unitId);
+    if (typeof collectionScene.applyFiltersAndSort === 'function') {
+      collectionScene.applyFiltersAndSort();
+    } else if (typeof collectionScene.refreshGrid === 'function') {
       collectionScene.refreshGrid();
     }
   }
+
+  return true;
 }
 
-public equipSingleRelic(relicId: number) {
-  // Ищем первый свободный слот слева-направо
+
+public equipSingleRelic(relicId: number): boolean {
+  // Ищем первый свободный слот
   for (let i = 0; i < 3; i++) {
     if (this.equippedRelics[i] === 0) {
       this.equippedRelics[i] = relicId;
       this.refreshRelics();
-
-      // Удаляем реликвию из коллекции (если она открыта)
-      const collectionScene = this.scene.get('CollectionScene') as any;
-      if (collectionScene && collectionScene.scene.isActive()) {
-        collectionScene.relicsData = collectionScene.relicsData.filter((r: any) => r.id !== relicId);
-        collectionScene.refreshGrid();
-      }
-      return;
+      return true;
     }
   }
+  // Все слоты заняты
+  return false;
 }
 
 }
