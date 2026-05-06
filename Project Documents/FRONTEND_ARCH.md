@@ -2,6 +2,25 @@
 
 **Стек:** Phaser 3.90.0 + Vite + TypeScript + viem/wagmi + @somniaforge/sdk
 
+## v1.6 — Архитектурные изменения
+
+### Межсценное взаимодействие
+- CollectionScene теперь запускается через `scene.launch()` (обе сцены могут быть активны одновременно)
+- Добавлены новые методы межсценного взаимодействия:
+  - `addSingleUnitToTeam(unitId)` — быстрое добавление юнита
+  - `equipSingleRelic(relicId)` — быстрое экипирование реликвии
+  - `returnUnitToCollection(unitId)` — возврат юнита в коллекцию
+  - `returnRelicToCollection(relicId)` — возврат реликвии в коллекцию
+  - `addMultipleRelicsToEquipped(relicIds[])` — массовое экипирование
+
+### PrepareScene
+- Полноценный drag-and-drop + double-click для equipped реликвий и team юнитов
+- Единая система снятия/обмена элементов (drag между слотами = swap, drag за пределы = remove)
+
+### CollectionScene
+- Поддержка параметра `equippedRelicIds` при запуске (фильтрация уже экипированных реликвий)
+- Разделение single/double click (двойной клик = instant add, одинарный = multi-select)
+- CollectionScene больше не закрывается после активации реликвий
 ## Актуальная структура файлов (v1.1)
 
 **Сцены:**

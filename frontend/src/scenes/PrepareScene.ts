@@ -4,6 +4,7 @@ import * as Phaser from 'phaser';
 import { getContract } from 'viem';
 
 export default class PrepareScene extends Phaser.Scene {
+  private unitsInTeam: number[] = [];
   private gameContract: any;
   private publicClient: any;
   private nftContract: any;
@@ -33,6 +34,7 @@ export default class PrepareScene extends Phaser.Scene {
   private teamCounterText: Phaser.GameObjects.Text | null = null;
   private teamOperationLock = false;
   private lastKnownLevel: number = 0;
+  private lastClickTime = 0;
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -53,19 +55,41 @@ export default class PrepareScene extends Phaser.Scene {
     if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
   }
 
-  private removeFromTeam(slotIndex: number) {
-    const occupant = this.teamSlotOccupants[slotIndex];
-    if (!occupant) return;
+private removeFromTeam(slotIndex: number) {
+  const occupant = this.teamSlotOccupants[slotIndex];
+  if (!occupant) return;
 
-    const tokenId = (occupant as any).tokenId;
-    this.team = this.team.filter(id => id !== tokenId);
+  const tokenId = (occupant as any).tokenId;
 
-    occupant.destroy();
+  this.team = this.team.filter(id => id !== tokenId);
+  occupant.destroy();
+  this.teamSlotOccupants[slotIndex] = null;
+  this.originalPositions.delete(tokenId);
+  this.updateTeamCounter();
 
-    this.teamSlotOccupants[slotIndex] = null;
-    this.originalPositions.delete(tokenId);
-    this.updateTeamCounter();
+  // === Возвращаем ТОЛЬКО ЭТОТ юнит в коллекцию ===
+  const collectionScene = this.scene.get('CollectionScene') as any;
+  if (collectionScene && collectionScene.scene.isActive()) {
+    const alreadyExists = collectionScene.unitsData.some((u: any) => u.id === tokenId);
+    if (!alreadyExists) {
+      collectionScene.unitsData.push({
+        id: tokenId,
+        unit: null
+      });
+      collectionScene.refreshGrid();
+    }
   }
+}
+
+
+
+public returnUnitToCollection(unitId: number) {
+  const collectionScene = this.scene.get('CollectionScene') as any;
+  if (collectionScene && collectionScene.scene.isActive()) {
+    collectionScene.loadCollectionData(); // просто перезагружаем коллекцию
+  }
+}
+
 
   private async loadOwnedUnits() {
     if (!this.account || !this.gameContract || !this.nftContract) return;
@@ -216,105 +240,116 @@ private async loadPlayerShop() {
     }
   }
 
-  private async loadEquippedRelics() {
-    if (!this.account || !this.gameContract || !this.relicContract) return;
+private async loadEquippedRelics() {
+  if (!this.account || !this.gameContract || !this.relicContract) return;
 
-    try {
-      this.equippedSprites.forEach(s => s.destroy());
-      this.equippedSprites = [];
+  try {
+    this.equippedSprites.forEach(s => s.destroy());
+    this.equippedSprites = [];
+    this.equippedTexts.forEach(t => t.destroy());
+    this.equippedTexts = [];
 
-      this.equippedTexts.forEach(t => t.destroy());
-      this.equippedTexts = [];
+    for (let i = 0; i < 3; i++) {
+      const slot = this.equippedSlotRects[i];
+      if (!slot) continue;
 
-for (let i = 0; i < 3; i++) {
-  const slot = this.equippedSlotRects[i];
-  if (!slot) continue;
+      const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
+      if (oldRect) oldRect.destroy();
 
-  const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
-  if (oldRect) oldRect.destroy();
-
-  // === ТЁМНЫЙ ФОН (добавлено для v1.6) ===
-  this.add.rectangle(slot.x, slot.y, 108, 108, 0x0a1122)
-    .setDepth(14);
-
-  if (this.equippedRelics[i] === 0) {
-    slot.setData('equippedRect', null);
-    continue;
-  }
-
-  const relicId = this.equippedRelics[i];
-  const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
-
-  const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
-    .setStrokeStyle(6, 0xffff00)
-    .setInteractive()
-    .setDepth(15);
-
-
-        (rect as any).relicId = relicId;
-        (rect as any).isEquipped = true;
-        (rect as any).slotIndex = i;
-
-        slot.setData('equippedRect', rect);
-
-const cleanName = relicData.name.replace(/\s*\+\d+/, ''); // убираем +X
-const nameText = this.add.text(slot.x, slot.y + 87, cleanName, { 
-  fontSize: '20px', 
-  fill: '#ffff00',
-  align: 'center',
-  wordWrap: { width: 135 }
-}).setOrigin(0.5).setDepth(15);
-
-        this.equippedTexts.push(nameText);
-
-        this.input.setDraggable(rect);
-
-        rect.on('dragstart', () => {
-          rect.setScale(1.1);
-          rect.setDepth(30);
-        });
-
-        rect.on('drag', (_: any, dragX: number, dragY: number) => {
-          rect.x = dragX;
-          rect.y = dragY;
-        });
-
-        rect.on('dragend', () => {
-          rect.setScale(1.0);
-
-          let stillInEquipped = false;
-          for (let s = 0; s < 3; s++) {
-            const slotRect = this.equippedSlotRects[s];
-            const dx = slotRect.x - rect.x;
-            const dy = slotRect.y - rect.y;
-            if (Math.sqrt(dx * dx + dy * dy) < 120) {
-              stillInEquipped = true;
-              break;
-            }
-          }
-
-          if (!stillInEquipped) {
-            console.log(`🔄 Unequip relic ${relicId} drag'ом`);
-            this.unequipRelic(i);
-          } else {
-            rect.x = this.equippedSlotRects[i].x;
-            rect.y = this.equippedSlotRects[i].y;
-          }
-        });
-
-        rect.on('pointerover', () => {
-          this.showTooltip(slot.x + 60, slot.y - 45, 
-            `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
-          );
-        });
-        rect.on('pointerout', () => this.hideTooltip());
-
-        this.equippedSprites.push(rect);
+      if (this.equippedRelics[i] === 0) {
+        slot.setData('equippedRect', null);
+        continue;
       }
-    } catch (e) {
-      console.error('loadEquippedRelics error', e);
+
+      const relicId = this.equippedRelics[i];
+      const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
+
+      const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
+        .setStrokeStyle(6, 0xffff00)
+        .setInteractive()
+        .setDepth(15);
+
+      (rect as any).relicId = relicId;
+      (rect as any).isEquipped = true;
+      (rect as any).slotIndex = i;
+
+      slot.setData('equippedRect', rect);
+
+      const nameText = this.add.text(slot.x, slot.y + 87, relicData.name, { 
+        fontSize: '20px', fill: '#ffff00', align: 'center', wordWrap: { width: 135 }
+      }).setOrigin(0.5).setDepth(15);
+
+      this.equippedTexts.push(nameText);
+      this.input.setDraggable(rect);
+
+      // === DOUBLE CLICK — снять реликвию ===
+      rect.on('pointerdown', () => {
+        const now = Date.now();
+        if (now - this.lastClickTime < 300) {
+          this.unequipRelic(i);
+        }
+        this.lastClickTime = now;
+      });
+
+      // === DRAG ===
+      rect.on('dragstart', () => {
+        rect.setScale(1.15);
+        rect.setDepth(30);
+      });
+
+      rect.on('drag', (_: any, dragX: number, dragY: number) => {
+        rect.x = dragX;
+        rect.y = dragY;
+      });
+
+      rect.on('dragend', () => {
+        rect.setScale(1.0);
+
+        let droppedOnSlot = false;
+
+        // Проверяем, попали ли в другой слот
+        for (let s = 0; s < 3; s++) {
+          if (s === i) continue;
+          const targetSlot = this.equippedSlotRects[s];
+          const dx = targetSlot.x - rect.x;
+          const dy = targetSlot.y - rect.y;
+
+          if (Math.sqrt(dx * dx + dy * dy) < 80) {
+            // Обмен реликвиями
+            const temp = this.equippedRelics[i];
+            this.equippedRelics[i] = this.equippedRelics[s];
+            this.equippedRelics[s] = temp;
+
+            this.refreshRelics();
+            droppedOnSlot = true;
+            break;
+          }
+        }
+
+        if (!droppedOnSlot) {
+          // Сняли реликвию (перетащили за пределы)
+          this.unequipRelic(i);
+        } else {
+          rect.x = this.equippedSlotRects[i].x;
+          rect.y = this.equippedSlotRects[i].y;
+        }
+      });
+
+      rect.on('pointerover', () => {
+        this.showTooltip(slot.x + 60, slot.y - 45, 
+          `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
+        );
+      });
+      rect.on('pointerout', () => this.hideTooltip());
+
+      this.equippedSprites.push(rect);
     }
+  } catch (e) {
+    console.error('loadEquippedRelics error', e);
   }
+}
+
+
 
   private async equipRelic(relicId: number, slotIndex: number) {
     if (slotIndex < 0 || slotIndex > 2) return;
@@ -323,12 +358,29 @@ const nameText = this.add.text(slot.x, slot.y + 87, cleanName, {
     await this.refreshRelics();
   }
 
-  private async unequipRelic(slotIndex: number) {
-    if (slotIndex < 0 || slotIndex > 2) return;
-    this.equippedRelics[slotIndex] = 0;
-    console.log(`✅ Unequipped слот ${slotIndex}`);
-    await this.refreshRelics();
+private async unequipRelic(slotIndex: number) {
+  if (slotIndex < 0 || slotIndex > 2) return;
+
+  const relicId = this.equippedRelics[slotIndex];
+  if (relicId === 0) return;
+
+  this.equippedRelics[slotIndex] = 0;
+  await this.refreshRelics();
+
+  // === Возвращаем ТОЛЬКО ЭТУ реликвию в коллекцию ===
+  const collectionScene = this.scene.get('CollectionScene') as any;
+  if (collectionScene && collectionScene.scene.isActive()) {
+    const alreadyExists = collectionScene.relicsData.some((r: any) => r.id === relicId);
+    if (!alreadyExists) {
+      collectionScene.relicsData.push({
+        id: relicId,
+        relic: null
+      });
+      collectionScene.refreshGrid();
+    }
   }
+}
+
 
   private getRelicEffectDescription(relicType: number): string {
     const desc = [
@@ -703,106 +755,88 @@ private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
   bg.setDisplaySize(1920, 1080);
 
-// === PROFILE BAR v1.6 (520×180, тексты сдвинуты вправо и вниз) ===
-const profileX = 45;
-const profileY = 28;
+  // === PROFILE ===
+  const profileX = 45;
+  const profileY = 28;
 
-// Кастомная рамка
-const profileFrame = this.add.image(profileX, profileY, 'profile_frame')
+  const profileFrame = this.add.image(profileX, profileY, 'profile_frame')
     .setOrigin(0, 0)
     .setDisplaySize(520, 180)
     .setDepth(5);
 
-// Level (сдвинут вправо +6 и вниз +8)
-this.playerLevelText = this.add.text(profileX + 32, profileY + 26, 'Level 1', {
-    fontSize: '46px',
-    fill: '#00ffff',
-    fontStyle: 'bold'
-}).setDepth(10);
+  this.playerLevelText = this.add.text(profileX + 32, profileY + 26, 'Level 1', {
+    fontSize: '46px', fill: '#00ffff', fontStyle: 'bold'
+  }).setDepth(10);
 
-// Статистика (сдвинут вправо +6 и вниз +8)
-this.playerStatsText = this.add.text(profileX + 32, profileY + 84, 'XP 0/90  •  W:0 L:0', {
-    fontSize: '23px',
-    fill: '#aaffff'
-}).setDepth(10);
+  this.playerStatsText = this.add.text(profileX + 32, profileY + 84, 'XP 0/90  •  W:0 L:0', {
+    fontSize: '23px', fill: '#aaffff'
+  }).setDepth(10);
 
-// Прогресс-бар (фон) — ширина 464, чтобы красиво вписался
-const progressBg = this.add.rectangle(profileX + 32, profileY + 122, 454, 16, 0x112233)
-    .setStrokeStyle(2, 0x00ffff)
-    .setOrigin(0, 0)
-    .setDepth(8);
+  const progressBg = this.add.rectangle(profileX + 32, profileY + 122, 454, 16, 0x112233)
+    .setStrokeStyle(2, 0x00ffff).setOrigin(0, 0).setDepth(8);
 
-// Прогресс-бар (заполнение)
-const progressBar = this.add.rectangle(profileX + 32, profileY + 122, 0, 16, 0x00ff88)
-    .setOrigin(0, 0)
-    .setDepth(9);
+  const progressBar = this.add.rectangle(profileX + 32, profileY + 122, 0, 16, 0x00ff88)
+    .setOrigin(0, 0).setDepth(9);
+  (this as any).levelProgressBar = progressBar;
 
-(this as any).levelProgressBar = progressBar;
+  // === TEAM GRID ===
+  this.gridSlots = [];
+  this.teamSlotOccupants = new Array(8).fill(null);
+  const teamCenterX = 1000;
+  const teamCenterY = 560;
+  const slotSize = 142;
+  const hSpacing = 23;
+  const vSpacing = 23;
+  const totalWidth = 4 * slotSize + 3 * hSpacing;
+  const totalHeight = 2 * slotSize + vSpacing;
+  const teamStartX = teamCenterX - totalWidth / 2;
+  const teamStartY = teamCenterY - totalHeight / 2;
 
+  for (let i = 0; i < 8; i++) {
+    const col = i % 4;
+    const row = Math.floor(i / 4);
+    const x = teamStartX + col * (slotSize + hSpacing);
+    const y = teamStartY + row * (slotSize + vSpacing);
 
-// === TEAM GRID (с тёмным фоном внутри слотов) ===
-this.gridSlots = [];
-this.teamSlotOccupants = new Array(8).fill(null);
-const teamCenterX = 1000;
-const teamCenterY = 560;
-const slotSize = 142;
-const hSpacing = 23;
-const vSpacing = 23;
-const totalWidth = 4 * slotSize + 3 * hSpacing;
-const totalHeight = 2 * slotSize + vSpacing;
-const teamStartX = teamCenterX - totalWidth / 2;
-const teamStartY = teamCenterY - totalHeight / 2;
+    this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
 
-for (let i = 0; i < 8; i++) {
-  const col = i % 4;
-  const row = Math.floor(i / 4);
-  const x = teamStartX + col * (slotSize + hSpacing);
-  const y = teamStartY + row * (slotSize + vSpacing);
+    const slot = this.add.image(x, y, 'slot_team')
+      .setInteractive()
+      .setDisplaySize(slotSize, slotSize)
+      .setDepth(2);
 
-  // Тёмный фон внутри слота
-  this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122)
-    .setDepth(1);
+    this.gridSlots.push(slot);
+    this.addButtonEffects(slot);
+  }
 
-  // Сама рамка слота
-  const slot = this.add.image(x, y, 'slot_team')
-    .setInteractive()
-    .setDisplaySize(slotSize, slotSize)
-    .setDepth(2);
-
-  this.gridSlots.push(slot);
-  this.addButtonEffects(slot);
-  // === ВНЕШНЯЯ РАМКА ЭКРАНА (добавлено v1.6) ===
-this.add.image(960, 540, 'outer_frame')
-  .setDisplaySize(1920, 1080)
-  .setDepth(200);   // высокая глубина, чтобы была поверх всего
-  
-}
-
+  // === ВНЕШНЯЯ РАМКА ===
+  this.add.image(960, 540, 'outer_frame')
+    .setDisplaySize(1920, 1080)
+    .setDepth(200);
 
   this.teamCounterText = this.add.text(920, 670, 'TEAM: 0/8', { 
-    fontSize: '38px', 
-    fill: '#ffff00' 
+    fontSize: '38px', fill: '#ffff00' 
   }).setOrigin(0.5);
 
   // === EQUIPPED RELICS ===
-this.equippedSlotRects = [];
-const equippedY = teamCenterY + totalHeight / 2 + 80;
-const equippedTotalWidth = 3 * 128 + 2 * 40;
-const equippedStartX = teamCenterX - equippedTotalWidth / 2;
+  this.equippedSlotRects = [];
+  const equippedY = teamCenterY + totalHeight / 2 + 80;
+  const equippedTotalWidth = 3 * 128 + 2 * 40;
+  const equippedStartX = teamCenterX - equippedTotalWidth / 2;
 
-for (let i = 0; i < 3; i++) {
-  const x = equippedStartX + i * (128 + 40);
-  const slot = this.add.image(x, equippedY, 'slot_equipped')
-    .setInteractive()
-    .setDisplaySize(128, 128);
-  this.equippedSlotRects.push(slot);
-  this.addButtonEffects(slot, 1.05);
-}
+  for (let i = 0; i < 3; i++) {
+    const x = equippedStartX + i * (128 + 40);
+    const slot = this.add.image(x, equippedY, 'slot_equipped')
+      .setInteractive()
+      .setDisplaySize(128, 128);
+    this.equippedSlotRects.push(slot);
+    this.addButtonEffects(slot, 1.05);
+  }
 
-// === КНОПКИ НАД TEAM ===
+// === КНОПКИ (все одинакового размера 270×70) ===
 const btnAuto = this.add.image(770, 300, 'button_base')
   .setInteractive()
-  .setDisplaySize(220, 52);
+  .setDisplaySize(270, 70);
 const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' }).setOrigin(0.5);
 (btnAuto as any).linkedText = textAuto;
 (textAuto as any).originalFill = '#00ff88';
@@ -811,48 +845,41 @@ this.addButtonEffects(btnAuto);
 
 const btnClear = this.add.image(1080, 300, 'button_base')
   .setInteractive()
-  .setDisplaySize(220, 52);
+  .setDisplaySize(270, 70);
 const textClear = this.add.text(1080, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
 (btnClear as any).linkedText = textClear;
 (textClear as any).originalFill = '#ff6666';
 btnClear.on('pointerdown', () => this.clearTeam());
 this.addButtonEffects(btnClear);
 
-// === REROLL SHOP ===
 const btnReroll = this.add.image(285, 460, 'button_base')
   .setInteractive()
-  .setDisplaySize(220, 50);
+  .setDisplaySize(270, 70);
 const textReroll = this.add.text(285, 460, 'REROLL SHOP', { fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' }).setOrigin(0.5);
 (btnReroll as any).linkedText = textReroll;
 (textReroll as any).originalFill = '#ff00ff';
 btnReroll.on('pointerdown', () => this.rerollShop());
 this.addButtonEffects(btnReroll);
 
-// === МОЯ КОЛЛЕКЦИЯ ===
 const btnCollection = this.add.image(285, 900, 'button_base')
   .setInteractive()
   .setDisplaySize(270, 70);
-const textCollection = this.add.text(285, 900, 'Collection', { 
-  fontSize: '26px', 
-  fill: '#ffff00', 
-  fontStyle: 'bold' 
-}).setOrigin(0.5);
+const textCollection = this.add.text(285, 900, 'Collection', { fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
 (btnCollection as any).linkedText = textCollection;
 (textCollection as any).originalFill = '#ffff00';
 btnCollection.on('pointerdown', () => this.openCollectionScene());
 this.addButtonEffects(btnCollection);
 
-// === BUY (FREE) ===
 const btnBuy = this.add.image(285, 820, 'button_base')
   .setInteractive()
-  .setDisplaySize(180, 46);
-const textBuy = this.add.text(285, 820, 'BUY (FREE)', { fontSize: '22px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
+  .setDisplaySize(270, 70);
+const textBuy = this.add.text(285, 820, 'BUY (FREE)', { fontSize: '26px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
 (btnBuy as any).linkedText = textBuy;
 (textBuy as any).originalFill = '#00ffff';
 btnBuy.on('pointerdown', () => this.buyUnit());
 this.addButtonEffects(btnBuy);
 
-// === START BATTLE (используем setScale!) ===
+// START BATTLE оставляем больше (главная кнопка)
 const btnStart = this.add.image(1600, 900, 'button_start')
   .setInteractive()
   .setDisplaySize(400, 90);
@@ -865,16 +892,20 @@ this.addButtonEffects(btnStart);
 
 
 
-  private openCollectionScene() {
-    this.scene.launch('CollectionScene', {
-      gameContract: this.gameContract,
-      nftContract: this.nftContract,
-      relicContract: this.relicContract,
-      account: this.account,
-      publicClient: this.publicClient,
-      returnTo: 'PrepareScene'
-    });
-  }
+private openCollectionScene() {
+  const equippedIds = this.equippedRelics.filter(id => id > 0);
+
+  this.scene.launch('CollectionScene', {
+    gameContract: this.gameContract,
+    nftContract: this.nftContract,
+    relicContract: this.relicContract,
+    account: this.account,
+    publicClient: this.publicClient,
+    returnTo: 'PrepareScene',
+    equippedRelicIds: equippedIds
+  });
+}
+
 
   public async addMultipleUnitsToTeam(newIds: number[]) {
     if (this.teamOperationLock || !newIds || newIds.length === 0) return;
@@ -900,67 +931,122 @@ this.addButtonEffects(btnStart);
     }
   }
 
-  public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
-    if (!newRelicIds || newRelicIds.length === 0 || newRelicIds.length > 3) return;
+public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
+  if (!newRelicIds || newRelicIds.length === 0 || newRelicIds.length > 3) return;
 
-    let equippedCopy = [...this.equippedRelics];
-    let idx = 0;
+  let equippedCopy = [...this.equippedRelics];
+  let idx = 0;
 
-    for (let i = 0; i < equippedCopy.length && idx < newRelicIds.length; i++) {
-      if (equippedCopy[i] === 0) {
-        equippedCopy[i] = newRelicIds[idx++];
-      }
-    }
-
-    for (let i = 0; idx < newRelicIds.length && i < equippedCopy.length; i++) {
+  // Заполняем пустые слоты
+  for (let i = 0; i < equippedCopy.length && idx < newRelicIds.length; i++) {
+    if (equippedCopy[i] === 0) {
       equippedCopy[i] = newRelicIds[idx++];
     }
-
-    this.equippedRelics = equippedCopy;
-
-    console.log(`✅ Активировано ${newRelicIds.length} реликвий →`, this.equippedRelics);
-
-    await this.refreshRelics();
-
-    const msg = this.add.text(600, 450, `РЕЛИКВИИ АКТИВИРОВАНЫ (${newRelicIds.length})`, {
-      fontSize: '42px',
-      fill: '#00ff88'
-    }).setOrigin(0.5);
-    setTimeout(() => msg.destroy(), 2200);
   }
 
-  private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
-    if (!this.nftContract || !this.gridSlots[slotIndex]) return;
-
-    try {
-      const unit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
-      const slot = this.gridSlots[slotIndex];
-
-      const style = this.getRarityTintAndScale(unit.rarity);
-
-      const rect = this.add.rectangle(slot.x, slot.y, 142, 142, 0x112233)
-        .setStrokeStyle(8, style.tint)
-        .setScale(style.scale)
-        .setInteractive()
-        .setDepth(10);
-
-      (rect as any).tokenId = tokenId;
-      (rect as any).unit = unit;
-
-      this.teamSlotOccupants[slotIndex] = rect;
-      this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
-
-      this.enableDoubleClickRemoveOnTeamUnit(rect, tokenId);
-
-      rect.on('pointerover', () => {
-        const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
-        this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
-      });
-      rect.on('pointerout', () => this.hideTooltip());
-    } catch (e) {
-      console.error('createTeamUnitVisual error', e);
-    }
+  // Если остались — перезаписываем
+  for (let i = 0; idx < newRelicIds.length && i < equippedCopy.length; i++) {
+    equippedCopy[i] = newRelicIds[idx++];
   }
+
+  this.equippedRelics = equippedCopy;
+  await this.refreshRelics();
+
+  const msg = this.add.text(600, 450, `РЕЛИКВИИ АКТИВИРОВАНЫ (${newRelicIds.length})`, {
+    fontSize: '42px',
+    fill: '#00ff88'
+  }).setOrigin(0.5);
+  setTimeout(() => msg.destroy(), 2200);
+}
+
+private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
+  if (!this.nftContract || !this.gridSlots[slotIndex]) return;
+
+  try {
+    const unit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
+    const slot = this.gridSlots[slotIndex];
+
+    const style = this.getRarityTintAndScale(unit.rarity);
+
+    const rect = this.add.rectangle(slot.x, slot.y, 142, 142, 0x112233)
+      .setStrokeStyle(8, style.tint)
+      .setScale(style.scale)
+      .setInteractive()
+      .setDepth(10);
+
+    (rect as any).tokenId = tokenId;
+    (rect as any).unit = unit;
+
+    this.teamSlotOccupants[slotIndex] = rect;
+    this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
+
+    // === DOUBLE CLICK — убрать из команды ===
+    rect.on('pointerdown', () => {
+      const now = Date.now();
+      if (now - this.lastClickTime < 300) {
+        this.removeFromTeam(slotIndex);
+      }
+      this.lastClickTime = now;
+    });
+
+    // === DRAG ===
+    this.input.setDraggable(rect);
+
+    rect.on('dragstart', () => {
+      rect.setScale(style.scale * 1.15);
+      rect.setDepth(30);
+    });
+
+    rect.on('drag', (_: any, dragX: number, dragY: number) => {
+      rect.x = dragX;
+      rect.y = dragY;
+    });
+
+    rect.on('dragend', () => {
+      rect.setScale(style.scale);
+
+      let droppedOnSlot = false;
+
+      // Проверяем, попали ли в другой слот команды
+      for (let s = 0; s < 8; s++) {
+        if (s === slotIndex) continue;
+        const targetSlot = this.gridSlots[s];
+        const dx = targetSlot.x - rect.x;
+        const dy = targetSlot.y - rect.y;
+
+        if (Math.sqrt(dx * dx + dy * dy) < 90) {
+          // Обмен юнитами
+          const temp = this.team[slotIndex];
+          this.team[slotIndex] = this.team[s];
+          this.team[s] = temp;
+
+          this.clearTeamVisuals();
+          this.rebuildTeamVisuals();
+          droppedOnSlot = true;
+          break;
+        }
+      }
+
+      if (!droppedOnSlot) {
+        // Убрали юнита из команды
+        this.removeFromTeam(slotIndex);
+      } else {
+        rect.x = this.gridSlots[slotIndex].x;
+        rect.y = this.gridSlots[slotIndex].y;
+      }
+    });
+
+    rect.on('pointerover', () => {
+      const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
+      this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
+    });
+    rect.on('pointerout', () => this.hideTooltip());
+
+  } catch (e) {
+    console.error('createTeamUnitVisual error', e);
+  }
+}
+
 
   private enableDoubleClickRemoveOnTeamUnit(rect: any, tokenId: number) {
     rect.on('pointerdown', () => {
@@ -987,6 +1073,32 @@ this.addButtonEffects(btnStart);
 
     console.log('✅ PrepareScene init — данные от BootScene получены');
   }
+
+public returnRelicToCollection(relicId: number) {
+  const collectionScene = this.scene.get('CollectionScene') as any;
+  if (collectionScene && collectionScene.scene.isActive()) {
+    collectionScene.loadCollectionData(); // просто перезагружаем коллекцию
+  }
+}
+
+
+
+private clearTeamVisuals() {
+  this.teamSlotOccupants.forEach(occupant => {
+    if (occupant) occupant.destroy();
+  });
+  this.teamSlotOccupants = new Array(8).fill(null);
+}
+
+private async rebuildTeamVisuals() {
+  for (let i = 0; i < this.team.length; i++) {
+    if (this.team[i]) {
+      await this.createTeamUnitVisual(this.team[i], i);
+    }
+  }
+  this.updateTeamCounter();
+}
+
 
 preload() {
   this.load.image('mainbackground', 'assets/mainbackground.jpg');
@@ -1051,13 +1163,13 @@ preload() {
     if (this.playerStatsText) this.playerStatsText.destroy();
     console.log('✅ PrepareScene shutdown — очистка перед выходом');
   }
-private addButtonEffects(obj: Phaser.GameObjects.GameObject) {
+private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.08) {
   const img = obj as Phaser.GameObjects.Image;
   const originalWidth = img.displayWidth;
   const originalHeight = img.displayHeight;
 
-  const hoverWidth = originalWidth * 1.08;
-  const hoverHeight = originalHeight * 1.08;
+  const hoverWidth = originalWidth * scale;
+  const hoverHeight = originalHeight * scale;
 
   obj.on('pointerover', () => {
     this.tweens.add({
@@ -1099,17 +1211,6 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject) {
       duration: 60,
       ease: 'Sine.easeOut'
     });
-
-    // Текст тоже нажимается
-    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
-    if (text) {
-      this.tweens.add({
-        targets: text,
-        scale: 0.92,
-        duration: 60,
-        ease: 'Sine.easeOut'
-      });
-    }
   });
 
   obj.on('pointerup', () => {
@@ -1120,18 +1221,45 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject) {
       duration: 80,
       ease: 'Sine.easeOut'
     });
-
-    // Текст возвращается
-    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
-    if (text) {
-      this.tweens.add({
-        targets: text,
-        scale: 1.1,
-        duration: 80,
-        ease: 'Sine.easeOut'
-      });
-    }
   });
+}
+
+
+public addSingleUnitToTeam(unitId: number) {
+  if (this.team.length >= 8) return;
+  if (this.team.includes(unitId)) return;
+
+  const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
+  if (freeSlotIndex !== -1) {
+    this.team.push(unitId);
+    this.createTeamUnitVisual(unitId, freeSlotIndex);
+    this.updateTeamCounter();
+
+    // Удаляем юнит из коллекции (если она открыта)
+    const collectionScene = this.scene.get('CollectionScene') as any;
+    if (collectionScene && collectionScene.scene.isActive()) {
+      collectionScene.unitsData = collectionScene.unitsData.filter((u: any) => u.id !== unitId);
+      collectionScene.refreshGrid();
+    }
+  }
+}
+
+public equipSingleRelic(relicId: number) {
+  // Ищем первый свободный слот слева-направо
+  for (let i = 0; i < 3; i++) {
+    if (this.equippedRelics[i] === 0) {
+      this.equippedRelics[i] = relicId;
+      this.refreshRelics();
+
+      // Удаляем реликвию из коллекции (если она открыта)
+      const collectionScene = this.scene.get('CollectionScene') as any;
+      if (collectionScene && collectionScene.scene.isActive()) {
+        collectionScene.relicsData = collectionScene.relicsData.filter((r: any) => r.id !== relicId);
+        collectionScene.refreshGrid();
+      }
+      return;
+    }
+  }
 }
 
 }

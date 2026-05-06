@@ -8,6 +8,8 @@ export default class CollectionScene extends Phaser.Scene {
   private relicContract: any;
   private account: `0x${string}` | undefined;
   private publicClient: any;
+  private equippedRelicIds: number[] = [];
+  private lastClickTime = 0;
 
   private currentTab: 'units' | 'relics' = 'units';
   private unitsData: any[] = [];
@@ -40,94 +42,83 @@ export default class CollectionScene extends Phaser.Scene {
     this.account = data.account;
     this.publicClient = data.publicClient;
     this.returnToScene = data.returnTo || 'PrepareScene';
-
-    console.log('✅ CollectionScene init — данные получены, returnTo:', this.returnToScene);
+    this.equippedRelicIds = data.equippedRelicIds || [];
   }
 
-create() {
-  this.children.getAll().forEach(child => {
-    if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
-  });
+  create() {
+    this.children.getAll().forEach(child => {
+      if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
+    });
 
-  this.unitSprites = [];
-  this.relicSprites = [];
-  this.selectedUnitIds = [];
-  this.selectedRelicIds = [];
-  this.previewTexts = [];
-  this.tooltip = null;
+    this.unitSprites = [];
+    this.relicSprites = [];
+    this.selectedUnitIds = [];
+    this.selectedRelicIds = [];
+    this.previewTexts = [];
+    this.tooltip = null;
 
-  // Overlay — только левая половина
-  this.add.rectangle(480, 540, 960, 1080, 0x0a0022)
-    .setAlpha(0.97)
-    .setDepth(-1);
+    // Тёмный оверлей (в стиле PrepareScene)
+    this.add.rectangle(480, 540, 960, 1080, 0x0a1122)
+      .setAlpha(0.96)
+      .setDepth(-1);
 
-  this.add.text(480, 45, 'МОЯ КОЛЛЕКЦИЯ', { 
-    fontSize: '52px', 
-    fill: '#ffff00', 
-    fontStyle: 'bold' 
-  }).setOrigin(0.5);
+    // Заголовок
+    this.add.text(480, 45, 'МОЯ КОЛЛЕКЦИЯ', { 
+      fontSize: '52px', 
+      fill: '#ffff00', 
+      fontStyle: 'bold' 
+    }).setOrigin(0.5);
 
-  this.createTabs();
-  this.createFilters();
-  this.createGridContainer();
-  this.createPreviewPanel();
-  this.createBottomPanel();
+    this.createTabs();
+    this.createFilters();
+    this.createGridContainer();
+    this.createPreviewPanel();
+    this.createBottomPanel();
 
-  this.loadCollectionData();
+    this.loadCollectionData();
+  }
 
-  console.log('✅ CollectionScene — overlay левая половина 960px');
-}
+  private createTabs() {
+    const unitsTab = this.add.text(270, 135, 'ЮНИТЫ', { 
+      fontSize: '38px', 
+      fill: '#00ffff' 
+    })
+      .setOrigin(1, 0.5)
+      .setInteractive()
+      .on('pointerdown', () => this.switchTab('units'));
 
+    const relicsTab = this.add.text(390, 135, 'РЕЛИКВИИ', { 
+      fontSize: '38px', 
+      fill: '#ff00ff' 
+    })
+      .setOrigin(0, 0.5)
+      .setInteractive()
+      .on('pointerdown', () => this.switchTab('relics'));
 
-private createTabs() {
-  const unitsTab = this.add.text(270, 135, 'ЮНИТЫ', { 
-    fontSize: '38px', 
-    fill: '#00ffff' 
-  })
-    .setOrigin(1, 0.5)   // правый край точно на x=270
-    .setInteractive()
-    .on('pointerdown', () => this.switchTab('units'));
+    this.unitsUnderline = this.add.rectangle(330, 172, 280, 9, 0x00ffff).setOrigin(0.5);
+  }
 
-  const relicsTab = this.add.text(390, 135, 'РЕЛИКВИИ', { 
-    fontSize: '38px', 
-    fill: '#ff00ff' 
-  })
-    .setOrigin(0, 0.5)   // левый край точно на x=390
-    .setInteractive()
-    .on('pointerdown', () => this.switchTab('relics'));
+  private switchTab(tab: 'units' | 'relics') {
+    this.currentTab = tab;
+    this.selectedUnitIds = [];
+    this.selectedRelicIds = [];
 
-  this.unitsUnderline = this.add.rectangle(330, 172, 280, 9, 0x00ffff).setOrigin(0.5);
-}
-
-
-private switchTab(tab: 'units' | 'relics') {
-  this.currentTab = tab;
-  this.selectedUnitIds = [];
-  this.selectedRelicIds = [];
-
-  if (this.unitsUnderline) {
-    if (tab === 'units') {
-      this.unitsUnderline.setPosition(330, 172); // центр под "ЮНИТЫ"
-    } else {
-      this.unitsUnderline.setPosition(550, 172); // центр под "РЕЛИКВИИ" (390 + ~160)
+    if (this.unitsUnderline) {
+      this.unitsUnderline.setPosition(tab === 'units' ? 330 : 550, 172);
     }
+    this.refreshGrid();
   }
-  this.refreshGrid();
-}
 
+  private createFilters() {
+    this.add.text(40, 175, 'ФИЛЬТРЫ:', { 
+      fontSize: '24px', 
+      fill: '#aaaaaa' 
+    });
 
-private createFilters() {
-  this.add.text(40, 175, 'ФИЛЬТРЫ (клик для смены):', { 
-    fontSize: '24px', 
-    fill: '#aaaaaa' 
-  });
-
-  const rarityBtn = this.add.text(40, 205, `Rarity: ${this.filters.rarity}`, { 
-    fontSize: '22px', 
-    fill: '#00ffff' 
-  })
-    .setInteractive()
-    .on('pointerdown', () => {
+    // Rarity
+    const rarityBtn = this.add.text(40, 205, `Rarity: ${this.filters.rarity}`, { 
+      fontSize: '22px', fill: '#00ffff' 
+    }).setInteractive().on('pointerdown', () => {
       const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
       const idx = options.indexOf(this.filters.rarity);
       this.filters.rarity = options[(idx + 1) % options.length];
@@ -135,12 +126,10 @@ private createFilters() {
       this.refreshGrid();
     });
 
-  const factionBtn = this.add.text(40, 237, `Faction: ${this.filters.faction}`, { 
-    fontSize: '22px', 
-    fill: '#00ffff' 
-  })
-    .setInteractive()
-    .on('pointerdown', () => {
+    // Faction
+    const factionBtn = this.add.text(40, 237, `Faction: ${this.filters.faction}`, { 
+      fontSize: '22px', fill: '#00ffff' 
+    }).setInteractive().on('pointerdown', () => {
       const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
       const idx = options.indexOf(this.filters.faction);
       this.filters.faction = options[(idx + 1) % options.length];
@@ -148,79 +137,78 @@ private createFilters() {
       this.refreshGrid();
     });
 
-  const classBtn = this.add.text(40, 269, `Class: ${this.filters.unitClass}`, { 
-    fontSize: '22px', 
-    fill: '#00ffff' 
-  })
-    .setInteractive()
-    .on('pointerdown', () => {
+    // Class (только для юнитов)
+    const classBtn = this.add.text(40, 269, `Class: ${this.filters.unitClass}`, { 
+      fontSize: '22px', fill: '#00ffff' 
+    }).setInteractive().on('pointerdown', () => {
       const options: ('all' | '0' | '1' | '2' | '3')[] = ['all', '0', '1', '2', '3'];
       const idx = options.indexOf(this.filters.unitClass);
       this.filters.unitClass = options[(idx + 1) % options.length];
       classBtn.setText(`Class: ${this.filters.unitClass}`);
       this.refreshGrid();
     });
-}
-
-
-
-private createGridContainer() {
-  this.gridContainer = this.add.container(48, 370);
-
-  const maskGraphics = this.make.graphics();
-  maskGraphics.fillRect(38, 355, 760, 640);
-  const mask = maskGraphics.createGeometryMask();
-  this.gridContainer.setMask(mask);
-}
-
-
-private createPreviewPanel() {
-  this.previewRect = this.add.rectangle(775, 510, 260, 390, 0x112233)
-    .setStrokeStyle(4, 0x00ffff);
-}
-
-
-private createBottomPanel() {
-  this.add.text(480, 1020, '← ВЕРНУТЬСЯ В ПОДГОТОВКУ', {
-    fontSize: '42px', 
-    fill: '#ffffff', 
-    backgroundColor: '#112233', 
-    padding: { x: 40, y: 16 }
-  })
-    .setOrigin(0.5)
-    .setInteractive()
-    .on('pointerdown', () => this.returnToPrepare());
-}
-
-
-  private async loadCollectionData() {
-    if (!this.account) return;
-
-    try {
-      const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
-      this.unitsData = await Promise.all(unitIds.map(async (idBig) => {
-        const id = Number(idBig);
-        const unit = await this.nftContract.read.getUnit([idBig]);
-        return { id, unit, inTeam: false };
-      }));
-
-      const relicIds: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
-      this.relicsData = await Promise.all(relicIds.map(async (idBig) => {
-        const id = Number(idBig);
-        const relic = await this.relicContract.read.getRelic([idBig]);
-        return { id, relic };
-      }));
-
-      this.refreshGrid();
-    } catch (e) {
-      console.error('loadCollectionData error', e);
-    }
   }
 
+  private createGridContainer() {
+    this.gridContainer = this.add.container(48, 370);
+    const maskGraphics = this.make.graphics();
+    maskGraphics.fillRect(38, 355, 760, 640);
+    const mask = maskGraphics.createGeometryMask();
+    this.gridContainer.setMask(mask);
+  }
+
+  private createPreviewPanel() {
+    this.previewRect = this.add.rectangle(775, 510, 260, 390, 0x112233)
+      .setStrokeStyle(4, 0x00ffff);
+  }
+
+  private createBottomPanel() {
+    this.add.text(480, 1020, '← ВЕРНУТЬСЯ В ПОДГОТОВКУ', {
+      fontSize: '42px', 
+      fill: '#ffffff', 
+      backgroundColor: '#112233', 
+      padding: { x: 40, y: 16 }
+    })
+      .setOrigin(0.5)
+      .setInteractive()
+      .on('pointerdown', () => this.returnToPrepare());
+  }
+
+private async loadCollectionData() {
+  if (!this.account) return;
+
+  try {
+    // === ЮНИТЫ (загружаем полностью) ===
+    const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
+    this.unitsData = await Promise.all(unitIds.map(async (idBig) => {
+      const id = Number(idBig);
+      const unit = await this.nftContract.read.getUnit([idBig]);
+      return { id, unit, inTeam: false };
+    }));
+
+    // === РЕЛИКВИИ ===
+    const relicIds: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+    this.relicsData = await Promise.all(relicIds.map(async (idBig) => {
+      const id = Number(idBig);
+      const relic = await this.relicContract.read.getRelic([idBig]);
+      return { id, relic };
+    }));
+
+    // Убираем экипированные реликвии из коллекции
+    this.relicsData = this.relicsData.filter(r => !this.equippedRelicIds.includes(r.id));
+
+    this.refreshGrid();
+  } catch (e) {
+    console.error('loadCollectionData error', e);
+  }
+}
+
+
+
   private getRarityTintAndScale(rarity: number) {
-    if (rarity === 2) return { tint: 0xffee00, scale: 1.22 };     // Legendary — золотой, большой
-    if (rarity === 1) return { tint: 0x00ff77, scale: 1.10 };     // Rare — ярко-зелёный
-    return { tint: 0x44aaff, scale: 0.96 };                       // Common — синий
+    if (rarity === 2) return { tint: 0xffee00, scale: 1.22 };
+    if (rarity === 1) return { tint: 0x00ff77, scale: 1.10 };
+    return { tint: 0x44aaff, scale: 0.96 };
   }
 
 private refreshGrid() {
@@ -256,45 +244,57 @@ private refreshGrid() {
 
     if (this.currentTab === 'units') {
       const rarityColor = item.unit.rarity === 2 ? 0xffee00 : item.unit.rarity === 1 ? 0x00ff77 : 0x00ccff;
-      
+      const isSelected = this.selectedUnitIds.includes(item.id);
+      const borderColor = isSelected ? 0x00ff00 : rarityColor;
+      const strokeWidth = isSelected ? 6 : 4;
+
       sprite = this.add.rectangle(x, y, 52, 52, 0x112233)
-        .setStrokeStyle(4, rarityColor)
+        .setStrokeStyle(strokeWidth, borderColor)
         .setInteractive();
 
       (sprite as any).unitId = item.id;
       (sprite as any).isUnit = true;
 
-      const check = this.add.rectangle(x - 21, y - 23, 14, 14, 
-        this.selectedUnitIds.includes(item.id) ? 0x00ff00 : 0x666666)
-        .setStrokeStyle(2, 0xffffff);
-      this.gridContainer!.add(check);
-      (sprite as any).checkBox = check;
-
-      sprite.on('pointerover', () => {
-        this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit);
+      // === ОБРАБОТКА КЛИКОВ (ДВОЙНОЙ = добавить, ОДИНОЧНЫЙ = выбрать) ===
+      sprite.on('pointerdown', () => {
+        const now = Date.now();
+        if (now - this.lastClickTime < 280) {
+          this.addSingleUnitToTeam(item.id);
+          this.lastClickTime = 0;
+          return;
+        }
+        this.toggleUnitSelection(item.id, sprite as any);
+        this.lastClickTime = now;
       });
-      sprite.on('pointerout', () => this.hideTooltip());
 
-      sprite.on('pointerdown', () => this.toggleUnitSelection(item.id, sprite as any));
+      sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+      sprite.on('pointerout', () => this.hideTooltip());
     } else {
+      const isSelected = this.selectedRelicIds.includes(item.id);
+      const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
+      const strokeWidth = isSelected ? 6 : 4;
+
       sprite = this.add.rectangle(x, y, 52, 52, 0x112233)
-        .setStrokeStyle(4, 0xffaa00)
+        .setStrokeStyle(strokeWidth, borderColor)
         .setInteractive();
+
       (sprite as any).relicId = item.id;
       (sprite as any).isRelic = true;
 
-      const check = this.add.rectangle(x - 21, y - 23, 14, 14, 
-        this.selectedRelicIds.includes(item.id) ? 0x00ff00 : 0x666666)
-        .setStrokeStyle(2, 0xffffff);
-      this.gridContainer!.add(check);
-      (sprite as any).checkBox = check;
-
-      sprite.on('pointerover', () => {
-        this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic);
+      // === ОБРАБОТКА КЛИКОВ (ДВОЙНОЙ = активировать, ОДИНОЧНЫЙ = выбрать) ===
+      sprite.on('pointerdown', () => {
+        const now = Date.now();
+        if (now - this.lastClickTime < 280) {
+          this.equipSingleRelic(item.id);
+          this.lastClickTime = 0;
+          return;
+        }
+        this.toggleRelicSelection(item.id, sprite as any);
+        this.lastClickTime = now;
       });
-      sprite.on('pointerout', () => this.hideTooltip());
 
-      sprite.on('pointerdown', () => this.toggleRelicSelection(item.id, sprite as any));
+      sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
+      sprite.on('pointerout', () => this.hideTooltip());
     }
 
     this.gridContainer!.add(sprite);
@@ -305,29 +305,28 @@ private refreshGrid() {
 
 
   private toggleUnitSelection(id: number, sprite: any) {
-  const idx = this.selectedUnitIds.indexOf(id);
-  if (idx > -1) {
-    this.selectedUnitIds.splice(idx, 1);
-  } else if (this.selectedUnitIds.length < 8) {
-    this.selectedUnitIds.push(id);
+    const idx = this.selectedUnitIds.indexOf(id);
+    if (idx > -1) {
+      this.selectedUnitIds.splice(idx, 1);
+    } else if (this.selectedUnitIds.length < 8) {
+      this.selectedUnitIds.push(id);
+    }
+    this.refreshGrid();
+    this.showFloatingMultiSelectPanel();
+    this.showPreview(id, true);
   }
-  this.refreshGrid();
-  this.showFloatingMultiSelectPanel();
-  this.showPreview(id, true);
-}
 
-private toggleRelicSelection(id: number, sprite: any) {
-  const idx = this.selectedRelicIds.indexOf(id);
-  if (idx > -1) {
-    this.selectedRelicIds.splice(idx, 1);
-  } else if (this.selectedRelicIds.length < 3) {
-    this.selectedRelicIds.push(id);
+  private toggleRelicSelection(id: number, sprite: any) {
+    const idx = this.selectedRelicIds.indexOf(id);
+    if (idx > -1) {
+      this.selectedRelicIds.splice(idx, 1);
+    } else if (this.selectedRelicIds.length < 3) {
+      this.selectedRelicIds.push(id);
+    }
+    this.refreshGrid();
+    this.showFloatingMultiSelectPanel();
+    this.showPreview(id, false);
   }
-  this.refreshGrid();
-  this.showFloatingMultiSelectPanel();
-  this.showPreview(id, false);
-}
-
 
 private showFloatingMultiSelectPanel() {
   // Удаляем старую панель
@@ -345,26 +344,24 @@ private showFloatingMultiSelectPanel() {
   if (count === 0) return;
 
   const isUnits = this.currentTab === 'units';
-
-  // Центр сцены (overlay 960px)
   const centerX = 480;
 
-  this.add.text(centerX, 910, `Выбрано: ${count} ${isUnits ? 'юнитов' : 'реликвий'}`, {
-    fontSize: '36px', 
-    fill: '#00ff88', 
-    backgroundColor: '#112233', 
-    padding: { x: 30, y: 12 }
-  }).setOrigin(0.5);
+this.add.text(centerX, 820, `Выбрано: ${count} ${isUnits ? 'юнитов' : 'реликвий'}`, {
+  fontSize: '34px', 
+  fill: '#00ff88', 
+  backgroundColor: '#112233', 
+  padding: { x: 28, y: 10 }
+}).setOrigin(0.5);
 
   const btnText = isUnits ? 'ДОБАВИТЬ В КОМАНДУ' : 'АКТИВИРОВАТЬ';
   const btnColor = isUnits ? '#ffff00' : '#00ffff';
 
-  const btn = this.add.text(centerX, 960, btnText, {
-    fontSize: '42px', 
-    fill: btnColor, 
-    backgroundColor: '#223311', 
-    padding: { x: 45, y: 18 }
-  })
+const btn = this.add.text(centerX, 900, btnText, {   // ← опущено на 10 пикселей
+  fontSize: '40px', 
+  fill: btnColor, 
+  backgroundColor: '#223311', 
+  padding: { x: 42, y: 16 }
+})
     .setOrigin(0.5)
     .setInteractive()
     .on('pointerdown', () => {
@@ -385,7 +382,12 @@ private activateSelectedRelics() {
     prepareScene.addMultipleRelicsToEquipped([...this.selectedRelicIds]);
   }
 
-  this.scene.stop('CollectionScene');
+  // Удаляем активированные из коллекции
+  this.relicsData = this.relicsData.filter(r => !this.selectedRelicIds.includes(r.id));
+  this.selectedRelicIds = [];
+
+  this.refreshGrid();
+  // НЕ закрываем сцену!
 }
 
 
@@ -402,79 +404,94 @@ private activateSelectedRelics() {
     });
   }
 
-private showPreview(id: number, isUnit: boolean) {
-  if (this.previewRect) this.previewRect.setFillStyle(0x112233);
-  this.previewTexts.forEach(t => t.destroy());
-  this.previewTexts = [];
+  private showPreview(id: number, isUnit: boolean) {
+    if (this.previewRect) this.previewRect.setFillStyle(0x112233);
+    this.previewTexts.forEach(t => t.destroy());
+    this.previewTexts = [];
 
-  const wrapWidth = 230;   // безопасная ширина внутри карточки
+    const wrapWidth = 230;
 
-  if (isUnit) {
-    const unitData = this.unitsData.find(u => u.id === id);
-    if (!unitData) return;
-    const unit = unitData.unit;
+    if (isUnit) {
+      const unitData = this.unitsData.find(u => u.id === id);
+      if (!unitData) return;
+      const unit = unitData.unit;
 
-    this.previewTexts.push(
-      this.add.text(775, 355, `ID: ${id}`, { 
-        fontSize: '26px', 
-        fill: '#ffff00',
-        wordWrap: { width: wrapWidth }
-      }).setOrigin(0.5)
-    );
-
-    this.previewTexts.push(
-      this.add.text(775, 405, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, 
-        { 
-          fontSize: '29px', 
-          fill: '#00ffff',
-          wordWrap: { width: wrapWidth },
-          align: 'center'
-        }).setOrigin(0.5)
-    );
-
-    this.previewTexts.push(
-      this.add.text(775, 465, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, 
-        { 
-          fontSize: '26px', 
-          fill: '#ffaa00',
-          wordWrap: { width: wrapWidth }
-        }).setOrigin(0.5)
-    );
-  } else {
-    const relicData = this.relicsData.find(r => r.id === id)?.relic;
-    if (relicData) {
       this.previewTexts.push(
-        this.add.text(775, 395, relicData.name, { 
-          fontSize: '29px', 
-          fill: '#ff00ff',
-          wordWrap: { width: wrapWidth },
-          align: 'center'
+        this.add.text(775, 355, `ID: ${id}`, { 
+          fontSize: '26px', fill: '#ffff00', wordWrap: { width: wrapWidth }
         }).setOrigin(0.5)
       );
 
       this.previewTexts.push(
-        this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, 
-          { 
-            fontSize: '25px', 
-            fill: '#ffff88',
-            wordWrap: { width: wrapWidth },
-            align: 'center'
+        this.add.text(775, 405, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, { 
+          fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
+        }).setOrigin(0.5)
+      );
+
+      this.previewTexts.push(
+        this.add.text(775, 465, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, { 
+          fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
+        }).setOrigin(0.5)
+      );
+    } else {
+      const relicData = this.relicsData.find(r => r.id === id)?.relic;
+      if (relicData) {
+        this.previewTexts.push(
+          this.add.text(775, 395, relicData.name, { 
+            fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
           }).setOrigin(0.5)
-      );
+        );
+
+        this.previewTexts.push(
+          this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, { 
+            fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
+          }).setOrigin(0.5)
+        );
+      }
     }
   }
+
+
+private addSingleUnitToTeam(unitId: number) {
+  const prepareScene = this.scene.get('PrepareScene') as any;
+  if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
+    prepareScene.addSingleUnitToTeam(unitId);
+  }
+
+  // Удаляем юнит из списка выбранных (если он там был)
+  const idx = this.selectedUnitIds.indexOf(unitId);
+  if (idx > -1) {
+    this.selectedUnitIds.splice(idx, 1);
+  }
+
+  // Обновляем (или убираем) плавающую панель "Выбрано"
+  this.showFloatingMultiSelectPanel();
+
+  // Обновляем грид (юнит исчезнет)
+  this.refreshGrid();
 }
 
+private equipSingleRelic(relicId: number) {
+  const prepareScene = this.scene.get('PrepareScene') as any;
+  if (prepareScene && typeof prepareScene.equipSingleRelic === 'function') {
+    prepareScene.equipSingleRelic(relicId);
+  }
 
+  // Удаляем реликвию из списка выбранных
+  const idx = this.selectedRelicIds.indexOf(relicId);
+  if (idx > -1) {
+    this.selectedRelicIds.splice(idx, 1);
+  }
+
+  this.showFloatingMultiSelectPanel();
+  this.refreshGrid();
+}
 
   private showCollectionTooltip(x: number, y: number, unit?: any, relic?: any) {
     if (!this.tooltip) {
       this.tooltip = this.add.text(0, 0, '', {
-        fontSize: '24px',
-        fill: '#ffffff',
-        backgroundColor: '#112233',
-        padding: { x: 18, y: 12 },
-        align: 'left'
+        fontSize: '24px', fill: '#ffffff', backgroundColor: '#112233',
+        padding: { x: 18, y: 12 }, align: 'left'
       }).setOrigin(0.5, 1).setDepth(100);
     }
 
@@ -494,10 +511,9 @@ private showPreview(id: number, isUnit: boolean) {
     if (this.tooltip) this.tooltip.setVisible(false);
   }
 
-private returnToPrepare() {
-  this.scene.stop('CollectionScene');
-}
-
+  private returnToPrepare() {
+    this.scene.stop('CollectionScene');
+  }
 
   private getFactionName(faction: number): string {
     const names = ['Empire', 'Voidborn', 'Mechanoids'];
@@ -530,6 +546,5 @@ private returnToPrepare() {
     this.unitSprites.forEach(s => s.destroy());
     this.relicSprites.forEach(s => s.destroy());
     if (this.tooltip) this.tooltip.destroy();
-    console.log('✅ CollectionScene shutdown');
   }
 }
