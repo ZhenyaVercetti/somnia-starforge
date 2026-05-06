@@ -235,16 +235,20 @@ private async loadPlayerShop() {
     await this.loadEquippedRelics();
   }
 
-  private async initEquippedState() {
-    if (!this.account || !this.gameContract) return;
-    try {
-      const equipped: bigint[] = await this.gameContract.read.getEquippedRelics([this.account]);
-      this.equippedRelics = equipped.map(id => Number(id));
-      console.log('✅ initEquippedState loaded:', this.equippedRelics);
-    } catch (e) {
-      console.error('initEquippedState error', e);
-    }
+private async initEquippedState() {
+  if (!this.account || !this.gameContract) return;
+  try {
+    const equipped: bigint[] = await this.gameContract.read.getEquippedRelics([this.account]);
+    this.equippedRelics = equipped.map(id => Number(id));
+    console.log('✅ initEquippedState loaded:', this.equippedRelics);
+
+    // === ВАЖНО: сразу обновляем визуалы после загрузки ===
+    await this.refreshRelics();
+  } catch (e) {
+    console.error('initEquippedState error', e);
   }
+}
+
 
 private async loadEquippedRelics() {
   if (!this.account || !this.gameContract || !this.relicContract) return;
@@ -793,7 +797,7 @@ private addGameUI() {
   // === TEAM GRID ===
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
-  const teamCenterX = 1000;
+  const teamCenterX = 1020;
   const teamCenterY = 560;
   const slotSize = 142;
   const hSpacing = 23;
@@ -825,7 +829,7 @@ private addGameUI() {
     .setDisplaySize(1920, 1080)
     .setDepth(200);
 
-  this.teamCounterText = this.add.text(920, 670, 'TEAM: 0/8', { 
+  this.teamCounterText = this.add.text(940, 670, 'TEAM: 0/8', { 
     fontSize: '38px', fill: '#ffff00' 
   }).setOrigin(0.5);
 
@@ -845,7 +849,7 @@ private addGameUI() {
   }
 
 // === КНОПКИ (все одинакового размера 270×70) ===
-const btnAuto = this.add.image(770, 300, 'button_base')
+const btnAuto = this.add.image(790, 300, 'button_base')
   .setInteractive()
   .setDisplaySize(270, 70);
 const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' }).setOrigin(0.5);
@@ -854,10 +858,10 @@ const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill
 btnAuto.on('pointerdown', () => this.autoSelectTeam());
 this.addButtonEffects(btnAuto);
 
-const btnClear = this.add.image(1080, 300, 'button_base')
+const btnClear = this.add.image(1100, 300, 'button_base')
   .setInteractive()
   .setDisplaySize(270, 70);
-const textClear = this.add.text(1080, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
+const textClear = this.add.text(1100, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
 (btnClear as any).linkedText = textClear;
 (textClear as any).originalFill = '#ff6666';
 btnClear.on('pointerdown', () => this.clearTeam());
@@ -918,12 +922,28 @@ private openCollectionScene() {
 }
 
 
-  public async addMultipleUnitsToTeam(newIds: number[]) {
-    if (this.teamOperationLock || !newIds || newIds.length === 0) return;
-    this.teamOperationLock = true;
+public async addMultipleUnitsToTeam(newIds: number[]) {
+  if (this.teamOperationLock || !newIds || newIds.length === 0) return;
+  this.teamOperationLock = true;
 
-    try {
-      let added = 0;
+  try {
+    const remaining = 8 - this.team.length;
+    const actuallyAdded: number[] = [];
+
+    if (newIds.length > remaining) {
+      this.clearTeam();
+      const toAdd = newIds.slice(0, 8);
+      for (const id of toAdd) {
+        if (!this.team.includes(id)) {
+          const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
+          if (freeSlotIndex !== -1) {
+            this.team.push(id);
+            await this.createTeamUnitVisual(id, freeSlotIndex);
+            actuallyAdded.push(id);
+          }
+        }
+      }
+    } else {
       for (const id of newIds) {
         if (this.team.length >= 8) break;
         if (!this.team.includes(id)) {
@@ -931,16 +951,29 @@ private openCollectionScene() {
           if (freeSlotIndex !== -1) {
             this.team.push(id);
             await this.createTeamUnitVisual(id, freeSlotIndex);
-            added++;
+            actuallyAdded.push(id);
           }
         }
       }
-      this.updateTeamCounter();
-      console.log(`✅ Добавлено ${added} юнитов из CollectionScene`);
-    } finally {
-      this.teamOperationLock = false;
     }
+
+    this.updateTeamCounter();
+
+    // Удаляем из коллекции ТОЛЬКО реально добавленные юниты
+    const collectionScene = this.scene.get('CollectionScene') as any;
+    if (collectionScene && collectionScene.scene.isActive() && actuallyAdded.length > 0) {
+      collectionScene.unitsData = collectionScene.unitsData.filter(
+        (u: any) => !actuallyAdded.includes(u.id)
+      );
+      if (typeof collectionScene.refreshGrid === 'function') {
+        collectionScene.refreshGrid();
+      }
+    }
+  } finally {
+    this.teamOperationLock = false;
   }
+}
+
 
 public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
   if (!newRelicIds || newRelicIds.length === 0 || newRelicIds.length > 3) return;
@@ -1121,41 +1154,42 @@ preload() {
   this.load.image('button_start', 'assets/button_start.png');
   this.load.image('profile_frame', 'assets/profile_frame.png');
   this.load.image('outer_frame', 'assets/outer_frame.png');
+  this.load.image('collection_frame', 'assets/collection_frame.png');
 }
 
-  create() {
-    if (this.tooltip) {
-      this.tooltip.destroy();
-      this.tooltip = null;
-    }
-
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
-    });
-    
-    this.team = [];
-    this.teamSlotOccupants = new Array(8).fill(null);
-    this.originalPositions.clear();
-    this.ownedSprites = [];
-    this.shopSprites = [];
-    this.aiSprites = [];
-    this.aiTexts = [];
-    this.equippedRelics = [0, 0, 0];
-    this.lastKnownLevel = 0;
-    this.teamOperationLock = false;
-
-    this.addGameUI();
-    
-    this.initEquippedState();
-    this.refreshRelics();
-    this.updatePlayerProfile();
-
-    this.loadOwnedUnits();
-    this.loadPlayerShop();
-    this.updatePlayerProfile();
-
-    console.log('✅ PrepareScene создана (дубли убраны, шрифты увеличены)');
+create() {
+  if (this.tooltip) {
+    this.tooltip.destroy();
+    this.tooltip = null;
   }
+
+  this.children.getAll().forEach(child => {
+    if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
+  });
+  
+  this.team = [];
+  this.teamSlotOccupants = new Array(8).fill(null);
+  this.originalPositions.clear();
+  this.ownedSprites = [];
+  this.shopSprites = [];
+  this.aiSprites = [];
+  this.aiTexts = [];
+  this.equippedRelics = [0, 0, 0];
+  this.lastKnownLevel = 0;
+  this.teamOperationLock = false;
+
+  this.addGameUI();
+  
+  this.initEquippedState();   // теперь сам обновит визуалы
+  this.updatePlayerProfile();
+
+  this.loadOwnedUnits();
+  this.loadPlayerShop();
+  this.updatePlayerProfile();
+
+  console.log('✅ PrepareScene создана (дубли убраны, шрифты увеличены)');
+}
+
 
   shutdown() {
     if (this.tooltip) {

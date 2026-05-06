@@ -56,14 +56,26 @@ export default class CollectionScene extends Phaser.Scene {
     this.selectedRelicIds = [];
     this.previewTexts = [];
     this.tooltip = null;
+// === ЗАКРЫТИЕ КОЛЛЕКЦИИ ПО КЛИКУ ВНЕ ИНТЕРФЕЙСА ===
+this.add.rectangle(960, 540, 1920, 1080, 0x000000, 0) // полностью прозрачный
+  .setDepth(-100)
+  .setInteractive()
+  .on('pointerdown', () => this.scene.stop('CollectionScene'));
 
     // Тёмный оверлей (в стиле PrepareScene)
-    this.add.rectangle(480, 540, 960, 1080, 0x0a1122)
-      .setAlpha(0.96)
-      .setDepth(-1);
+this.add.rectangle(480, 540, 960, 1080, 0x0a1122)
+  .setAlpha(0.96)
+  .setDepth(-1)
+  .setInteractive()
+  .on('pointerdown', () => this.scene.stop('CollectionScene'));
+// === РАМКА ПОВЕРХ ВСЕЙ СЦЕНЫ КОЛЛЕКЦИИ ===
+this.add.image(480, 540, 'collection_frame')
+  .setDisplaySize(960, 1080)
+  .setOrigin(0.5)
+  .setDepth(300);
 
     // Заголовок
-    this.add.text(480, 45, 'МОЯ КОЛЛЕКЦИЯ', { 
+    this.add.text(480, 45, 'COLLECTION', { 
       fontSize: '52px', 
       fill: '#ffff00', 
       fontStyle: 'bold' 
@@ -78,25 +90,38 @@ export default class CollectionScene extends Phaser.Scene {
     this.loadCollectionData();
   }
 
-  private createTabs() {
-    const unitsTab = this.add.text(270, 135, 'ЮНИТЫ', { 
-      fontSize: '38px', 
-      fill: '#00ffff' 
-    })
-      .setOrigin(1, 0.5)
-      .setInteractive()
-      .on('pointerdown', () => this.switchTab('units'));
+private createTabs() {
+  // Кнопка UNITS
+  const unitsBtn = this.add.image(270, 135, 'button_base')
+    .setDisplaySize(160, 55)
+    .setInteractive()
+    .setOrigin(1, 0.5);
 
-    const relicsTab = this.add.text(390, 135, 'РЕЛИКВИИ', { 
-      fontSize: '38px', 
-      fill: '#ff00ff' 
-    })
-      .setOrigin(0, 0.5)
-      .setInteractive()
-      .on('pointerdown', () => this.switchTab('relics'));
+  this.add.text(270, 135, 'UNITS', {
+    fontSize: '28px',
+    fill: '#00ffff',
+    fontStyle: 'bold'
+  }).setOrigin(1, 0.5);
 
-    this.unitsUnderline = this.add.rectangle(330, 172, 280, 9, 0x00ffff).setOrigin(0.5);
-  }
+  unitsBtn.on('pointerdown', () => this.switchTab('units'));
+
+  // Кнопка RELICS
+  const relicsBtn = this.add.image(390, 135, 'button_base')
+    .setDisplaySize(160, 55)
+    .setInteractive()
+    .setOrigin(0, 0.5);
+
+  this.add.text(390, 135, 'RELICS', {
+    fontSize: '28px',
+    fill: '#ff00ff',
+    fontStyle: 'bold'
+  }).setOrigin(0, 0.5);
+
+  relicsBtn.on('pointerdown', () => this.switchTab('relics'));
+
+  // Подчёркивание (можно оставить или убрать)
+  //this.unitsUnderline = this.add.rectangle(330, 172, 280, 9, 0x00ffff).setOrigin(0.5);
+}
 
   private switchTab(tab: 'units' | 'relics') {
     this.currentTab = tab;
@@ -110,7 +135,7 @@ export default class CollectionScene extends Phaser.Scene {
   }
 
   private createFilters() {
-    this.add.text(40, 175, 'ФИЛЬТРЫ:', { 
+    this.add.text(40, 175, 'FILTERS:', { 
       fontSize: '24px', 
       fill: '#aaaaaa' 
     });
@@ -212,29 +237,39 @@ export default class CollectionScene extends Phaser.Scene {
       .setStrokeStyle(4, 0x00ffff);
   }
 
-  private createBottomPanel() {
-    this.add.text(480, 1020, '← ВЕРНУТЬСЯ В ПОДГОТОВКУ', {
-      fontSize: '42px', 
-      fill: '#ffffff', 
-      backgroundColor: '#112233', 
-      padding: { x: 40, y: 16 }
-    })
-      .setOrigin(0.5)
-      .setInteractive()
-      .on('pointerdown', () => this.returnToPrepare());
-  }
+private createBottomPanel() {
+  const backBtn = this.add.image(480, 1020, 'button_base')
+    .setDisplaySize(420, 70)
+    .setInteractive()
+    .setOrigin(0.5);
+
+  this.add.text(480, 1020, '← GO BACK', {
+    fontSize: '36px',
+    fill: '#ffffff',
+    fontStyle: 'bold'
+  }).setOrigin(0.5);
+
+  backBtn.on('pointerdown', () => this.returnToPrepare());
+}
+
 
 private async loadCollectionData() {
   if (!this.account) return;
 
   try {
-    // === ЮНИТЫ (загружаем полностью) ===
+    // === ЮНИТЫ ===
     const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
     this.unitsData = await Promise.all(unitIds.map(async (idBig) => {
       const id = Number(idBig);
       const unit = await this.nftContract.read.getUnit([idBig]);
       return { id, unit, inTeam: false };
     }));
+
+    // Фильтруем юниты, которые уже в команде PrepareScene
+    const prepare = this.scene.get('PrepareScene') as any;
+    if (prepare && prepare.team && Array.isArray(prepare.team)) {
+      this.unitsData = this.unitsData.filter(u => !prepare.team.includes(u.id));
+    }
 
     // === РЕЛИКВИИ ===
     const relicIds: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
@@ -244,7 +279,7 @@ private async loadCollectionData() {
       return { id, relic };
     }));
 
-    // Убираем экипированные реликвии из коллекции
+    // Убираем экипированные реликвии
     this.relicsData = this.relicsData.filter(r => !this.equippedRelicIds.includes(r.id));
 
     this.refreshGrid();
@@ -252,7 +287,6 @@ private async loadCollectionData() {
     console.error('loadCollectionData error', e);
   }
 }
-
 
 
   private getRarityTintAndScale(rarity: number) {
@@ -305,32 +339,26 @@ private refreshGrid() {
       (sprite as any).unitId = item.id;
       (sprite as any).isUnit = true;
 
-      // === ОБРАБОТКА КЛИКОВ (ДВОЙНОЙ = добавить, ОДИНОЧНЫЙ = выбрать) ===
-sprite.on('pointerdown', () => {
-  const now = Date.now();
-
-  // Защита от спама и от работы когда команда заполнена
-  if (now - this.lastClickTime < 380) {
-    const prepareScene = this.scene.get('PrepareScene') as any;
-
-    // Жёсткая проверка: если команда уже полная — ничего не делаем
-    if (prepareScene && prepareScene.team && prepareScene.team.length >= 8) {
-      this.lastClickTime = 0;
-      return;
-    }
-
-    if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
-      const success = prepareScene.addSingleUnitToTeam(item.id);
-      if (success) {
-        this.lastClickTime = 0;
-      }
-    }
-    return;
-  }
-
-  this.lastClickTime = now;
-});
-
+      let clickCount = 0;
+      sprite.on('pointerdown', () => {
+        clickCount++;
+        if (clickCount === 1) {
+          this.toggleUnitSelection(item.id, sprite);
+        }
+        if (clickCount === 2) {
+          const prepareScene = this.scene.get('PrepareScene') as any;
+          if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
+            const success = prepareScene.addSingleUnitToTeam(item.id);
+            if (success) {
+              const idx = this.selectedUnitIds.indexOf(item.id);
+              if (idx > -1) this.selectedUnitIds.splice(idx, 1);
+              this.showFloatingMultiSelectPanel();
+            }
+          }
+          clickCount = 0;
+        }
+        setTimeout(() => { clickCount = 0; }, 500);
+      });
 
       sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
       sprite.on('pointerout', () => this.hideTooltip());
@@ -346,22 +374,30 @@ sprite.on('pointerdown', () => {
       (sprite as any).relicId = item.id;
       (sprite as any).isRelic = true;
 
-      // === ОБРАБОТКА КЛИКОВ (ДВОЙНОЙ = активировать, ОДИНОЧНЫЙ = выбрать) ===
-sprite.on('pointerdown', () => {
-  const now = Date.now();
-  if (now - this.lastClickTime < 400) {
-    const prepare = this.scene.get('PrepareScene') as any;
-    if (prepare && typeof prepare.equipSingleRelic === 'function') {
-      prepare.equipSingleRelic(item.id);
-      this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
-      this.refreshGrid();
-    }
-    this.lastClickTime = 0;
-    return;
-  }
-  this.lastClickTime = now;
-});
+      let clickCount = 0;
+      sprite.on('pointerdown', () => {
+        clickCount++;
+        if (clickCount === 1) {
+          this.toggleRelicSelection(item.id, sprite);
+        }
+        if (clickCount === 2) {
+          const prepare = this.scene.get('PrepareScene') as any;
+          if (prepare && typeof prepare.equipSingleRelic === 'function') {
+            const success = prepare.equipSingleRelic(item.id);
+            if (success) {
+              // Чистим выбор, чтобы не появлялась панель «Выбрано»
+              const idx = this.selectedRelicIds.indexOf(item.id);
+              if (idx > -1) this.selectedRelicIds.splice(idx, 1);
+              this.showFloatingMultiSelectPanel();
 
+              this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
+              this.refreshGrid();
+            }
+          }
+          clickCount = 0;
+        }
+                setTimeout(() => { clickCount = 0; }, 450);
+      });
 
       sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
       sprite.on('pointerout', () => this.hideTooltip());
@@ -374,29 +410,32 @@ sprite.on('pointerdown', () => {
 }
 
 
-  private toggleUnitSelection(id: number, sprite: any) {
-    const idx = this.selectedUnitIds.indexOf(id);
-    if (idx > -1) {
-      this.selectedUnitIds.splice(idx, 1);
-    } else if (this.selectedUnitIds.length < 8) {
-      this.selectedUnitIds.push(id);
-    }
-    this.refreshGrid();
-    this.showFloatingMultiSelectPanel();
-    this.showPreview(id, true);
+private toggleUnitSelection(id: number, sprite: any) {
+  const idx = this.selectedUnitIds.indexOf(id);
+  if (idx > -1) {
+    this.selectedUnitIds.splice(idx, 1);
+  } else if (this.selectedUnitIds.length < 8) {
+    this.selectedUnitIds.push(id);
   }
+  // refreshGrid убрали, чтобы не ломать двойной клик
+  this.showFloatingMultiSelectPanel();
+  this.showPreview(id, true);
+}
 
-  private toggleRelicSelection(id: number, sprite: any) {
-    const idx = this.selectedRelicIds.indexOf(id);
-    if (idx > -1) {
-      this.selectedRelicIds.splice(idx, 1);
-    } else if (this.selectedRelicIds.length < 3) {
-      this.selectedRelicIds.push(id);
-    }
-    this.refreshGrid();
-    this.showFloatingMultiSelectPanel();
-    this.showPreview(id, false);
+
+private toggleRelicSelection(id: number, sprite: any) {
+  const idx = this.selectedRelicIds.indexOf(id);
+  if (idx > -1) {
+    this.selectedRelicIds.splice(idx, 1);
+  } else if (this.selectedRelicIds.length < 3) {
+    this.selectedRelicIds.push(id);
   }
+  // refreshGrid убрали, чтобы не ломать двойной клик
+  this.showFloatingMultiSelectPanel();
+  this.showPreview(id, false);
+  // Рамка обновится при следующем refreshGrid (или можно добавить ручное обновление бордера)
+}
+
 
 private showFloatingMultiSelectPanel() {
   // Удаляем старую панель
@@ -411,27 +450,30 @@ private showFloatingMultiSelectPanel() {
     ? this.selectedUnitIds.length 
     : this.selectedRelicIds.length;
 
-  if (count === 0) return;
+  if (count === 0) {
+    this.refreshGrid(); // принудительно чистим зелёные рамки
+    return;
+  }
 
   const isUnits = this.currentTab === 'units';
   const centerX = 480;
 
-this.add.text(centerX, 820, `Выбрано: ${count} ${isUnits ? 'юнитов' : 'реликвий'}`, {
-  fontSize: '34px', 
-  fill: '#00ff88', 
-  backgroundColor: '#112233', 
-  padding: { x: 28, y: 10 }
-}).setOrigin(0.5);
+  this.add.text(centerX, 820, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
+    fontSize: '34px', 
+    fill: '#00ff88', 
+    backgroundColor: '#112233', 
+    padding: { x: 28, y: 10 }
+  }).setOrigin(0.5);
 
-  const btnText = isUnits ? 'ДОБАВИТЬ В КОМАНДУ' : 'АКТИВИРОВАТЬ';
+  const btnText = isUnits ? 'ADD TO the TEAM' : 'ACTIVATE';
   const btnColor = isUnits ? '#ffff00' : '#00ffff';
 
-const btn = this.add.text(centerX, 900, btnText, {   // ← опущено на 10 пикселей
-  fontSize: '40px', 
-  fill: btnColor, 
-  backgroundColor: '#223311', 
-  padding: { x: 42, y: 16 }
-})
+  const btn = this.add.text(centerX, 900, btnText, { 
+    fontSize: '40px', 
+    fill: btnColor, 
+    backgroundColor: '#223311', 
+    padding: { x: 42, y: 16 }
+  })
     .setOrigin(0.5)
     .setInteractive()
     .on('pointerdown', () => {
@@ -461,18 +503,23 @@ private activateSelectedRelics() {
 }
 
 
-  private async addSelectedToTeam() {
-    if (this.selectedUnitIds.length === 0) return;
+private addSelectedToTeam() {
+  if (this.selectedUnitIds.length === 0) return;
 
-    this.scene.start(this.returnToScene, {
-      gameContract: this.gameContract,
-      nftContract: this.nftContract,
-      relicContract: this.relicContract,
-      account: this.account,
-      publicClient: this.publicClient,
-      addUnits: [...this.selectedUnitIds]
-    });
+  const prepareScene = this.scene.get('PrepareScene') as any;
+  if (prepareScene && typeof prepareScene.addMultipleUnitsToTeam === 'function') {
+    prepareScene.addMultipleUnitsToTeam([...this.selectedUnitIds]);
   }
+
+  // Очищаем выбор и обновляем коллекцию
+  this.selectedUnitIds = [];
+  this.showFloatingMultiSelectPanel();
+this.refreshGrid();
+setTimeout(() => this.refreshGrid(), 150); // перестраховка
+
+  // Закрываем коллекцию (опционально, можно убрать)
+  // this.scene.stop('CollectionScene');
+}
 
   private showPreview(id: number, isUnit: boolean) {
     if (this.previewRect) this.previewRect.setFillStyle(0x112233);
@@ -602,13 +649,13 @@ private equipSingleRelic(relicId: number) {
 
   private getRelicEffectDescription(relicType: number): string {
     const desc = [
-      'Увеличивает ATK всем юнитам',
-      'Увеличивает DEF всем юнитам',
-      'Увеличивает SPD всем юнитам',
-      'Увеличивает HP всем юнитам',
-      'Повышает шанс крита (Quantum Flux)',
-      'Последний удар перед смертью (Last Stand)'
-    ];
+'Increases ATK for all units',
+    'Increases DEF for all units',
+    'Increases SPD for all units',
+    'Increases HP for all units',
+    'Increases crit chance (Quantum Flux)',
+    'Last stand before death (Last Stand)'
+      ];
     return desc[relicType] || 'Эффект неизвестен';
   }
 
