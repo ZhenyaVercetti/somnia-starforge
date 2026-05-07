@@ -45,134 +45,150 @@ export default class CollectionScene extends Phaser.Scene {
     this.equippedRelicIds = data.equippedRelicIds || [];
   }
 
-  create() {
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
+create() {
+  this.children.getAll().forEach(child => {
+    if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
+  });
+
+  this.unitSprites = [];
+  this.relicSprites = [];
+  this.selectedUnitIds = [];
+  this.selectedRelicIds = [];
+  this.previewTexts = [];
+  this.tooltip = null;
+
+  // === ТЁМНЫЙ ФОН 960×1080 (безопасная зона — клик ничего не делает) ===
+  this.darkOverlay = this.add.rectangle(480, 540, 960, 1080, 0x0a1122)
+    .setAlpha(0.96)
+    .setDepth(-1)
+    .setInteractive()
+    .on('pointerdown', (pointer) => {
+      pointer.event.stopPropagation(); // блокируем прокликивание, но не закрываем сцену
     });
 
-    this.unitSprites = [];
-    this.relicSprites = [];
-    this.selectedUnitIds = [];
-    this.selectedRelicIds = [];
-    this.previewTexts = [];
-    this.tooltip = null;
-// === ЗАКРЫТИЕ КОЛЛЕКЦИИ ПО КЛИКУ ВНЕ ИНТЕРФЕЙСА ===
-this.add.rectangle(960, 540, 1920, 1080, 0x000000, 0) // полностью прозрачный
-  .setDepth(-100)
-  .setInteractive()
-  .on('pointerdown', () => this.scene.stop('CollectionScene'));
+  // Рамка коллекции
+  this.add.image(480, 540, 'collection_frame')
+    .setDisplaySize(960, 1080)
+    .setOrigin(0.5)
+    .setDepth(5);
 
-    // Тёмный оверлей (в стиле PrepareScene)
-this.add.rectangle(480, 540, 960, 1080, 0x0a1122)
-  .setAlpha(0.96)
-  .setDepth(-1)
-  .setInteractive()
-  .on('pointerdown', () => this.scene.stop('CollectionScene'));
-// === РАМКА ПОВЕРХ ВСЕЙ СЦЕНЫ КОЛЛЕКЦИИ ===
-this.add.image(480, 540, 'collection_frame')
-  .setDisplaySize(960, 1080)
-  .setOrigin(0.5)
-  .setDepth(300);
+  // Заголовок
+  this.add.text(480, 45, 'COLLECTION', { 
+    fontSize: '52px', 
+    fill: '#ffff00', 
+    fontStyle: 'bold' 
+  }).setOrigin(0.5);
 
-    // Заголовок
-    this.add.text(480, 45, 'COLLECTION', { 
-      fontSize: '52px', 
-      fill: '#ffff00', 
-      fontStyle: 'bold' 
-    }).setOrigin(0.5);
+  this.createTabs();
+  this.createFilters();
+  this.createGridContainer();
+  this.createPreviewPanel();
+  this.createBottomPanel();
 
-    this.createTabs();
-    this.createFilters();
-    this.createGridContainer();
-    this.createPreviewPanel();
-    this.createBottomPanel();
+  this.loadCollectionData();
 
-    this.loadCollectionData();
-  }
+  // === ЗАКРЫТИЕ ТОЛЬКО ЗА ПРЕДЕЛАМИ ТЁМНОГО ФОНА (960×1080) ===
+  this.input.on('pointerdown', (pointer) => {
+    const isInsideDark = pointer.x >= 0 && pointer.x <= 960 && pointer.y >= 0 && pointer.y <= 1080;
+    if (!isInsideDark) {
+      this.scene.stop('CollectionScene');
+    }
+  });
+}
+
 
 private createTabs() {
-  // Кнопка UNITS
-  const unitsBtn = this.add.image(270, 135, 'button_base')
+  // UNITS
+  const unitsBtn = this.add.image(380, 135, 'button_base')
     .setDisplaySize(160, 55)
     .setInteractive()
-    .setOrigin(1, 0.5);
+    .setOrigin(0.5);
 
-  this.add.text(270, 135, 'UNITS', {
+  const unitsText = this.add.text(380, 135, 'UNITS', {
     fontSize: '28px',
     fill: '#00ffff',
     fontStyle: 'bold'
-  }).setOrigin(1, 0.5);
+  }).setOrigin(0.5);
 
+  (unitsBtn as any).linkedText = unitsText;
+  (unitsText as any).originalFill = '#00ffff';
+
+  this.addButtonEffects(unitsBtn);
   unitsBtn.on('pointerdown', () => this.switchTab('units'));
 
-  // Кнопка RELICS
-  const relicsBtn = this.add.image(390, 135, 'button_base')
+  // RELICS
+  const relicsBtn = this.add.image(580, 135, 'button_base')
     .setDisplaySize(160, 55)
     .setInteractive()
-    .setOrigin(0, 0.5);
+    .setOrigin(0.5);
 
-  this.add.text(390, 135, 'RELICS', {
+  const relicsText = this.add.text(580, 135, 'RELICS', {
     fontSize: '28px',
     fill: '#ff00ff',
     fontStyle: 'bold'
-  }).setOrigin(0, 0.5);
+  }).setOrigin(0.5);
 
+  (relicsBtn as any).linkedText = relicsText;
+  (relicsText as any).originalFill = '#ff00ff';
+
+  this.addButtonEffects(relicsBtn);
   relicsBtn.on('pointerdown', () => this.switchTab('relics'));
-
-  // Подчёркивание (можно оставить или убрать)
-  //this.unitsUnderline = this.add.rectangle(330, 172, 280, 9, 0x00ffff).setOrigin(0.5);
 }
 
-  private switchTab(tab: 'units' | 'relics') {
-    this.currentTab = tab;
-    this.selectedUnitIds = [];
-    this.selectedRelicIds = [];
 
-    if (this.unitsUnderline) {
-      this.unitsUnderline.setPosition(tab === 'units' ? 330 : 550, 172);
-    }
+private switchTab(tab: 'units' | 'relics') {
+  this.currentTab = tab;
+  this.selectedUnitIds = [];
+  this.selectedRelicIds = [];
+
+  if (this.unitsUnderline) {
+    this.unitsUnderline.setPosition(tab === 'units' ? 380 : 580, 172);
+  }
+
+  this.showFloatingMultiSelectPanel(); // очищаем панель при переключении
+  this.refreshGrid();
+}
+
+private createFilters() {
+  this.add.text(50, 190, 'FILTERS:', { 
+    fontSize: '24px', 
+    fill: '#aaaaaa' 
+  });
+
+  // Rarity
+  const rarityBtn = this.add.text(50, 220, `Rarity: ${this.getRarityName(Number(this.filters.rarity))}`, { 
+    fontSize: '22px', fill: '#00ffff' 
+  }).setInteractive().on('pointerdown', () => {
+    const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
+    const idx = options.indexOf(this.filters.rarity);
+    this.filters.rarity = options[(idx + 1) % options.length];
+    rarityBtn.setText(`Rarity: ${this.getRarityName(Number(this.filters.rarity))}`);
     this.refreshGrid();
-  }
+  });
 
-  private createFilters() {
-    this.add.text(40, 175, 'FILTERS:', { 
-      fontSize: '24px', 
-      fill: '#aaaaaa' 
-    });
+  // Faction
+  const factionBtn = this.add.text(50, 252, `Faction: ${this.getFactionName(Number(this.filters.faction))}`, { 
+    fontSize: '22px', fill: '#00ffff' 
+  }).setInteractive().on('pointerdown', () => {
+    const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
+    const idx = options.indexOf(this.filters.faction);
+    this.filters.faction = options[(idx + 1) % options.length];
+    factionBtn.setText(`Faction: ${this.getFactionName(Number(this.filters.faction))}`);
+    this.refreshGrid();
+  });
 
-    // Rarity
-    const rarityBtn = this.add.text(40, 205, `Rarity: ${this.filters.rarity}`, { 
-      fontSize: '22px', fill: '#00ffff' 
-    }).setInteractive().on('pointerdown', () => {
-      const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
-      const idx = options.indexOf(this.filters.rarity);
-      this.filters.rarity = options[(idx + 1) % options.length];
-      rarityBtn.setText(`Rarity: ${this.filters.rarity}`);
-      this.refreshGrid();
-    });
+  // Class
+  const classBtn = this.add.text(50, 284, `Class: ${this.getClassName(Number(this.filters.unitClass))}`, { 
+    fontSize: '22px', fill: '#00ffff' 
+  }).setInteractive().on('pointerdown', () => {
+    const options: ('all' | '0' | '1' | '2' | '3')[] = ['all', '0', '1', '2', '3'];
+    const idx = options.indexOf(this.filters.unitClass);
+    this.filters.unitClass = options[(idx + 1) % options.length];
+    classBtn.setText(`Class: ${this.getClassName(Number(this.filters.unitClass))}`);
+    this.refreshGrid();
+  });
+}
 
-    // Faction
-    const factionBtn = this.add.text(40, 237, `Faction: ${this.filters.faction}`, { 
-      fontSize: '22px', fill: '#00ffff' 
-    }).setInteractive().on('pointerdown', () => {
-      const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
-      const idx = options.indexOf(this.filters.faction);
-      this.filters.faction = options[(idx + 1) % options.length];
-      factionBtn.setText(`Faction: ${this.filters.faction}`);
-      this.refreshGrid();
-    });
-
-    // Class (только для юнитов)
-    const classBtn = this.add.text(40, 269, `Class: ${this.filters.unitClass}`, { 
-      fontSize: '22px', fill: '#00ffff' 
-    }).setInteractive().on('pointerdown', () => {
-      const options: ('all' | '0' | '1' | '2' | '3')[] = ['all', '0', '1', '2', '3'];
-      const idx = options.indexOf(this.filters.unitClass);
-      this.filters.unitClass = options[(idx + 1) % options.length];
-      classBtn.setText(`Class: ${this.filters.unitClass}`);
-      this.refreshGrid();
-    });
-  }
 
   private createSearchAndSort() {
   // Поиск
@@ -232,25 +248,38 @@ private createTabs() {
     this.gridContainer.setMask(mask);
   }
 
-  private createPreviewPanel() {
-    this.previewRect = this.add.rectangle(775, 510, 260, 390, 0x112233)
-      .setStrokeStyle(4, 0x00ffff);
-  }
+private createPreviewPanel() {
+  // Карточка превью (серый фон)
+  this.previewRect = this.add.rectangle(775, 510, 260, 390, 0x112233)
+    .setDepth(4);
+
+  // Рамка (поверх карточки и текста)
+  this.add.image(775, 510, 'preview_frame')
+    .setDisplaySize(260, 390)
+    .setOrigin(0.5)
+    .setDepth(100);
+}
+
 
 private createBottomPanel() {
   const backBtn = this.add.image(480, 1020, 'button_base')
-    .setDisplaySize(420, 70)
+    .setDisplaySize(360, 70)
     .setInteractive()
     .setOrigin(0.5);
 
-  this.add.text(480, 1020, '← GO BACK', {
+  const backText = this.add.text(480, 1020, '← GO BACK', {
     fontSize: '36px',
     fill: '#ffffff',
     fontStyle: 'bold'
   }).setOrigin(0.5);
 
+  (backBtn as any).linkedText = backText;
+  (backText as any).originalFill = '#ffffff';
+
+  this.addButtonEffects(backBtn);
   backBtn.on('pointerdown', () => this.returnToPrepare());
 }
+
 
 
 private async loadCollectionData() {
@@ -438,51 +467,66 @@ private toggleRelicSelection(id: number, sprite: any) {
 
 
 private showFloatingMultiSelectPanel() {
-  // Удаляем старую панель
-  this.children.getAll().forEach(child => {
-    if (child instanceof Phaser.GameObjects.Text && 
-        (child.text.includes('Выбрано') || child.text.includes('ДОБАВИТЬ') || child.text.includes('АКТИВИРОВАТЬ'))) {
-      child.destroy();
-    }
-  });
+  // Удаляем предыдущую панель
+  if (this.floatingPanel) {
+    this.floatingPanel.destroy();
+    this.floatingPanel = null;
+  }
 
   const count = this.currentTab === 'units' 
     ? this.selectedUnitIds.length 
     : this.selectedRelicIds.length;
 
   if (count === 0) {
-    this.refreshGrid(); // принудительно чистим зелёные рамки
+    this.refreshGrid();
     return;
   }
 
   const isUnits = this.currentTab === 'units';
   const centerX = 480;
 
-  this.add.text(centerX, 820, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
-    fontSize: '34px', 
-    fill: '#00ff88', 
-    backgroundColor: '#112233', 
-    padding: { x: 28, y: 10 }
+  // Контейнер панели
+  this.floatingPanel = this.add.container(0, 0);
+
+  // Кнопка "Selected: X units/relics" (визуальная, не интерактивная)
+  const selectedBtn = this.add.image(centerX, 820, 'button_base')
+    .setDisplaySize(320, 50)
+    .setOrigin(0.5);
+  this.floatingPanel.add(selectedBtn);
+
+  const selectedText = this.add.text(centerX, 820, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
+    fontSize: '28px',
+    fill: '#00ff88',
+    fontStyle: 'bold'
   }).setOrigin(0.5);
+  this.floatingPanel.add(selectedText);
 
-  const btnText = isUnits ? 'ADD TO the TEAM' : 'ACTIVATE';
-  const btnColor = isUnits ? '#ffff00' : '#00ffff';
-
-  const btn = this.add.text(centerX, 900, btnText, { 
-    fontSize: '40px', 
-    fill: btnColor, 
-    backgroundColor: '#223311', 
-    padding: { x: 42, y: 16 }
-  })
-    .setOrigin(0.5)
+  // Action кнопка (ADD TO TEAM / ACTIVATE)
+  const actionBtn = this.add.image(centerX, 900, 'button_base')
+    .setDisplaySize(320, 60)
     .setInteractive()
-    .on('pointerdown', () => {
-      if (isUnits) {
-        this.addSelectedToTeam();
-      } else {
-        this.activateSelectedRelics();
-      }
-    });
+    .setOrigin(0.5);
+  this.floatingPanel.add(actionBtn);
+
+  const actionText = this.add.text(centerX, 900, isUnits ? 'ADD TO TEAM' : 'ACTIVATE', {
+    fontSize: '32px',
+    fill: isUnits ? '#ffff00' : '#00ffff',
+    fontStyle: 'bold'
+  }).setOrigin(0.5);
+  this.floatingPanel.add(actionText);
+
+  (actionBtn as any).linkedText = actionText;
+  (actionText as any).originalFill = isUnits ? '#ffff00' : '#00ffff';
+
+  this.addButtonEffects(actionBtn);
+
+  actionBtn.on('pointerdown', () => {
+    if (isUnits) {
+      this.addSelectedToTeam();
+    } else {
+      this.activateSelectedRelics();
+    }
+  });
 }
 
 
@@ -521,52 +565,51 @@ setTimeout(() => this.refreshGrid(), 150); // перестраховка
   // this.scene.stop('CollectionScene');
 }
 
-  private showPreview(id: number, isUnit: boolean) {
-    if (this.previewRect) this.previewRect.setFillStyle(0x112233);
-    this.previewTexts.forEach(t => t.destroy());
-    this.previewTexts = [];
+private showPreview(id: number, isUnit: boolean) {
+  if (this.previewRect) {
+    this.previewRect.setVisible(true);
+    this.previewRect.setFillStyle(0x112233);
+  }
 
-    const wrapWidth = 230;
+  this.previewTexts.forEach(t => t.destroy());
+  this.previewTexts = [];
 
-    if (isUnit) {
-      const unitData = this.unitsData.find(u => u.id === id);
-      if (!unitData) return;
-      const unit = unitData.unit;
+  const wrapWidth = 230;
 
-      this.previewTexts.push(
-        this.add.text(775, 355, `ID: ${id}`, { 
-          fontSize: '26px', fill: '#ffff00', wordWrap: { width: wrapWidth }
-        }).setOrigin(0.5)
-      );
+  if (isUnit) {
+    const unitData = this.unitsData.find(u => u.id === id);
+    if (!unitData) return;
+    const unit = unitData.unit;
 
-      this.previewTexts.push(
-        this.add.text(775, 405, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, { 
-          fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
-        }).setOrigin(0.5)
-      );
+    const t1 = this.add.text(775, 355, `ID: ${id}`, { 
+      fontSize: '26px', fill: '#ffff00', wordWrap: { width: wrapWidth }
+    }).setOrigin(0.5).setDepth(6);
+    this.previewTexts.push(t1);
 
-      this.previewTexts.push(
-        this.add.text(775, 465, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, { 
-          fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
-        }).setOrigin(0.5)
-      );
-    } else {
-      const relicData = this.relicsData.find(r => r.id === id)?.relic;
-      if (relicData) {
-        this.previewTexts.push(
-          this.add.text(775, 395, relicData.name, { 
-            fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
-          }).setOrigin(0.5)
-        );
+    const t2 = this.add.text(775, 405, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, { 
+      fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
+    }).setOrigin(0.5).setDepth(6);
+    this.previewTexts.push(t2);
 
-        this.previewTexts.push(
-          this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, { 
-            fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
-          }).setOrigin(0.5)
-        );
-      }
+    const t3 = this.add.text(775, 465, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, { 
+      fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
+    }).setOrigin(0.5).setDepth(6);
+    this.previewTexts.push(t3);
+  } else {
+    const relicData = this.relicsData.find(r => r.id === id)?.relic;
+    if (relicData) {
+      const t1 = this.add.text(775, 395, relicData.name, { 
+        fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
+      }).setOrigin(0.5).setDepth(6);
+      this.previewTexts.push(t1);
+
+      const t2 = this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, { 
+        fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
+      }).setOrigin(0.5).setDepth(6);
+      this.previewTexts.push(t2);
     }
   }
+}
 
 
 private addSingleUnitToTeam(unitId: number) {
@@ -633,19 +676,23 @@ private equipSingleRelic(relicId: number) {
   }
 
   private getFactionName(faction: number): string {
-    const names = ['Empire', 'Voidborn', 'Mechanoids'];
-    return names[faction] || 'Unknown';
-  }
+  if (isNaN(faction) || faction < 0 || faction > 2) return 'Any';
+  const names = ['Empire', 'Voidborn', 'Mechanoids'];
+  return names[faction] || 'Any';
+}
 
-  private getClassName(unitClass: number): string {
-    const names = ['Fighter', 'Cruiser', 'Dreadnought', 'Drone Swarm'];
-    return names[unitClass] || 'Unknown';
-  }
+private getClassName(unitClass: number): string {
+  if (isNaN(unitClass) || unitClass < 0 || unitClass > 3) return 'Any';
+  const names = ['Fighter', 'Cruiser', 'Dreadnought', 'Drone Swarm'];
+  return names[unitClass] || 'Any';
+}
 
-  private getRarityName(rarity: number): string {
-    const names = ['Common', 'Rare', 'Legendary'];
-    return names[rarity] || 'Unknown';
-  }
+private getRarityName(rarity: number): string {
+  if (isNaN(rarity) || rarity < 0 || rarity > 2) return 'Any';
+  const names = ['Common', 'Rare', 'Legendary'];
+  return names[rarity] || 'Any';
+}
+
 
   private getRelicEffectDescription(relicType: number): string {
     const desc = [
@@ -658,8 +705,69 @@ private equipSingleRelic(relicId: number) {
       ];
     return desc[relicType] || 'Эффект неизвестен';
   }
+private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.08) {
+  const img = obj as Phaser.GameObjects.Image;
+  const originalWidth = img.displayWidth;
+  const originalHeight = img.displayHeight;
 
-  shutdown() {
+  const hoverWidth = originalWidth * scale;
+  const hoverHeight = originalHeight * scale;
+
+  obj.on('pointerover', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: hoverWidth,
+      displayHeight: hoverHeight,
+      duration: 120,
+      ease: 'Sine.easeOut'
+    });
+
+    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
+    if (text) {
+      text.setFill('#ffff88');
+      this.tweens.add({ targets: text, scale: 1.1, duration: 120 });
+    }
+  });
+
+  obj.on('pointerout', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: originalWidth,
+      displayHeight: originalHeight,
+      duration: 120,
+      ease: 'Sine.easeOut'
+    });
+
+    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
+    if (text) {
+      text.setFill((text as any).originalFill || '#ffffff');
+      this.tweens.add({ targets: text, scale: 1, duration: 120 });
+    }
+  });
+
+  obj.on('pointerdown', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: originalWidth * 0.95,
+      displayHeight: originalHeight * 0.95,
+      duration: 60,
+      ease: 'Sine.easeOut'
+    });
+  });
+
+  obj.on('pointerup', () => {
+    this.tweens.add({
+      targets: img,
+      displayWidth: hoverWidth,
+      displayHeight: hoverHeight,
+      duration: 80,
+      ease: 'Sine.easeOut'
+    });
+  });
+}
+
+
+shutdown() {
     this.unitSprites.forEach(s => s.destroy());
     this.relicSprites.forEach(s => s.destroy());
     if (this.tooltip) this.tooltip.destroy();

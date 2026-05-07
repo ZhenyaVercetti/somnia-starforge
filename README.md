@@ -1,15 +1,1 @@
-# Somnia StarForge
-
-**On-chain Auto-Battler (MVP — 3 фракции)**
-
-**Контракты (testnet):**
-- StarForgeUnitNFT: 0x9D00dB7fb6faF315C9c63971ae34380d5b831a56
-- StarForgeGame: 0xA8D096516d744e747FB9C735d20AAC1dEe079bac
-
-**Фронтенд структура:**
-- `src/main.ts`
-- `src/scenes/BootScene.ts`
-- `src/scenes/PrepareScene.ts`
-- `src/scenes/BattleScene.ts`
-
-Все актуальные файлы лежат в Sources/attachments.
+вся актуальная информация находится в соответствующих документах в корне проекта

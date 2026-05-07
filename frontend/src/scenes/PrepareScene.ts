@@ -1155,6 +1155,7 @@ preload() {
   this.load.image('profile_frame', 'assets/profile_frame.png');
   this.load.image('outer_frame', 'assets/outer_frame.png');
   this.load.image('collection_frame', 'assets/collection_frame.png');
+  this.load.image('preview_frame', 'assets/preview_frame.png');
 }
 
 create() {
