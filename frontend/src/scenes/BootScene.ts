@@ -6,7 +6,7 @@ import { somniaTestnet } from 'viem/chains';
 import { getContract } from 'viem';
 
 const GAME_CONTRACT = '0x52C428Ec735ef6fEb46334E626600ec31120cC80';
-const NFT_CONTRACT = '0x9D00dB7fb6faF315C9c63971ae34380d5b831a56';
+const NFT_CONTRACT = '0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d';
 const RELIC_CONTRACT = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
 
 export default class BootScene extends Phaser.Scene {

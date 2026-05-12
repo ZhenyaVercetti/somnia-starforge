@@ -682,89 +682,94 @@ private async unequipRelic(slotIndex: number) {
     }
   }
 
-  private async startBattle() {
-    if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
-      return alert('Сначала подключи MetaMask');
+private async startBattle() {
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) 
+    return alert('Сначала подключи MetaMask');
 
-    console.log('🚀 startBattle: team =', this.team, 'equipped =', this.equippedRelics);
-
-    if (this.team.length < 4 || this.team.length > 8) {
-      return this.add.text(750, 750, `Нужно 4-8 юнитов! Сейчас: ${this.team.length}`, { fontSize: '42px', fill: '#ff0000' });
-    }
-
-    const tempTeam = [...this.team];
-
-    try {
-      const teamBigInt = this.team.map(id => BigInt(id));
-      const equippedBigInt = this.equippedRelics.map(id => BigInt(id));
-
-      const hash = await this.gameContract.write.startMatch([teamBigInt, equippedBigInt], { account: this.account });
-      
-      const waitingText = this.add.text(750, 420, 'TX отправлена... Бой обрабатывается on-chain (5–10 сек)', { fontSize: '36px', fill: '#ffff00' });
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ 
-        hash, 
-        confirmations: 1 
-      });
-
-      if (receipt.status !== 'success') {
-        throw new Error(`Транзакция не прошла (status = ${receipt.status})`);
-      }
-
-      waitingText.destroy();
-
-      this.team = [];
-      if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-
-      await new Promise(resolve => setTimeout(resolve, 7000));
-
-      let playerWon = false;
-      let events: any[] = [];
-      let playerMaxHp: number[] = [];
-      let aiMaxHp: number[] = [];
-
-      for (let attempt = 0; attempt < 4; attempt++) {
-        try {
-          const result = await this.gameContract.read.getLastBattleResult([this.account]);
-          playerWon = result[0];
-          events = result[1] || [];
-          playerMaxHp = result[2] ? result[2].map((v: bigint) => Number(v)) : [];
-          aiMaxHp = result[3] ? result[3].map((v: bigint) => Number(v)) : [];
-          if (events.length > 0) break;
-        } catch (e) {
-          console.warn('getLastBattleResult attempt failed', attempt, e);
-        }
-        if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 3500));
-      }
-
-      if (events.length === 0) {
-        throw new Error('Бой прошёл, но результат не получен с on-chain');
-      }
-
-      console.log('✅ Бой успешно подтверждён, переходим в BattleScene');
-      this.scene.start('BattleScene', { 
-        events, 
-        playerWon, 
-        playerMaxHp, 
-        aiMaxHp 
-      });
-
-    } catch (e: any) {
-      console.error('❌ startMatch error:', e);
-      
-      this.team = tempTeam;
-      if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
-
-      const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
-      const errorText = this.add.text(600, 450, `ОШИБКА: ${errMsg}\nБой отменён.\nКоманда восстановлена.`, { 
-        fontSize: '36px', 
-        fill: '#ff4444',
-        align: 'center',
-        wordWrap: { width: 1050 }
-      });
-      setTimeout(() => errorText.destroy(), 6000);
-    }
+  if (this.team.length < 4 || this.team.length > 8) {
+    return this.add.text(750, 750, `Нужно 4-8 юнитов! Сейчас: ${this.team.length}`, { 
+      fontSize: '42px', fill: '#ff0000' 
+    });
   }
+
+  const tempTeam = [...this.team];
+
+  try {
+    const teamBigInt = this.team.map(id => BigInt(id));
+    const equippedBigInt = this.equippedRelics.map(id => BigInt(id));
+
+    // === ЗАГРУЖАЕМ РЕАЛЬНЫЕ ДАННЫЕ ЮНИТОВ ===
+    const playerUnitsData: any[] = [];
+    for (const id of this.team) {
+      const unit = await this.nftContract.read.getUnit([BigInt(id)]);
+      playerUnitsData.push({
+        id: Number(id),
+        faction: Number(unit.faction),
+        unitClass: Number(unit.unitClass),
+        rarity: Number(unit.rarity),
+        attack: Number(unit.attack),
+        defense: Number(unit.defense),
+        speed: Number(unit.speed)
+      });
+    }
+
+    // Загружаем данные ИИ
+    const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+    const aiUnitsData = aiData.map((unit: any) => ({
+      faction: Number(unit.faction),
+      unitClass: Number(unit.unitClass),
+      rarity: Number(unit.rarity),
+      attack: Number(unit.attack),
+      defense: Number(unit.defense),
+      speed: Number(unit.speed)
+    }));
+
+    const hash = await this.gameContract.write.startMatch([teamBigInt, equippedBigInt], { 
+      account: this.account 
+    });
+
+    const waitingText = this.add.text(750, 420, 'TX отправлена... Бой обрабатывается on-chain (5–10 сек)', { 
+      fontSize: '36px', fill: '#ffff00' 
+    });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+
+    if (receipt.status !== 'success') throw new Error('Транзакция не прошла');
+
+    waitingText.destroy();
+    await new Promise(resolve => setTimeout(resolve, 6500));
+
+    // Получаем результат боя
+    const result = await this.gameContract.read.getLastBattleResult([this.account]);
+    const playerWon = result[0];
+    const events = result[1] || [];
+    const playerMaxHp = result[2] ? result[2].map((v: bigint) => Number(v)) : [];
+    const aiMaxHp = result[3] ? result[3].map((v: bigint) => Number(v)) : [];
+
+    if (events.length === 0) throw new Error('Результат боя не получен');
+
+    // === ПЕРЕДАЁМ РЕАЛЬНЫЕ ДАННЫЕ В BATTLE SCENE ===
+    this.scene.start('BattleScene', {
+      events,
+      playerWon,
+      playerMaxHp,
+      aiMaxHp,
+      playerUnitsData,   // ← реальные данные игрока
+      aiUnitsData        // ← реальные данные ИИ
+    });
+
+  } catch (e: any) {
+    console.error('startBattle error:', e);
+    this.team = tempTeam;
+    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+
+    const errMsg = e.shortMessage || e.message || 'Ошибка';
+    this.add.text(600, 450, `ОШИБКА: ${errMsg}`, { 
+      fontSize: '36px', fill: '#ff4444', align: 'center' 
+    }).setOrigin(0.5);
+  }
+}
+
 
 private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
@@ -1156,6 +1161,24 @@ preload() {
   this.load.image('outer_frame', 'assets/outer_frame.png');
   this.load.image('collection_frame', 'assets/collection_frame.png');
   this.load.image('preview_frame', 'assets/preview_frame.png');
+  // Портреты кораблей (12 штук)
+  this.load.image('Emperial_fighter', 'assets/units/portraits/Emperial_fighter.png');
+  this.load.image('Emperial_cruiser', 'assets/units/portraits/Emperial_cruiser.png');
+  this.load.image('Emperial_dreadnought', 'assets/units/portraits/Emperial_dreadnought.png');
+  this.load.image('Emperial_droneswarm', 'assets/units/portraits/Emperial_droneswarm.png');
+
+  this.load.image('voidborn_fighter', 'assets/units/portraits/voidborn_fighter.png');
+  this.load.image('voidborn_cruiser', 'assets/units/portraits/voidborn_cruiser.png');
+  this.load.image('voidborn_dreadnought', 'assets/units/portraits/voidborn_dreadnought.png');
+  this.load.image('voidborn_droneswarm', 'assets/units/portraits/voidborn_droneswarm.png');
+
+  this.load.image('mechanoid_fighter', 'assets/units/portraits/mechanoid_fighter.png');
+  this.load.image('mechanoid_cruiser', 'assets/units/portraits/mechanoid_cruiser.png');
+  this.load.image('mechanoid_dreadnought', 'assets/units/portraits/mechanoid_dreadnought.png');
+  this.load.image('mechanoid_droneswarm', 'assets/units/portraits/mechanoid_droneswarm.png');
+
+  // Временные эффекты (пока используем примитивы)
+  this.load.image('explosion', 'assets/effects/explosion.png'); // если есть
 }
 
 create() {
