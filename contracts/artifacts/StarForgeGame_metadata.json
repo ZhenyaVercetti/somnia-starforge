@@ -1500,11 +1500,11 @@
 			]
 		},
 		"StarForgeUnitNFT.sol": {
-			"keccak256": "0xc040f2aa86d31e370168cc3c0c17b137677edfe094c8578e83897450198491b8",
+			"keccak256": "0xea82b8760f233fd84e77d73fa2fe75e345b1c44148c41625a8f361554c5d620e",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://0f647d38c5ba0579849d4de66d68c6b9f2334ba82436af7d910200d7327ce4b6",
-				"dweb:/ipfs/QmSh1J8mXKfNBq8KWZxoXg8hYcpZTSquTGCWBK6hhoE4h5"
+				"bzz-raw://ebda8b269be0d130f0b6c1fadb185bafd6f7915f7dbb47ba3fcb45ea35db7a59",
+				"dweb:/ipfs/Qmc7idWckpgFLE38aUnZGVFp2LSTg8TY6tCMf8iw22a2Sa"
 			]
 		}
 	},
