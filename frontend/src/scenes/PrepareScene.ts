@@ -698,7 +698,7 @@ private async startBattle() {
     const teamBigInt = this.team.map(id => BigInt(id));
     const equippedBigInt = this.equippedRelics.map(id => BigInt(id));
 
-    // === ЗАГРУЖАЕМ РЕАЛЬНЫЕ ДАННЫЕ ЮНИТОВ ===
+    // === ЗАГРУЖАЕМ РЕАЛЬНЫЕ ДАННЫЕ ЮНИТОВ ДЛЯ BATTLE SCENE ===
     const playerUnitsData: any[] = [];
     for (const id of this.team) {
       const unit = await this.nftContract.read.getUnit([BigInt(id)]);
@@ -713,7 +713,6 @@ private async startBattle() {
       });
     }
 
-    // Загружаем данные ИИ
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
     const aiUnitsData = aiData.map((unit: any) => ({
       faction: Number(unit.faction),
@@ -734,7 +733,9 @@ private async startBattle() {
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
-    if (receipt.status !== 'success') throw new Error('Транзакция не прошла');
+    if (receipt.status !== 'success') {
+      throw new Error('Транзакция не прошла');
+    }
 
     waitingText.destroy();
     await new Promise(resolve => setTimeout(resolve, 6500));
@@ -746,24 +747,42 @@ private async startBattle() {
     const playerMaxHp = result[2] ? result[2].map((v: bigint) => Number(v)) : [];
     const aiMaxHp = result[3] ? result[3].map((v: bigint) => Number(v)) : [];
 
-    if (events.length === 0) throw new Error('Результат боя не получен');
+    if (events.length === 0) {
+      throw new Error('Результат боя не получен');
+    }
 
-    // === ПЕРЕДАЁМ РЕАЛЬНЫЕ ДАННЫЕ В BATTLE SCENE ===
+    // === ОЧИЩАЕМ КОМАНДУ ПОЛНОСТЬЮ ===
+    this.team = [];
+    this.clearTeamVisuals();
+    if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
+
+    // === ПЕРЕДАЁМ ДАННЫЕ В BATTLE SCENE ===
     this.scene.start('BattleScene', {
       events,
       playerWon,
       playerMaxHp,
       aiMaxHp,
-      playerUnitsData,   // ← реальные данные игрока
-      aiUnitsData        // ← реальные данные ИИ
+      playerUnitsData,
+      aiUnitsData
     });
+
+    // === ПРИНУДИТЕЛЬНО ОБНОВЛЯЕМ КОЛЛЕКЦИЮ ===
+    setTimeout(() => {
+      const collectionScene = this.scene.get('CollectionScene') as any;
+      if (collectionScene && collectionScene.scene.isActive()) {
+        collectionScene.loadCollectionData();
+      }
+    }, 500);
 
   } catch (e: any) {
     console.error('startBattle error:', e);
+    
+    // Восстанавливаем команду при ошибке
     this.team = tempTeam;
+    this.clearTeamVisuals();
     if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
 
-    const errMsg = e.shortMessage || e.message || 'Ошибка';
+    const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
     this.add.text(600, 450, `ОШИБКА: ${errMsg}`, { 
       fontSize: '36px', fill: '#ff4444', align: 'center' 
     }).setOrigin(0.5);
@@ -1013,8 +1032,8 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
   try {
     const unit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
-    const slot = this.gridSlots[slotIndex];
 
+    const slot = this.gridSlots[slotIndex];
     const style = this.getRarityTintAndScale(unit.rarity);
 
     const rect = this.add.rectangle(slot.x, slot.y, 142, 142, 0x112233)
@@ -1029,7 +1048,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     this.teamSlotOccupants[slotIndex] = rect;
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
 
-    // === DOUBLE CLICK — убрать из команды ===
     rect.on('pointerdown', () => {
       const now = Date.now();
       if (now - this.lastClickTime < 300) {
@@ -1038,7 +1056,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       this.lastClickTime = now;
     });
 
-    // === DRAG ===
     this.input.setDraggable(rect);
 
     rect.on('dragstart', () => {
@@ -1056,7 +1073,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
       let droppedOnSlot = false;
 
-      // Проверяем, попали ли в другой слот команды
       for (let s = 0; s < 8; s++) {
         if (s === slotIndex) continue;
         const targetSlot = this.gridSlots[s];
@@ -1064,7 +1080,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
         const dy = targetSlot.y - rect.y;
 
         if (Math.sqrt(dx * dx + dy * dy) < 90) {
-          // Обмен юнитами
           const temp = this.team[slotIndex];
           this.team[slotIndex] = this.team[s];
           this.team[s] = temp;
@@ -1077,7 +1092,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       }
 
       if (!droppedOnSlot) {
-        // Убрали юнита из команды
         this.removeFromTeam(slotIndex);
       } else {
         rect.x = this.gridSlots[slotIndex].x;
@@ -1092,7 +1106,13 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     rect.on('pointerout', () => this.hideTooltip());
 
   } catch (e) {
-    console.error('createTeamUnitVisual error', e);
+    console.error(`Юнит ${tokenId} не существует, удаляем из команды`);
+    this.team = this.team.filter(id => id !== tokenId);
+    this.teamSlotOccupants[slotIndex] = null;
+    
+    if (this.teamCounterText) {
+      this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+    }
   }
 }
 
@@ -1178,7 +1198,6 @@ preload() {
   this.load.image('mechanoid_droneswarm', 'assets/units/portraits/mechanoid_droneswarm.png');
 
   // Временные эффекты (пока используем примитивы)
-  this.load.image('explosion', 'assets/effects/explosion.png'); // если есть
 }
 
 create() {
@@ -1191,7 +1210,8 @@ create() {
     if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
   });
   
-  this.team = [];
+this.team = [];
+this.cleanupInvalidTeamIds();
   this.teamSlotOccupants = new Array(8).fill(null);
   this.originalPositions.clear();
   this.ownedSprites = [];
@@ -1201,6 +1221,19 @@ create() {
   this.equippedRelics = [0, 0, 0];
   this.lastKnownLevel = 0;
   this.teamOperationLock = false;
+  // Очищаем команду от несуществующих токенов
+if (this.team.length > 0) {
+  const validTeam: number[] = [];
+  for (const id of this.team) {
+    try {
+      await this.nftContract.read.getUnit([BigInt(id)]);
+      validTeam.push(id);
+    } catch {
+      console.log(`Удаляем несуществующий токен из команды: ${id}`);
+    }
+  }
+  this.team = validTeam;
+}
 
   this.addGameUI();
   
@@ -1336,6 +1369,28 @@ public equipSingleRelic(relicId: number): boolean {
   }
   // Все слоты заняты
   return false;
+}
+
+private async cleanupInvalidTeamIds() {
+  if (!this.nftContract || this.team.length === 0) return;
+
+  const validTeam: number[] = [];
+  
+  for (const id of this.team) {
+    try {
+      await this.nftContract.read.getUnit([BigInt(id)]);
+      validTeam.push(id);
+    } catch {
+      console.log(`Удаляем несуществующий токен из команды: ${id}`);
+    }
+  }
+  
+  this.team = validTeam;
+  this.clearTeamVisuals();
+  
+  if (this.teamCounterText) {
+    this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+  }
 }
 
 }

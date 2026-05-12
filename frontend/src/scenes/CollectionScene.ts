@@ -86,6 +86,13 @@ create() {
   this.createBottomPanel();
 
   this.loadCollectionData();
+  // Принудительная перезагрузка при возврате из боя
+setTimeout(() => {
+  if (this.scene.get('PrepareScene')) {
+    this.loadCollectionData();
+  }
+}, 300);
+
 
   // === ЗАКРЫТИЕ ТОЛЬКО ЗА ПРЕДЕЛАМИ ТЁМНОГО ФОНА (960×1080) ===
   this.input.on('pointerdown', (pointer) => {
@@ -283,37 +290,46 @@ private createBottomPanel() {
 
 
 private async loadCollectionData() {
-  if (!this.account) return;
+  if (!this.account || !this.gameContract || !this.nftContract) {
+    console.error('CollectionScene: не хватает контрактов');
+    return;
+  }
 
   try {
-    // === ЮНИТЫ ===
     const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
-    this.unitsData = await Promise.all(unitIds.map(async (idBig) => {
-      const id = Number(idBig);
-      const unit = await this.nftContract.read.getUnit([idBig]);
-      return { id, unit, inTeam: false };
-    }));
+    console.log('📦 Юнитов в контракте:', unitIds.length);
 
-    // Фильтруем юниты, которые уже в команде PrepareScene
-    const prepare = this.scene.get('PrepareScene') as any;
-    if (prepare && prepare.team && Array.isArray(prepare.team)) {
-      this.unitsData = this.unitsData.filter(u => !prepare.team.includes(u.id));
-    }
+    this.unitsData = await Promise.all(
+      unitIds.map(async (idBig) => {
+        const id = Number(idBig);
+        const unit = await this.nftContract.read.getUnit([idBig]);
+        return { id, unit, inTeam: false };
+      })
+    );
 
-    // === РЕЛИКВИИ ===
+    // Временно убираем фильтр по команде (для отладки)
+    // const prepare = this.scene.get('PrepareScene') as any;
+    // if (prepare && prepare.team) {
+    //   this.unitsData = this.unitsData.filter(u => !prepare.team.includes(u.id));
+    // }
+
+    console.log('✅ Юнитов загружено:', this.unitsData.length);
+
     const relicIds: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
-    this.relicsData = await Promise.all(relicIds.map(async (idBig) => {
-      const id = Number(idBig);
-      const relic = await this.relicContract.read.getRelic([idBig]);
-      return { id, relic };
-    }));
+    this.relicsData = await Promise.all(
+      relicIds.map(async (idBig) => {
+        const id = Number(idBig);
+        const relic = await this.relicContract.read.getRelic([idBig]);
+        return { id, relic };
+      })
+    );
 
-    // Убираем экипированные реликвии
     this.relicsData = this.relicsData.filter(r => !this.equippedRelicIds.includes(r.id));
 
     this.refreshGrid();
+
   } catch (e) {
-    console.error('loadCollectionData error', e);
+    console.error('loadCollectionData error:', e);
   }
 }
 
