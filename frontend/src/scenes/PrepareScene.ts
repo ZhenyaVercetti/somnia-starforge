@@ -1209,9 +1209,8 @@ create() {
   this.children.getAll().forEach(child => {
     if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
   });
-  
-this.team = [];
-this.cleanupInvalidTeamIds();
+
+  this.team = [];
   this.teamSlotOccupants = new Array(8).fill(null);
   this.originalPositions.clear();
   this.ownedSprites = [];
@@ -1221,32 +1220,19 @@ this.cleanupInvalidTeamIds();
   this.equippedRelics = [0, 0, 0];
   this.lastKnownLevel = 0;
   this.teamOperationLock = false;
-  // Очищаем команду от несуществующих токенов
-if (this.team.length > 0) {
-  const validTeam: number[] = [];
-  for (const id of this.team) {
-    try {
-      await this.nftContract.read.getUnit([BigInt(id)]);
-      validTeam.push(id);
-    } catch {
-      console.log(`Удаляем несуществующий токен из команды: ${id}`);
-    }
-  }
-  this.team = validTeam;
-}
+
+  // Очистка "мёртвых" ID (без await)
+  this.cleanupInvalidTeamIds();
 
   this.addGameUI();
-  
-  this.initEquippedState();   // теперь сам обновит визуалы
+  this.initEquippedState();
   this.updatePlayerProfile();
-
   this.loadOwnedUnits();
   this.loadPlayerShop();
   this.updatePlayerProfile();
 
-  console.log('✅ PrepareScene создана (дубли убраны, шрифты увеличены)');
+  console.log('✅ PrepareScene создана (с очисткой несуществующих токенов)');
 }
-
 
   shutdown() {
     if (this.tooltip) {

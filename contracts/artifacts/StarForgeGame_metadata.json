@@ -206,6 +206,19 @@
 				"anonymous": false,
 				"inputs": [
 					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "PlayerUnitsCleared",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
 						"indexed": false,
 						"internalType": "address",
 						"name": "player",
@@ -323,6 +336,19 @@
 				"name": "buyUnit",
 				"outputs": [],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "clearPlayerUnits",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -1484,11 +1510,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0xb27958a7dd4ffa0414442550d8348a6908f8dff276b860aacd355891ec8c3abc",
+			"keccak256": "0x4fbb25093c0b5e83b84e259115acf403b8d186800ab7a6ed724f90e23c313b52",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://cc46f0bbceea8219470dc3b3f00b8da71cf471b2207c79331f658c001646c503",
-				"dweb:/ipfs/QmX2SCSt4MyVE9zWCuiU5WDzqWqKtAj2uKhMzyDTipKv4c"
+				"bzz-raw://164e7238e694847d244450a3aaee82a06492da3607046b85d0323e7e7bdbc151",
+				"dweb:/ipfs/QmfH1mc43HXnQt9R56HbDScEgf6HaNTCpoe8uZbWuUmfWG"
 			]
 		},
 		"StarForgeRelic.sol": {

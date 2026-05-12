@@ -355,4 +355,10 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
     function withdraw() external onlyOwner { payable(owner()).transfer(address(this).balance); }
+    function clearPlayerUnits(address player) external onlyOwner {
+    delete playerUnits[player];
+    emit PlayerUnitsCleared(player);
+}
+
+event PlayerUnitsCleared(address indexed player);
 }
