@@ -84,44 +84,52 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('arena_platform', 'assets/background/arena_platform.png');
   }
 
-  create() {
-    this.shutdownCleanup();
-    this.createParallaxBackground();
-    this.createArenaPlatform();
+create() {
+  this.shutdownCleanup();
+  this.createParallaxBackground();
+  this.createArenaPlatform();
 
-    this.add.rectangle(960, 540, 1920, 1080, 0x050010).setAlpha(0.22);
+  this.add.rectangle(960, 540, 1920, 1080, 0x050010).setAlpha(0.22);
 
-        // Кнопка x2 (правый верхний угол)
-const speedBtn = this.add.text(1820, 40, 'x2', {
-  fontSize: '28px',
-  color: '#ffffff',
-  backgroundColor: '#112233',
-  padding: { x: 14, y: 6 }
-}).setOrigin(1, 0).setInteractive().setDepth(200);
+  // === X2 / X1 кнопка (правый верхний угол) ===
+  const speedBtnBase = this.add.image(1820, 55, 'button_base')
+    .setDisplaySize(78, 48)
+    .setInteractive()
+    .setDepth(200);
 
-speedBtn.on('pointerdown', () => {
-  if (this.battleSpeedMultiplier === 1) {
-    this.battleSpeedMultiplier = 0.5;
-    speedBtn.setText('x1');
-    speedBtn.setFill('#ffff00');
-  } else {
-    this.battleSpeedMultiplier = 1;
-    speedBtn.setText('x2');
-    speedBtn.setFill('#ffffff');
-  }
-});
+  const speedBtnText = this.add.text(1820, 55, 'x2', {
+    fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(201);
 
+  (speedBtnBase as any).linkedText = speedBtnText;
 
-    this.setupTeams();
-    this.setupBattleLog();
-
-    if (this.battleEvents.length === 0) {
-      this.showFinalResult();
+  speedBtnBase.on('pointerdown', () => {
+    if (this.battleSpeedMultiplier === 1) {
+      this.battleSpeedMultiplier = 0.5;
+      speedBtnText.setText('x1');
+      speedBtnText.setFill('#ffff00');
     } else {
-      this.currentEventIndex = 0;
-      this.processNextEvent();
+      this.battleSpeedMultiplier = 1;
+      speedBtnText.setText('x2');
+      speedBtnText.setFill('#ffffff');
     }
+  });
+
+  this.setupTeams();
+  this.setupBattleLog();
+
+  if (this.battleEvents.length === 0) {
+    this.showFinalResult();
+  } else {
+    this.currentEventIndex = 0;
+    this.processNextEvent();
   }
+  // === Полная рамка сцены ===
+this.add.image(960, 540, 'outer_frame')
+  .setDisplaySize(1920, 1080)
+  .setDepth(300);
+}
+
 
   private createParallaxBackground() {
     const w = this.scale.width;
@@ -146,6 +154,27 @@ speedBtn.on('pointerdown', () => {
       .setScrollFactor(0.5)
       .setDepth(2);
     this.backgroundLayers.push(nebulaClose);
+    // === Дыхание космоса (живой эффект) ===
+this.tweens.add({
+  targets: nebulaMid,
+  scaleX: 1.022,
+  scaleY: 1.022,
+  duration: 48000,
+  yoyo: true,
+  repeat: -1,
+  ease: 'Sine.easeInOut'
+});
+// === Очень-очень медленное движение звёзд ===
+this.tweens.add({
+  targets: stars,
+  x: '+=12',
+  y: '+=7',
+  duration: 52000,
+  yoyo: true,
+  repeat: -1,
+  ease: 'Linear'
+});
+
   }
 
 private createArenaPlatform() {
@@ -270,7 +299,7 @@ private setupTeams() {
 
 private setupBattleLog() {
   this.logContainer = this.add.container(960, 915);
-  this.add.text(960, 890, 'БОЕВОЙ ЛОГ', {
+  this.add.text(960, 890, 'BATTLE LOG', {
     fontSize: '24px', color: '#ffff00', fontStyle: 'bold'
   }).setOrigin(0.5);
 }
@@ -416,20 +445,34 @@ private animateEvent(event: BattleEvent) {
   }
 
 private showFinalResult() {
-  const resultText = this.playerWon ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ';
+  const resultText = this.playerWon ? 'VICTORY!' : 'DEFEAT';
   const color = this.playerWon ? '#00ff88' : '#ff3366';
 
-  // На 50 пикселей вверх от оригинальной позиции
-  this.add.text(960, 80, resultText, {
-    fontSize: '108px', color, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(100);
+  // VICTORY / DEFEAT (как кнопка)
+  const resultBase = this.add.image(960, 90, 'button_base')
+    .setDisplaySize(520, 92)
+    .setInteractive()
+    .setDepth(100);
 
-  // Кнопка под уведомлением
-  const btn = this.add.text(960, 180, '← ВЕРНУТЬСЯ В ПОДГОТОВКУ', {
-    fontSize: '32px', color: '#ffffff', backgroundColor: '#112233', padding: { x: 32, y: 10 }
-  }).setOrigin(0.5).setInteractive().setDepth(100);
+  const resultLabel = this.add.text(960, 90, resultText, {
+    fontSize: '72px', color, fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(101);
 
-  btn.on('pointerdown', () => this.scene.start('PrepareScene'));
+  (resultBase as any).linkedText = resultLabel;
+
+  // GO BACK кнопка
+  const btnBase = this.add.image(960, 230, 'button_base')
+    .setDisplaySize(320, 58)
+    .setInteractive()
+    .setDepth(100);
+
+  const btnText = this.add.text(960, 230, 'GO BACK', {
+    fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(101);
+
+  (btnBase as any).linkedText = btnText;
+
+  btnBase.on('pointerdown', () => this.scene.start('PrepareScene'));
 }
 
 

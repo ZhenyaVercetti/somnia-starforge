@@ -40,6 +40,24 @@ export default class PrepareScene extends Phaser.Scene {
     super({ key: 'PrepareScene' });
   }
 
+  private getShipKey(faction: number, unitClass: number): string {
+  const map: Record<string, string> = {
+    '0_0': 'emperial_fighter',
+    '0_1': 'emperial_cruiser',
+    '0_2': 'emperial_dreadnought',
+    '0_3': 'emperial_droneswarm',
+    '1_0': 'voidborn_fighter',
+    '1_1': 'voidborn_cruiser',
+    '1_2': 'voidborn_dreadnought',
+    '1_3': 'voidborn_droneswarm',
+    '2_0': 'mechanoid_fighter',
+    '2_1': 'mechanoid_cruiser',
+    '2_2': 'mechanoid_dreadnought',
+    '2_3': 'mechanoid_droneswarm',
+  };
+  return map[`${faction}_${unitClass}`] || 'emperial_fighter';
+}
+
   private getRarityTintAndScale(rarity: number) {
     if (rarity === 2) { // Legendary
       return { tint: 0xffee00, scale: 0.89 };
@@ -217,7 +235,7 @@ private async loadPlayerShop() {
       const slot = this.add.image(x, y, 'slot_ai')
         .setInteractive()
         .setDisplaySize(aiSlotSize, aiSlotSize)
-        .setDepth(2);
+        .setDepth(10);
 
       this.aiGridSlots.push(slot);
       this.addButtonEffects(slot);
@@ -409,49 +427,47 @@ private async unequipRelic(slotIndex: number) {
     return desc[relicType] || 'Эффект неизвестен';
   }
 
-  private async loadCurrentAI() {
-    if (!this.account || !this.gameContract) return;
+private async loadCurrentAI() {
+  if (!this.account || !this.gameContract) return;
 
-    this.aiSprites.forEach(s => s.destroy());
-    this.aiSprites = [];
+  this.aiSprites.forEach(s => s.destroy());
+  this.aiSprites = [];
 
-    try {
-      const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+  try {
+    const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
-      this.aiGridSlots.forEach(slot => {
-        const oldSprite = slot.getData('aiSprite') as Phaser.GameObjects.Sprite;
-        if (oldSprite) oldSprite.destroy();
-        slot.setData('aiSprite', null);
-      });
+    this.aiGridSlots.forEach(slot => {
+      const oldSprite = slot.getData('aiSprite') as Phaser.GameObjects.Sprite;
+      if (oldSprite) oldSprite.destroy();
+      slot.setData('aiSprite', null);
+    });
 
-      for (let i = 0; i < 8; i++) {
-        const slot = this.aiGridSlots[i];
-        if (!slot) continue;
+    for (let i = 0; i < 8; i++) {
+      const slot = this.aiGridSlots[i];
+      if (!slot) continue;
+      if (i >= aiData.length) continue;
 
-        if (i >= aiData.length) continue;
+      const unit = aiData[i];
+      const style = this.getRarityTintAndScale(unit.rarity);
+      const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
 
-        const unit = aiData[i];
-        const style = this.getRarityTintAndScale(unit.rarity);
+      const ship = this.add.sprite(slot.x, slot.y, shipKey)
+        .setScale(style.scale * 0.30)
+        .setInteractive()
+        .setDepth(6);
 
-        const rect = this.add.rectangle(slot.x, slot.y, 95, 95, 0x112233)
-          .setStrokeStyle(6, style.tint)
-          .setScale(style.scale * 0.85)
-          .setInteractive()
-          .setDepth(10);
+      (ship as any).unit = unit;
+      slot.setData('aiSprite', ship);
+      this.aiSprites.push(ship);
 
-        (rect as any).unit = unit;
-
-        slot.setData('aiSprite', rect);
-        this.aiSprites.push(rect);
-
-        const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
-        rect.on('pointerover', () => this.showTooltip(slot.x + 55, slot.y - 45, tooltipText));
-        rect.on('pointerout', () => this.hideTooltip());
-      }
-    } catch (e) {
-      console.error('loadCurrentAI error', e);
+      const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
+      ship.on('pointerover', () => this.showTooltip(slot.x + 55, slot.y - 45, tooltipText));
+      ship.on('pointerout', () => this.hideTooltip());
     }
+  } catch (e) {
+    console.error('loadCurrentAI error', e);
   }
+}
 
   private async autoSelectTeam() {
     if (this.teamOperationLock) return;
@@ -738,7 +754,7 @@ private async startBattle() {
     }
 
     waitingText.destroy();
-    await new Promise(resolve => setTimeout(resolve, 6500));
+    await new Promise(resolve => setTimeout(resolve, 3500));
 
     // Получаем результат боя
     const result = await this.gameContract.read.getLastBattleResult([this.account]);
@@ -842,7 +858,7 @@ private addGameUI() {
     const slot = this.add.image(x, y, 'slot_team')
       .setInteractive()
       .setDisplaySize(slotSize, slotSize)
-      .setDepth(2);
+      .setDepth(10);
 
     this.gridSlots.push(slot);
     this.addButtonEffects(slot);
@@ -1032,23 +1048,23 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
   try {
     const unit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
-
     const slot = this.gridSlots[slotIndex];
     const style = this.getRarityTintAndScale(unit.rarity);
 
-    const rect = this.add.rectangle(slot.x, slot.y, 142, 142, 0x112233)
-      .setStrokeStyle(8, style.tint)
-      .setScale(style.scale)
+    const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
+
+    const ship = this.add.sprite(slot.x, slot.y, shipKey)
+      .setScale(style.scale * 0.46)
       .setInteractive()
-      .setDepth(10);
+      .setDepth(6);
 
-    (rect as any).tokenId = tokenId;
-    (rect as any).unit = unit;
+    (ship as any).tokenId = tokenId;
+    (ship as any).unit = unit;
 
-    this.teamSlotOccupants[slotIndex] = rect;
+    this.teamSlotOccupants[slotIndex] = ship;
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
 
-    rect.on('pointerdown', () => {
+    ship.on('pointerdown', () => {
       const now = Date.now();
       if (now - this.lastClickTime < 300) {
         this.removeFromTeam(slotIndex);
@@ -1056,28 +1072,28 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       this.lastClickTime = now;
     });
 
-    this.input.setDraggable(rect);
+    this.input.setDraggable(ship);
 
-    rect.on('dragstart', () => {
-      rect.setScale(style.scale * 1.15);
-      rect.setDepth(30);
+    ship.on('dragstart', () => {
+      ship.setScale(style.scale * 1.15);
+      ship.setDepth(30);
     });
 
-    rect.on('drag', (_: any, dragX: number, dragY: number) => {
-      rect.x = dragX;
-      rect.y = dragY;
+    ship.on('drag', (_: any, dragX: number, dragY: number) => {
+      ship.x = dragX;
+      ship.y = dragY;
     });
 
-    rect.on('dragend', () => {
-      rect.setScale(style.scale);
+    ship.on('dragend', () => {
+      ship.setScale(style.scale);
 
       let droppedOnSlot = false;
 
       for (let s = 0; s < 8; s++) {
         if (s === slotIndex) continue;
         const targetSlot = this.gridSlots[s];
-        const dx = targetSlot.x - rect.x;
-        const dy = targetSlot.y - rect.y;
+        const dx = targetSlot.x - ship.x;
+        const dy = targetSlot.y - ship.y;
 
         if (Math.sqrt(dx * dx + dy * dy) < 90) {
           const temp = this.team[slotIndex];
@@ -1094,22 +1110,23 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       if (!droppedOnSlot) {
         this.removeFromTeam(slotIndex);
       } else {
-        rect.x = this.gridSlots[slotIndex].x;
-        rect.y = this.gridSlots[slotIndex].y;
+        ship.x = this.gridSlots[slotIndex].x;
+        ship.y = this.gridSlots[slotIndex].y;
       }
     });
 
-    rect.on('pointerover', () => {
+    ship.on('pointerover', () => {
       const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
       this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
     });
-    rect.on('pointerout', () => this.hideTooltip());
+
+    ship.on('pointerout', () => this.hideTooltip());
 
   } catch (e) {
     console.error(`Юнит ${tokenId} не существует, удаляем из команды`);
     this.team = this.team.filter(id => id !== tokenId);
     this.teamSlotOccupants[slotIndex] = null;
-    
+
     if (this.teamCounterText) {
       this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
     }
@@ -1378,5 +1395,6 @@ private async cleanupInvalidTeamIds() {
     this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
   }
 }
+
 
 }
