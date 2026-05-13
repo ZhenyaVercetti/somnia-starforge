@@ -2,6 +2,7 @@
 // frontend/src/scenes/PrepareScene.ts
 import * as Phaser from 'phaser';
 import { getContract } from 'viem';
+import { UnitVisualFactory } from '../utils/UnitVisualFactory';
 
 export default class PrepareScene extends Phaser.Scene {
   private unitsInTeam: number[] = [];
@@ -451,8 +452,8 @@ private async loadCurrentAI() {
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
     this.aiGridSlots.forEach(slot => {
-      const oldSprite = slot.getData('aiSprite') as Phaser.GameObjects.Sprite;
-      if (oldSprite) oldSprite.destroy();
+      const old = slot.getData('aiSprite');
+      if (old) old.destroy();
       slot.setData('aiSprite', null);
     });
 
@@ -465,15 +466,28 @@ private async loadCurrentAI() {
       const style = this.getRarityTintAndScale(unit.rarity);
       const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
 
-      const ship = this.add.sprite(slot.x, slot.y, shipKey)
-        .setScale(style.scale * 0.30)
-        .setInteractive()
-        .setDepth(8);
+      // === ФАБРИКА (фрейм + пульсация + корабль) ===
+      const container = UnitVisualFactory.createUnitWithFrame(
+        this,
+        slot.x,
+        slot.y,
+        shipKey,
+        Number(unit.rarity),
+        style.scale * 0.30
+      );
+
+      const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
+      if (!ship) {
+        container.destroy();
+        continue;
+      }
 
       (ship as any).unit = unit;
-      slot.setData('aiSprite', ship);
-      this.aiSprites.push(ship);
-      
+      ship.setInteractive().setDepth(8);
+      container.setDepth(8);
+
+      slot.setData('aiSprite', container);
+      this.aiSprites.push(container);
 
       const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
       ship.on('pointerover', () => this.showTooltip(slot.x + 55, slot.y - 45, tooltipText));
@@ -1068,32 +1082,39 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const unit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
     const slot = this.gridSlots[slotIndex];
     const style = this.getRarityTintAndScale(unit.rarity);
-
     const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
+    const rarityNum = Number(unit.rarity);
+    const baseScale = style.scale * 0.42;
 
-    const ship = this.add.sprite(slot.x, slot.y, shipKey)
-      .setScale(style.scale * 0.42)
-      .setInteractive()
-      .setDepth(8);
+    const container = UnitVisualFactory.createUnitWithFrame(this, slot.x, slot.y, shipKey, rarityNum, baseScale);
+    const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
 
-    (ship as any).tokenId = tokenId;
-    (ship as any).unit = unit;
-    (ship as any).teamSlotIndex = slotIndex;
+    if (!ship) {
+      container.destroy();
+      return;
+    }
 
+    (container as any).tokenId = tokenId;
+    (container as any).unit = unit;
+    (container as any).teamSlotIndex = slotIndex;
+
+    ship.setInteractive().setDepth(8);
+    container.setDepth(8);
+
+    this.teamSlotOccupants[slotIndex] = container;
+    slot.disableInteractive();
+    this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
+
+    // === ЛЁГКАЯ ПУЛЬСАЦИЯ КОРАБЛЯ (как было раньше) ===
     this.tweens.add({
       targets: ship,
-      scale: style.scale * 0.44,
-      duration: 1900,
+      scale: baseScale * 1.04,
+      duration: 2100,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
 
-    this.teamSlotOccupants[slotIndex] = ship;
-    slot.disableInteractive();   // слот больше не перехватывает события
-    this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
-
-    // === ПРАВИЛЬНЫЙ HOVER НА РАМКЕ (через displayWidth / displayHeight) ===
     const originalWidth = slot.displayWidth;
     const originalHeight = slot.displayHeight;
     const hoverWidth = originalWidth * 1.08;
@@ -1107,7 +1128,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
         duration: 120,
         ease: 'Sine.easeOut'
       });
-
       const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
       this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
     });
@@ -1120,11 +1140,9 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
         duration: 120,
         ease: 'Sine.easeOut'
       });
-
       this.hideTooltip();
     });
 
-    // === DOUBLE CLICK ===
     ship.on('pointerdown', () => {
       const now = Date.now();
       if (now - this.lastClickTime < 300) {
@@ -1136,75 +1154,58 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     this.input.setDraggable(ship);
 
     ship.on('dragstart', () => {
+      container.setDepth(30);
       ship.setScale(style.scale * 1.15);
-      ship.setDepth(30);
       slot.setDisplaySize(originalWidth, originalHeight);
     });
 
     ship.on('drag', (_: any, dragX: number, dragY: number) => {
-      ship.x = dragX;
-      ship.y = dragY;
+      container.x = dragX;
+      container.y = dragY;
     });
 
     ship.on('dragend', () => {
-      ship.setScale(style.scale);
-      ship.setDepth(8);
+      container.setDepth(8);
+      ship.setScale(baseScale);
 
       let droppedOnSlot = false;
-
       for (let s = 0; s < 8; s++) {
         if (s === slotIndex) continue;
         const targetSlot = this.gridSlots[s];
-        const dx = targetSlot.x - ship.x;
-        const dy = targetSlot.y - ship.y;
-
+        const dx = targetSlot.x - container.x;
+        const dy = targetSlot.y - container.y;
         if (Math.sqrt(dx * dx + dy * dy) < 90) {
           const temp = this.team[slotIndex];
           this.team[slotIndex] = this.team[s];
           this.team[s] = temp;
-
           this.clearTeamVisuals();
           this.rebuildTeamVisuals();
           droppedOnSlot = true;
           break;
         }
       }
-
       if (!droppedOnSlot) {
         this.removeFromTeam(slotIndex);
       } else {
-        ship.x = this.gridSlots[slotIndex].x;
-        ship.y = this.gridSlots[slotIndex].y;
+        container.x = this.gridSlots[slotIndex].x;
+        container.y = this.gridSlots[slotIndex].y;
       }
     });
 
   } catch (e) {
-    console.error(`Юнит ${tokenId} не существует, удаляем из команды`);
+    console.error(`createTeamUnitVisual error for ${tokenId}:`, e);
     this.team = this.team.filter(id => id !== tokenId);
     this.teamSlotOccupants[slotIndex] = null;
     const slot = this.gridSlots[slotIndex];
-if (slot) {
-  slot.setInteractive();
-  this.addButtonEffects(slot);
-}
-
-    if (this.teamCounterText) {
-      this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+    if (slot) {
+      slot.setInteractive();
+      this.addButtonEffects(slot);
     }
+    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
   }
 }
 
 
-  private enableDoubleClickRemoveOnTeamUnit(rect: any, tokenId: number) {
-    rect.on('pointerdown', () => {
-      const now = Date.now();
-      if (now - this.lastClickTime < 300) {
-        const slotIndex = this.teamSlotOccupants.indexOf(rect);
-        if (slotIndex !== -1) this.removeFromTeam(slotIndex);
-      }
-      this.lastClickTime = now;
-    });
-  }
 
   init(data: any) {
     this.gameContract = data.gameContract;
@@ -1403,47 +1404,6 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.0
 }
 
 
-private createUnitSpriteWithFrame(
-  x: number, 
-  y: number, 
-  shipKey: string, 
-  rarity: number, 
-  scale: number = 1
-): Phaser.GameObjects.Container {
-  
-  const container = this.add.container(x, y);
-
-  // Фрейм (только для Rare и Legendary)
-  if (rarity === 2) {
-    const frame = this.add.image(0, 0, 'legendary_frame')
-      .setScale(scale * 1.15);
-    container.add(frame);
-  } else if (rarity === 1) {
-    const frame = this.add.image(0, 0, 'rare_frame')
-      .setScale(scale * 1.12);
-    container.add(frame);
-  }
-
-  // Сам корабль
-  const ship = this.add.sprite(0, 0, shipKey)
-    .setScale(scale);
-
-  container.add(ship);
-
-  // Лёгкая пульсация фрейма (для редких и легендарных)
-  if (rarity >= 1) {
-    this.tweens.add({
-      targets: container.first, // фрейм
-      scale: scale * (rarity === 2 ? 1.18 : 1.15),
-      duration: 1600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-  }
-
-  return container;
-}
 
 
 public addSingleUnitToTeam(unitId: number): boolean {
