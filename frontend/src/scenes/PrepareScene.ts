@@ -1182,10 +1182,10 @@ preload() {
   this.load.image('collection_frame', 'assets/collection_frame.png');
   this.load.image('preview_frame', 'assets/preview_frame.png');
   // Портреты кораблей (12 штук)
-  this.load.image('Emperial_fighter', 'assets/units/portraits/Emperial_fighter.png');
-  this.load.image('Emperial_cruiser', 'assets/units/portraits/Emperial_cruiser.png');
-  this.load.image('Emperial_dreadnought', 'assets/units/portraits/Emperial_dreadnought.png');
-  this.load.image('Emperial_droneswarm', 'assets/units/portraits/Emperial_droneswarm.png');
+  this.load.image('emperial_fighter', 'assets/units/portraits/emperial_fighter.png');
+  this.load.image('emperial_cruiser', 'assets/units/portraits/emperial_cruiser.png');
+  this.load.image('emperial_dreadnought', 'assets/units/portraits/emperial_dreadnought.png');
+  this.load.image('emperial_droneswarm', 'assets/units/portraits/emperial_droneswarm.png');
 
   this.load.image('voidborn_fighter', 'assets/units/portraits/voidborn_fighter.png');
   this.load.image('voidborn_cruiser', 'assets/units/portraits/voidborn_cruiser.png');
