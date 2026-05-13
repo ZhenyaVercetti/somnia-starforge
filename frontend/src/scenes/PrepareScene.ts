@@ -326,13 +326,72 @@ private async loadEquippedRelics() {
         );
       });
       sprite.on('pointerout', () => this.hideTooltip());
+
+      // === DRAG (основное действие) ===
+      this.input.setDraggable(sprite);
+
+      let dragStartX = 0;
+      let dragStartY = 0;
+
+      sprite.on('dragstart', (pointer: Phaser.Input.Pointer) => {
+        dragStartX = pointer.x;
+        dragStartY = pointer.y;
+        sprite.setDepth(30);
+        sprite.setScale(0.95);
+      });
+
+      sprite.on('drag', (_: any, dragX: number, dragY: number) => {
+        sprite.x = dragX;
+        sprite.y = dragY;
+      });
+
+      sprite.on('dragend', (pointer: Phaser.Input.Pointer) => {
+        sprite.setScale(0.80);
+        sprite.setDepth(12);
+
+        const movedDistance = Math.sqrt(
+          Math.pow(pointer.x - dragStartX, 2) + Math.pow(pointer.y - dragStartY, 2)
+        );
+
+        // Если почти не двигали — это клик → unequip
+        if (movedDistance < 25) {
+          this.unequipRelic(i);
+          return;
+        }
+
+        // Иначе проверяем свап с другим слотом
+        let droppedOnAnotherSlot = false;
+
+        for (let s = 0; s < 3; s++) {
+          if (s === i) continue;
+          const targetSlot = this.equippedSlotRects[s];
+          const dx = targetSlot.x - sprite.x;
+          const dy = targetSlot.y - sprite.y;
+
+          if (Math.sqrt(dx * dx + dy * dy) < 80) {
+            const temp = this.equippedRelics[i];
+            this.equippedRelics[i] = this.equippedRelics[s];
+            this.equippedRelics[s] = temp;
+
+            this.refreshRelics();
+            droppedOnAnotherSlot = true;
+            break;
+          }
+        }
+
+        if (!droppedOnAnotherSlot) {
+          // Выбросили далеко — unequip
+          this.unequipRelic(i);
+        } else {
+          sprite.x = slot.x;
+          sprite.y = slot.y;
+        }
+      });
     }
   } catch (e) {
     console.error('loadEquippedRelics error', e);
   }
 }
-
-
 
   private async equipRelic(relicId: number, slotIndex: number) {
     if (slotIndex < 0 || slotIndex > 2) return;
@@ -790,35 +849,35 @@ private addGameUI() {
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-  // === TEAM GRID ===
-  this.gridSlots = [];
-  this.teamSlotOccupants = new Array(8).fill(null);
-  const teamCenterX = 1020;
-  const teamCenterY = 560;
-  const slotSize = 142;
-  const hSpacing = 23;
-  const vSpacing = 23;
-  const totalWidth = 4 * slotSize + 3 * hSpacing;
-  const totalHeight = 2 * slotSize + vSpacing;
-  const teamStartX = teamCenterX - totalWidth / 2;
-  const teamStartY = teamCenterY - totalHeight / 2;
+// === TEAM GRID (слоты теперь только визуальные, интерактивность убрана — события обрабатывают корабли) ===
+this.gridSlots = [];
+this.teamSlotOccupants = new Array(8).fill(null);
+const teamCenterX = 1020;
+const teamCenterY = 560;
+const slotSize = 142;
+const hSpacing = 23;
+const vSpacing = 23;
+const totalWidth = 4 * slotSize + 3 * hSpacing;
+const totalHeight = 2 * slotSize + vSpacing;
+const teamStartX = teamCenterX - totalWidth / 2;
+const teamStartY = teamCenterY - totalHeight / 2;
 
-  for (let i = 0; i < 8; i++) {
-    const col = i % 4;
-    const row = Math.floor(i / 4);
-    const x = teamStartX + col * (slotSize + hSpacing);
-    const y = teamStartY + row * (slotSize + vSpacing);
+for (let i = 0; i < 8; i++) {
+  const col = i % 4;
+  const row = Math.floor(i / 4);
+  const x = teamStartX + col * (slotSize + hSpacing);
+  const y = teamStartY + row * (slotSize + vSpacing);
 
-    this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
+  this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
 
-    const slot = this.add.image(x, y, 'slot_team')
-      .setInteractive()
-      .setDisplaySize(slotSize, slotSize)
-      .setDepth(10);
+  const slot = this.add.image(x, y, 'slot_team')
+    .setDisplaySize(slotSize, slotSize)
+    .setDepth(10);
+    // .setInteractive() УБРАНО — слот больше не перехватывает события
 
-    this.gridSlots.push(slot);
-    this.addButtonEffects(slot);
-  }
+  this.gridSlots.push(slot);
+  // addButtonEffects(slot) УБРАНО — hover эффект теперь только на кораблях
+}
 
   // === ВНЕШНЯЯ РАМКА ===
   this.add.image(960, 540, 'outer_frame')
@@ -829,20 +888,21 @@ private addGameUI() {
     fontSize: '38px', fill: '#ffff00' 
   }).setOrigin(0.5);
 
-  // === EQUIPPED RELICS ===
-  this.equippedSlotRects = [];
-  const equippedY = teamCenterY + totalHeight / 2 + 80;
-  const equippedTotalWidth = 3 * 128 + 2 * 40;
-  const equippedStartX = teamCenterX - equippedTotalWidth / 2;
+// === EQUIPPED RELICS (слоты только визуальные, интерактивность убрана — события обрабатывают сами реликвии) ===
+this.equippedSlotRects = [];
+const equippedY = teamCenterY + totalHeight / 2 + 80;
+const equippedTotalWidth = 3 * 128 + 2 * 40;
+const equippedStartX = teamCenterX - equippedTotalWidth / 2;
 
-  for (let i = 0; i < 3; i++) {
-    const x = equippedStartX + i * (128 + 40);
-    const slot = this.add.image(x, equippedY, 'slot_equipped')
-      .setInteractive()
-      .setDisplaySize(128, 128);
-    this.equippedSlotRects.push(slot);
-    this.addButtonEffects(slot, 1.05);
-  }
+for (let i = 0; i < 3; i++) {
+  const x = equippedStartX + i * (128 + 40);
+  const slot = this.add.image(x, equippedY, 'slot_equipped')
+    .setDisplaySize(128, 128)
+    .setDepth(10);                    // ← добавлено для соответствия таблице
+
+  this.equippedSlotRects.push(slot);
+  // .setInteractive() и addButtonEffects УБРАНЫ — реликвия сама обрабатывает hover/tooltip
+}
 
 // === КНОПКИ (все одинакового размера 270×70) ===
 const btnAuto = this.add.image(790, 300, 'button_base')
@@ -1012,23 +1072,24 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const ship = this.add.sprite(slot.x, slot.y, shipKey)
       .setScale(style.scale * 0.42)
       .setInteractive()
-      .setDepth(6);
+      .setDepth(8);                    // ← ИСПРАВЛЕНО: было 6, теперь 8
 
     (ship as any).tokenId = tokenId;
     (ship as any).unit = unit;
-    // Пульсация
-this.tweens.add({
-  targets: ship,
-  scale: style.scale * 0.44,
-  duration: 1900,
-  yoyo: true,
-  repeat: -1,
-  ease: 'Sine.easeInOut'
-});
+
+    this.tweens.add({
+      targets: ship,
+      scale: style.scale * 0.44,
+      duration: 1900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
 
     this.teamSlotOccupants[slotIndex] = ship;
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
 
+    // Двойной клик — удаление
     ship.on('pointerdown', () => {
       const now = Date.now();
       if (now - this.lastClickTime < 300) {
@@ -1051,6 +1112,7 @@ this.tweens.add({
 
     ship.on('dragend', () => {
       ship.setScale(style.scale);
+      ship.setDepth(8);                    // ← ИСПРАВЛЕНО: возвращаем depth 8
 
       let droppedOnSlot = false;
 
@@ -1097,7 +1159,6 @@ this.tweens.add({
     }
   }
 }
-
 
   private enableDoubleClickRemoveOnTeamUnit(rect: any, tokenId: number) {
     rect.on('pointerdown', () => {
@@ -1219,6 +1280,9 @@ create() {
   this.loadOwnedUnits();
   this.loadPlayerShop();
   this.updatePlayerProfile();
+  this.gridSlots.forEach(slot => slot.disableInteractive());
+  // Глобально разрешаем событиям доходить до объектов с меньшей глубиной
+this.input.topOnly = false;
 
   console.log('✅ PrepareScene создана (с очисткой несуществующих токенов)');
 }

@@ -1,5 +1,15 @@
 # Changelog — Somnia StarForge
 
+## v1.6.1 — 13.05.2026
+
+### Визуальный апгрейд
+- Заменены все цветные квадратики на реальные портреты кораблей в PrepareScene и CollectionScene
+- Добавлена лёгкая пульсация юнитам в Team и Preview
+- Исправлены проблемы с depth (двойной клик, drag & drop, hover)
+- В превью Collection теперь отображается реальный корабль + статы
+- Улучшена система глубин и очистки превью
+- Добавлен `getShipKey()` в PrepareScene и CollectionScene
+
 12 мая 2026 — BattleScene (v1.6, в работе)
 Статус: Работа над BattleScene не завершена (Priority 0 — блокер).
 Что было сделано:

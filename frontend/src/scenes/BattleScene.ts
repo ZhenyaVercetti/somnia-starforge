@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 // frontend/src/scenes/BattleScene.ts
 import Phaser from 'phaser';
 

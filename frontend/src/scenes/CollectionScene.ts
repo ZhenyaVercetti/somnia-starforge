@@ -390,42 +390,42 @@ private refreshGrid() {
 
     let sprite: Phaser.GameObjects.GameObject;
 
-    if (this.currentTab === 'units') {
-      const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
-      const isSelected = this.selectedUnitIds.includes(item.id);
+if (this.currentTab === 'units') {
+  const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
+  const isSelected = this.selectedUnitIds.includes(item.id);
 
-      sprite = this.add.sprite(x, y, shipKey)
-        .setScale(0.20)
-        .setInteractive();
+  sprite = this.add.sprite(x, y, shipKey)
+    .setScale(0.20)
+    .setInteractive()
+    .setDepth(8);                    // ← ВОТ ЭТА СТРОКА ДОБАВЛЕНА
 
-      (sprite as any).unitId = item.id;
-      (sprite as any).isUnit = true;
+  (sprite as any).unitId = item.id;
+  (sprite as any).isUnit = true;
 
-      let clickCount = 0;
-      sprite.on('pointerdown', () => {
-        clickCount++;
-        if (clickCount === 1) {
-          this.toggleUnitSelection(item.id, sprite);
+  let clickCount = 0;
+  sprite.on('pointerdown', () => {
+    clickCount++;
+    if (clickCount === 1) {
+      this.toggleUnitSelection(item.id, sprite);
+    }
+    if (clickCount === 2) {
+      const prepareScene = this.scene.get('PrepareScene') as any;
+      if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
+        const success = prepareScene.addSingleUnitToTeam(item.id);
+        if (success) {
+          const idx = this.selectedUnitIds.indexOf(item.id);
+          if (idx > -1) this.selectedUnitIds.splice(idx, 1);
+          this.showFloatingMultiSelectPanel();
         }
-        if (clickCount === 2) {
-          const prepareScene = this.scene.get('PrepareScene') as any;
-          if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
-            const success = prepareScene.addSingleUnitToTeam(item.id);
-            if (success) {
-              const idx = this.selectedUnitIds.indexOf(item.id);
-              if (idx > -1) this.selectedUnitIds.splice(idx, 1);
-              this.showFloatingMultiSelectPanel();
-            }
-          }
-          clickCount = 0;
-        }
-        setTimeout(() => { clickCount = 0; }, 500);
-      });
+      }
+      clickCount = 0;
+    }
+    setTimeout(() => { clickCount = 0; }, 500);
+  });
 
-      sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
-      sprite.on('pointerout', () => this.hideTooltip());
-
-    } else {
+  sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+  sprite.on('pointerout', () => this.hideTooltip());
+} else {
       const isSelected = this.selectedRelicIds.includes(item.id);
       const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
       const strokeWidth = isSelected ? 6 : 4;
