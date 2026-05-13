@@ -133,7 +133,6 @@ public returnUnitToCollection(unitId: number) {
 private async loadPlayerShop() {
   if (!this.account || !this.gameContract) return;
 
-  // Уничтожаем всё старое в области магазина
   this.children.getAll().forEach(child => {
     if (child instanceof Phaser.GameObjects.Text) {
       const txt = child as Phaser.GameObjects.Text;
@@ -164,39 +163,46 @@ private async loadPlayerShop() {
       const x = shopStartX + i * (shopSlotSize + shopSpacing);
       const y = shopY;
 
-      // Тёмный фон внутри слота
-      this.add.rectangle(x, y, shopSlotSize - 10, shopSlotSize - 10, 0x0a1122)
-        .setDepth(1);
+      this.add.rectangle(x, y, shopSlotSize - 10, shopSlotSize - 10, 0x0a1122).setDepth(1);
 
-      // Рамка слота
       const slotImage = this.add.image(x, y, 'slot_shop')
         .setInteractive()
         .setDisplaySize(120, 120)
-        .setDepth(2);
+        .setDepth(10);
 
-      this.addButtonEffects(slotImage);   // ← анимация hover/click
+      this.addButtonEffects(slotImage);
 
       let displayName = 'RELIC';
       let tooltipText = `RELIC SLOT ${i}`;
 
       if (item.isRelic) {
-        const typeNames = [
-          'Quantum Strike', 'Void Shield', 'Nebula Dash',
-          'Echo Core', 'Flux Overload', 'Last Stand'
-        ];
+        const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
         const typeName = typeNames[item.relicType] || 'Unknown Relic';
         displayName = `${typeName} +${item.relicValue}`;
         tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
       }
 
-      const sprite = this.add.sprite(x, y, 'ship').setInteractive().setScale(1.1);
+      // === РЕАЛЬНОЕ ИЗОБРАЖЕНИЕ РЕЛИКВИИ ===
+      const relicMap: Record<number, string> = {
+        0: 'quantum_strike',
+        1: 'void_shield',
+        2: 'nebula_dash',
+        3: 'echo_core',
+        4: 'flux_overload',
+        5: 'last_stand'
+      };
+
+      const relicKey = relicMap[item.relicType] || 'quantum_strike';
+
+      const sprite = this.add.sprite(x, y, relicKey)
+        .setInteractive()
+        .setScale(0.85)
+        .setDepth(4);
+
       (sprite as any).shopSlot = i;
 
       this.add.text(x, y + 82, displayName, { 
-        fontSize: '22px', 
-        fill: '#ffff00',
-        align: 'center',
-        wordWrap: { width: 165 }
+        fontSize: '22px', fill: '#ffff00', align: 'center', wordWrap: { width: 165 }
       }).setOrigin(0.5);
 
       this.add.text(x - 30, y + 128, 'BUY', { fontSize: '30px', fill: '#00ff00' })
@@ -209,8 +215,7 @@ private async loadPlayerShop() {
       this.shopSprites.push(sprite);
     }
 
-
-    // === AI OPPONENT GRID (вынесено из цикла) ===
+    // AI Grid
     this.aiGridSlots = [];
     const aiCenterX = 1640;
     const aiCenterY = 610;
@@ -228,9 +233,7 @@ private async loadPlayerShop() {
       const x = aiStartX + col * (aiSlotSize + aiHSpacing);
       const y = aiStartY + row * (aiSlotSize + aiVSpacing);
 
-      // Тёмный фон внутри AI слота
-      this.add.rectangle(x, y, aiSlotSize - 6, aiSlotSize - 6, 0x0a1122)
-        .setDepth(1);
+      this.add.rectangle(x, y, aiSlotSize - 6, aiSlotSize - 6, 0x0a1122).setDepth(1);
 
       const slot = this.add.image(x, y, 'slot_ai')
         .setInteractive()
@@ -242,6 +245,7 @@ private async loadPlayerShop() {
     }
 
     this.loadCurrentAI();
+
   } catch (e) { 
     console.error('loadPlayerShop error', e); 
   }
@@ -277,101 +281,52 @@ private async loadEquippedRelics() {
     this.equippedTexts.forEach(t => t.destroy());
     this.equippedTexts = [];
 
-for (let i = 0; i < 3; i++) {
-  const slot = this.equippedSlotRects[i];
-  if (!slot) continue;
+    for (let i = 0; i < 3; i++) {
+      const slot = this.equippedSlotRects[i];
+      if (!slot) continue;
 
-  const oldRect = slot.getData('equippedRect') as Phaser.GameObjects.GameObject;
-  if (oldRect) oldRect.destroy();
+      const oldSprite = slot.getData('equippedSprite') as Phaser.GameObjects.Sprite;
+      if (oldSprite) oldSprite.destroy();
 
-  if (this.equippedRelics[i] === 0) {
-    slot.setData('equippedRect', null);
-    continue;
-  }
-
-  const relicId = this.equippedRelics[i];
-  const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
-
-  const rect = this.add.rectangle(slot.x, slot.y, 108, 108, 0x112233)
-    .setStrokeStyle(6, 0xffff00)
-    .setInteractive()
-    .setDepth(15);
-
-  (rect as any).relicId = relicId;
-  (rect as any).isEquipped = true;
-  (rect as any).slotIndex = i;
-
-  slot.setData('equippedRect', rect);
-
-  const nameText = this.add.text(slot.x, slot.y + 87, relicData.name, { 
-    fontSize: '20px', fill: '#ffff00', align: 'center', wordWrap: { width: 135 }
-  }).setOrigin(0.5).setDepth(15);
-
-  this.equippedTexts.push(nameText);
-
-  // === DOUBLE CLICK (отдельная логика, без конфликта с drag) ===
-  let clickCount = 0;
-  rect.on('pointerdown', () => {
-    clickCount++;
-    if (clickCount === 2) {
-      this.unequipRelic(i);
-      clickCount = 0;
-    }
-    setTimeout(() => { clickCount = 0; }, 400);
-  });
-
-  // === DRAG (только для перемещения между слотами) ===
-  this.input.setDraggable(rect);
-
-  rect.on('dragstart', () => {
-    rect.setScale(1.15);
-    rect.setDepth(30);
-  });
-
-  rect.on('drag', (_: any, dragX: number, dragY: number) => {
-    rect.x = dragX;
-    rect.y = dragY;
-  });
-
-  rect.on('dragend', () => {
-    rect.setScale(1.0);
-
-    let droppedOnSlot = false;
-
-    for (let s = 0; s < 3; s++) {
-      if (s === i) continue;
-      const targetSlot = this.equippedSlotRects[s];
-      const dx = targetSlot.x - rect.x;
-      const dy = targetSlot.y - rect.y;
-
-      if (Math.sqrt(dx * dx + dy * dy) < 80) {
-        const temp = this.equippedRelics[i];
-        this.equippedRelics[i] = this.equippedRelics[s];
-        this.equippedRelics[s] = temp;
-
-        this.refreshRelics();
-        droppedOnSlot = true;
-        break;
+      if (this.equippedRelics[i] === 0) {
+        slot.setData('equippedSprite', null);
+        continue;
       }
+
+      const relicId = this.equippedRelics[i];
+      const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
+
+      const relicMap: Record<number, string> = {
+        0: 'quantum_strike',
+        1: 'void_shield',
+        2: 'nebula_dash',
+        3: 'echo_core',
+        4: 'flux_overload',
+        5: 'last_stand'
+      };
+
+      const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
+
+      const sprite = this.add.sprite(slot.x, slot.y, relicKey)
+        .setScale(0.80)
+        .setInteractive()
+        .setDepth(12);
+
+      (sprite as any).relicId = relicId;
+      (sprite as any).isEquipped = true;
+      (sprite as any).slotIndex = i;
+
+      slot.setData('equippedSprite', sprite);
+      this.equippedSprites.push(sprite);
+
+      // Tooltip
+      sprite.on('pointerover', () => {
+        this.showTooltip(slot.x + 60, slot.y - 45, 
+          `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
+        );
+      });
+      sprite.on('pointerout', () => this.hideTooltip());
     }
-
-    if (!droppedOnSlot) {
-      this.unequipRelic(i);
-    } else {
-      rect.x = this.equippedSlotRects[i].x;
-      rect.y = this.equippedSlotRects[i].y;
-    }
-  });
-
-  rect.on('pointerover', () => {
-    this.showTooltip(slot.x + 60, slot.y - 45, 
-      `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`
-    );
-  });
-  rect.on('pointerout', () => this.hideTooltip());
-
-  this.equippedSprites.push(rect);
-}
   } catch (e) {
     console.error('loadEquippedRelics error', e);
   }
@@ -454,7 +409,7 @@ private async loadCurrentAI() {
       const ship = this.add.sprite(slot.x, slot.y, shipKey)
         .setScale(style.scale * 0.30)
         .setInteractive()
-        .setDepth(6);
+        .setDepth(8);
 
       (ship as any).unit = unit;
       slot.setData('aiSprite', ship);
@@ -1224,6 +1179,13 @@ preload() {
   this.load.image('mechanoid_dreadnought', 'assets/units/portraits/mechanoid_dreadnought.png');
   this.load.image('mechanoid_droneswarm', 'assets/units/portraits/mechanoid_droneswarm.png');
 
+  // === РЕЛИКВИИ ===
+this.load.image('quantum_strike', 'assets/relics/quantum_strike.png');
+this.load.image('void_shield', 'assets/relics/void_shield.png');
+this.load.image('nebula_dash', 'assets/relics/nebula_dash.png');
+this.load.image('echo_core', 'assets/relics/echo_core.png');
+this.load.image('flux_overload', 'assets/relics/flux_overload.png');
+this.load.image('last_stand', 'assets/relics/last_stand.png');
   // Временные эффекты (пока используем примитивы)
 }
 
