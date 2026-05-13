@@ -22,6 +22,9 @@ export default class BootScene extends Phaser.Scene {
 
   preload() {
     console.log('✅ Preload завершён');
+    this.load.image('legendary_frame', 'assets/frames/legendary.png');
+this.load.image('rare_frame', 'assets/frames/rare.png');
+
   }
 
   create() {

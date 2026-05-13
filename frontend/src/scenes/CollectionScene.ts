@@ -1,6 +1,7 @@
 // @ts-nocheck
 // frontend/src/scenes/CollectionScene.ts
 import * as Phaser from 'phaser';
+import { UnitVisualFactory } from '../utils/UnitVisualFactory';
 
 export default class CollectionScene extends Phaser.Scene {
   private gameContract: any;
@@ -63,6 +64,49 @@ export default class CollectionScene extends Phaser.Scene {
     this.returnToScene = data.returnTo || 'PrepareScene';
     this.equippedRelicIds = data.equippedRelicIds || [];
   }
+
+
+  private createUnitSpriteWithFrame(
+  x: number, 
+  y: number, 
+  shipKey: string, 
+  rarity: number, 
+  scale: number = 1
+): Phaser.GameObjects.Container {
+  
+  const container = this.add.container(x, y);
+
+  // Фрейм (только для Rare и Legendary)
+  if (rarity === 2) {
+    const frame = this.add.image(0, 0, 'legendary_frame')
+      .setScale(scale * 1.15);
+    container.add(frame);
+  } else if (rarity === 1) {
+    const frame = this.add.image(0, 0, 'rare_frame')
+      .setScale(scale * 1.12);
+    container.add(frame);
+  }
+
+  // Сам корабль
+  const ship = this.add.sprite(0, 0, shipKey)
+    .setScale(scale);
+
+  container.add(ship);
+
+  // Лёгкая пульсация фрейма (для редких и легендарных)
+  if (rarity >= 1) {
+    this.tweens.add({
+      targets: container.first, // фрейм
+      scale: scale * (rarity === 2 ? 1.18 : 1.15),
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
+
+  return container;
+}
 
 create() {
   this.children.getAll().forEach(child => {
@@ -394,19 +438,24 @@ if (this.currentTab === 'units') {
   const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
   const isSelected = this.selectedUnitIds.includes(item.id);
 
-  sprite = this.add.sprite(x, y, shipKey)
-    .setScale(0.20)
-    .setInteractive()
-    .setDepth(8);                    // ← ВОТ ЭТА СТРОКА ДОБАВЛЕНА
+  // === НОВАЯ ВЕРСИЯ С ФРЕЙМОМ РЕДКОСТИ ===
+  const unitContainer = UnitVisualFactory.createUnitWithFrame(
+    this,
+    x, y,
+    shipKey,
+    item.unit.rarity,
+    0.20
+  );
 
-  (sprite as any).unitId = item.id;
-  (sprite as any).isUnit = true;
+  const ship = unitContainer.last as Phaser.GameObjects.Sprite;
+  (ship as any).unitId = item.id;
+  (ship as any).isUnit = true;
 
   let clickCount = 0;
-  sprite.on('pointerdown', () => {
+  ship.on('pointerdown', () => {
     clickCount++;
     if (clickCount === 1) {
-      this.toggleUnitSelection(item.id, sprite);
+      this.toggleUnitSelection(item.id, ship);
     }
     if (clickCount === 2) {
       const prepareScene = this.scene.get('PrepareScene') as any;
@@ -423,8 +472,11 @@ if (this.currentTab === 'units') {
     setTimeout(() => { clickCount = 0; }, 500);
   });
 
-  sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
-  sprite.on('pointerout', () => this.hideTooltip());
+  ship.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+  ship.on('pointerout', () => this.hideTooltip());
+
+  this.gridContainer!.add(unitContainer);
+  this.unitSprites.push(unitContainer);
 } else {
       const isSelected = this.selectedRelicIds.includes(item.id);
       const borderColor = isSelected ? 0x00ff00 : 0xffaa00;

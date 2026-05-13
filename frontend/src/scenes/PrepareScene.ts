@@ -851,6 +851,8 @@ private addGameUI() {
 
 // === TEAM GRID (слоты теперь только визуальные, интерактивность убрана — события обрабатывают корабли) ===
 this.gridSlots = [];
+// === TEAM GRID ===
+this.gridSlots = [];
 this.teamSlotOccupants = new Array(8).fill(null);
 const teamCenterX = 1020;
 const teamCenterY = 560;
@@ -871,12 +873,12 @@ for (let i = 0; i < 8; i++) {
   this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
 
   const slot = this.add.image(x, y, 'slot_team')
+    .setInteractive()
     .setDisplaySize(slotSize, slotSize)
     .setDepth(10);
-    // .setInteractive() УБРАНО — слот больше не перехватывает события
 
   this.gridSlots.push(slot);
-  // addButtonEffects(slot) УБРАНО — hover эффект теперь только на кораблях
+  this.addButtonEffects(slot);   // ← возвращаем hover-эффект для пустых слотов
 }
 
   // === ВНЕШНЯЯ РАМКА ===
@@ -1072,10 +1074,11 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const ship = this.add.sprite(slot.x, slot.y, shipKey)
       .setScale(style.scale * 0.42)
       .setInteractive()
-      .setDepth(8);                    // ← ИСПРАВЛЕНО: было 6, теперь 8
+      .setDepth(8);
 
     (ship as any).tokenId = tokenId;
     (ship as any).unit = unit;
+    (ship as any).teamSlotIndex = slotIndex;
 
     this.tweens.add({
       targets: ship,
@@ -1087,9 +1090,41 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     });
 
     this.teamSlotOccupants[slotIndex] = ship;
+    slot.disableInteractive();   // слот больше не перехватывает события
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
 
-    // Двойной клик — удаление
+    // === ПРАВИЛЬНЫЙ HOVER НА РАМКЕ (через displayWidth / displayHeight) ===
+    const originalWidth = slot.displayWidth;
+    const originalHeight = slot.displayHeight;
+    const hoverWidth = originalWidth * 1.08;
+    const hoverHeight = originalHeight * 1.08;
+
+    ship.on('pointerover', () => {
+      this.tweens.add({
+        targets: slot,
+        displayWidth: hoverWidth,
+        displayHeight: hoverHeight,
+        duration: 120,
+        ease: 'Sine.easeOut'
+      });
+
+      const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
+      this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
+    });
+
+    ship.on('pointerout', () => {
+      this.tweens.add({
+        targets: slot,
+        displayWidth: originalWidth,
+        displayHeight: originalHeight,
+        duration: 120,
+        ease: 'Sine.easeOut'
+      });
+
+      this.hideTooltip();
+    });
+
+    // === DOUBLE CLICK ===
     ship.on('pointerdown', () => {
       const now = Date.now();
       if (now - this.lastClickTime < 300) {
@@ -1103,6 +1138,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     ship.on('dragstart', () => {
       ship.setScale(style.scale * 1.15);
       ship.setDepth(30);
+      slot.setDisplaySize(originalWidth, originalHeight);
     });
 
     ship.on('drag', (_: any, dragX: number, dragY: number) => {
@@ -1112,7 +1148,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
     ship.on('dragend', () => {
       ship.setScale(style.scale);
-      ship.setDepth(8);                    // ← ИСПРАВЛЕНО: возвращаем depth 8
+      ship.setDepth(8);
 
       let droppedOnSlot = false;
 
@@ -1142,23 +1178,22 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       }
     });
 
-    ship.on('pointerover', () => {
-      const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
-      this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
-    });
-
-    ship.on('pointerout', () => this.hideTooltip());
-
   } catch (e) {
     console.error(`Юнит ${tokenId} не существует, удаляем из команды`);
     this.team = this.team.filter(id => id !== tokenId);
     this.teamSlotOccupants[slotIndex] = null;
+    const slot = this.gridSlots[slotIndex];
+if (slot) {
+  slot.setInteractive();
+  this.addButtonEffects(slot);
+}
 
     if (this.teamCounterText) {
       this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
     }
   }
 }
+
 
   private enableDoubleClickRemoveOnTeamUnit(rect: any, tokenId: number) {
     rect.on('pointerdown', () => {
@@ -1247,7 +1282,9 @@ this.load.image('nebula_dash', 'assets/relics/nebula_dash.png');
 this.load.image('echo_core', 'assets/relics/echo_core.png');
 this.load.image('flux_overload', 'assets/relics/flux_overload.png');
 this.load.image('last_stand', 'assets/relics/last_stand.png');
-  // Временные эффекты (пока используем примитивы)
+this.load.image('legendary_frame', 'assets/frames/legendary.png');
+this.load.image('rare_frame', 'assets/frames/rare.png');
+  
 }
 
 create() {
@@ -1363,6 +1400,49 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.0
       ease: 'Sine.easeOut'
     });
   });
+}
+
+
+private createUnitSpriteWithFrame(
+  x: number, 
+  y: number, 
+  shipKey: string, 
+  rarity: number, 
+  scale: number = 1
+): Phaser.GameObjects.Container {
+  
+  const container = this.add.container(x, y);
+
+  // Фрейм (только для Rare и Legendary)
+  if (rarity === 2) {
+    const frame = this.add.image(0, 0, 'legendary_frame')
+      .setScale(scale * 1.15);
+    container.add(frame);
+  } else if (rarity === 1) {
+    const frame = this.add.image(0, 0, 'rare_frame')
+      .setScale(scale * 1.12);
+    container.add(frame);
+  }
+
+  // Сам корабль
+  const ship = this.add.sprite(0, 0, shipKey)
+    .setScale(scale);
+
+  container.add(ship);
+
+  // Лёгкая пульсация фрейма (для редких и легендарных)
+  if (rarity >= 1) {
+    this.tweens.add({
+      targets: container.first, // фрейм
+      scale: scale * (rarity === 2 ? 1.18 : 1.15),
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
+
+  return container;
 }
 
 

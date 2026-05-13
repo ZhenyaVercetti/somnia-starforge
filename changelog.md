@@ -1,5 +1,27 @@
 # Changelog — Somnia StarForge
 
+## v1.6.2 — 13.05.2026 (Frontend Depth + Relic Drag Fix)
+
+### Исправления (критические)
+- Полностью переработана система глубин в PrepareScene и CollectionScene
+  - Корабли и реликвии теперь всегда на depth 8
+  - Слоты/рамки (Team, Shop, Equipped, AI) — только визуальные на depth 10 (интерактивность отключена)
+  - Во время drag объекты поднимаются на depth 30
+  - Tooltip всегда на depth 100
+- Почищены hover, drag, double-click на юнитах в команде (PrepareScene)
+- Добавлен полноценный drag + click для equipped relics:
+  - Короткий клик = unequip
+  - Перетаскивание на другой слот = свап
+  - Перетаскивание за пределы = unequip + возврат в коллекцию
+- Удалены конфликтующие `.setInteractive()` и `addButtonEffects` со слотов команды и equipped
+
+### Технические улучшения
+- `this.input.topOnly = false` в PrepareScene
+- Единообразная обработка dragend с проверкой расстояния
+- Стабильная работа `setDraggable` + `dragstart`/`drag`/`dragend` на relic спрайтах
+
+**Статус:** v1.6.1 → v1.6.2 (frontend polish завершён). Готовы к финальному тестированию и переходу к доработке BattleScene.
+
 ## v1.6.1 — 13.05.2026
 
 ### Визуальный апгрейд
