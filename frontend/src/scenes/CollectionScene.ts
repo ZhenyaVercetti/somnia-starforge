@@ -1,7 +1,7 @@
 // @ts-nocheck
 // frontend/src/scenes/CollectionScene.ts
 import * as Phaser from 'phaser';
-import { UnitVisualFactory } from '../utils/UnitVisualFactory';
+
 
 export default class CollectionScene extends Phaser.Scene {
   private gameContract: any;
@@ -438,24 +438,19 @@ if (this.currentTab === 'units') {
   const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
   const isSelected = this.selectedUnitIds.includes(item.id);
 
-  // === НОВАЯ ВЕРСИЯ С ФРЕЙМОМ РЕДКОСТИ ===
-  const unitContainer = UnitVisualFactory.createUnitWithFrame(
-    this,
-    x, y,
-    shipKey,
-    item.unit.rarity,
-    0.20
-  );
+  sprite = this.add.sprite(x, y, shipKey)
+    .setScale(0.20)
+    .setInteractive()
+    .setDepth(8);                    // ← ВОТ ЭТА СТРОКА ДОБАВЛЕНА
 
-  const ship = unitContainer.last as Phaser.GameObjects.Sprite;
-  (ship as any).unitId = item.id;
-  (ship as any).isUnit = true;
+  (sprite as any).unitId = item.id;
+  (sprite as any).isUnit = true;
 
   let clickCount = 0;
-  ship.on('pointerdown', () => {
+  sprite.on('pointerdown', () => {
     clickCount++;
     if (clickCount === 1) {
-      this.toggleUnitSelection(item.id, ship);
+      this.toggleUnitSelection(item.id, sprite);
     }
     if (clickCount === 2) {
       const prepareScene = this.scene.get('PrepareScene') as any;
@@ -472,11 +467,8 @@ if (this.currentTab === 'units') {
     setTimeout(() => { clickCount = 0; }, 500);
   });
 
-  ship.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
-  ship.on('pointerout', () => this.hideTooltip());
-
-  this.gridContainer!.add(unitContainer);
-  this.unitSprites.push(unitContainer);
+  sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+  sprite.on('pointerout', () => this.hideTooltip());
 } else {
       const isSelected = this.selectedRelicIds.includes(item.id);
       const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
