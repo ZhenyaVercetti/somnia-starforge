@@ -459,6 +459,7 @@ private async loadCurrentAI() {
       (ship as any).unit = unit;
       slot.setData('aiSprite', ship);
       this.aiSprites.push(ship);
+      
 
       const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
       ship.on('pointerover', () => this.showTooltip(slot.x + 55, slot.y - 45, tooltipText));
@@ -1054,12 +1055,21 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
 
     const ship = this.add.sprite(slot.x, slot.y, shipKey)
-      .setScale(style.scale * 0.46)
+      .setScale(style.scale * 0.42)
       .setInteractive()
       .setDepth(6);
 
     (ship as any).tokenId = tokenId;
     (ship as any).unit = unit;
+    // Пульсация
+this.tweens.add({
+  targets: ship,
+  scale: style.scale * 0.44,
+  duration: 1900,
+  yoyo: true,
+  repeat: -1,
+  ease: 'Sine.easeInOut'
+});
 
     this.teamSlotOccupants[slotIndex] = ship;
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });

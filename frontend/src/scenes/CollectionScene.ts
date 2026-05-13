@@ -10,6 +10,7 @@ export default class CollectionScene extends Phaser.Scene {
   private publicClient: any;
   private equippedRelicIds: number[] = [];
   private lastClickTime = 0;
+  private previewShip: Phaser.GameObjects.Sprite | null = null;
 
   private currentTab: 'units' | 'relics' = 'units';
   private unitsData: any[] = [];
@@ -34,6 +35,24 @@ export default class CollectionScene extends Phaser.Scene {
   constructor() {
     super({ key: 'CollectionScene' });
   }
+
+  private getShipKey(faction: number, unitClass: number): string {
+  const map: Record<string, string> = {
+    '0_0': 'emperial_fighter',
+    '0_1': 'emperial_cruiser',
+    '0_2': 'emperial_dreadnought',
+    '0_3': 'emperial_droneswarm',
+    '1_0': 'voidborn_fighter',
+    '1_1': 'voidborn_cruiser',
+    '1_2': 'voidborn_dreadnought',
+    '1_3': 'voidborn_droneswarm',
+    '2_0': 'mechanoid_fighter',
+    '2_1': 'mechanoid_cruiser',
+    '2_2': 'mechanoid_dreadnought',
+    '2_3': 'mechanoid_droneswarm',
+  };
+  return map[`${faction}_${unitClass}`] || 'emperial_fighter';
+}
 
   init(data: any) {
     this.gameContract = data.gameContract;
@@ -372,13 +391,11 @@ private refreshGrid() {
     let sprite: Phaser.GameObjects.GameObject;
 
     if (this.currentTab === 'units') {
-      const rarityColor = item.unit.rarity === 2 ? 0xffee00 : item.unit.rarity === 1 ? 0x00ff77 : 0x00ccff;
+      const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
       const isSelected = this.selectedUnitIds.includes(item.id);
-      const borderColor = isSelected ? 0x00ff00 : rarityColor;
-      const strokeWidth = isSelected ? 6 : 4;
 
-      sprite = this.add.rectangle(x, y, 52, 52, 0x112233)
-        .setStrokeStyle(strokeWidth, borderColor)
+      sprite = this.add.sprite(x, y, shipKey)
+        .setScale(0.20)
         .setInteractive();
 
       (sprite as any).unitId = item.id;
@@ -407,6 +424,7 @@ private refreshGrid() {
 
       sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
       sprite.on('pointerout', () => this.hideTooltip());
+
     } else {
       const isSelected = this.selectedRelicIds.includes(item.id);
       const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
@@ -430,18 +448,16 @@ private refreshGrid() {
           if (prepare && typeof prepare.equipSingleRelic === 'function') {
             const success = prepare.equipSingleRelic(item.id);
             if (success) {
-              // Чистим выбор, чтобы не появлялась панель «Выбрано»
               const idx = this.selectedRelicIds.indexOf(item.id);
               if (idx > -1) this.selectedRelicIds.splice(idx, 1);
               this.showFloatingMultiSelectPanel();
-
               this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
               this.refreshGrid();
             }
           }
           clickCount = 0;
         }
-                setTimeout(() => { clickCount = 0; }, 450);
+        setTimeout(() => { clickCount = 0; }, 450);
       });
 
       sprite.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
@@ -582,13 +598,22 @@ setTimeout(() => this.refreshGrid(), 150); // перестраховка
 }
 
 private showPreview(id: number, isUnit: boolean) {
+  if (this.previewShip) {
+    this.previewShip.destroy(true);
+    this.previewShip = null;
+  }
+
+  if (this.previewTexts && this.previewTexts.length > 0) {
+    this.previewTexts.forEach(t => {
+      if (t && t.destroy) t.destroy(true);
+    });
+    this.previewTexts = [];
+  }
+
   if (this.previewRect) {
     this.previewRect.setVisible(true);
     this.previewRect.setFillStyle(0x112233);
   }
-
-  this.previewTexts.forEach(t => t.destroy());
-  this.previewTexts = [];
 
   const wrapWidth = 230;
 
@@ -597,20 +622,31 @@ private showPreview(id: number, isUnit: boolean) {
     if (!unitData) return;
     const unit = unitData.unit;
 
-    const t1 = this.add.text(775, 355, `ID: ${id}`, { 
-      fontSize: '26px', fill: '#ffff00', wordWrap: { width: wrapWidth }
+    const shipKey = this.getShipKey(unit.faction, unit.unitClass);
+    this.previewShip = this.add.sprite(775, 420, shipKey)
+      .setScale(0.6)
+      .setDepth(8);
+
+// Пульсация
+this.tweens.add({
+  targets: this.previewShip,
+  scale: 0.62,
+  duration: 1800,
+  yoyo: true,
+  repeat: -1,
+  ease: 'Sine.easeInOut'
+});
+
+    const t1 = this.add.text(775, 555, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, { 
+      fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
     }).setOrigin(0.5).setDepth(6);
     this.previewTexts.push(t1);
 
-    const t2 = this.add.text(775, 405, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, { 
-      fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
+    const t2 = this.add.text(775, 605, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, { 
+      fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
     }).setOrigin(0.5).setDepth(6);
     this.previewTexts.push(t2);
 
-    const t3 = this.add.text(775, 465, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, { 
-      fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
-    }).setOrigin(0.5).setDepth(6);
-    this.previewTexts.push(t3);
   } else {
     const relicData = this.relicsData.find(r => r.id === id)?.relic;
     if (relicData) {
