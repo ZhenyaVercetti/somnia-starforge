@@ -90,15 +90,21 @@ private removeFromTeam(slotIndex: number) {
 
   // === ВОЗОБНОВЛЯЕМ ПУЛЬСАЦИЮ ПУСТОЙ ЯЧЕЙКИ ===
   const teamSlot = this.gridSlots[slotIndex];
-  if (teamSlot) {
-    teamSlot.setInteractive();
+if (teamSlot) {
+  teamSlot.setInteractive();
 
-    // Если вдруг остался старый tween — останавливаем
-    if ((teamSlot as any).pulseTween) {
-      (teamSlot as any).pulseTween.stop();
-      (teamSlot as any).pulseTween = null;
-    }
-  }
+
+  const pulse = this.tweens.add({
+    targets: teamSlot,
+    scaleX: 1.03,
+    scaleY: 1.03,
+    duration: 1800,
+    yoyo: true,
+    repeat: -1,
+    ease: 'Sine.easeInOut'
+  });
+  (teamSlot as any).pulseTween = pulse;
+}
 
   // Возвращаем ТОЛЬКО этот юнит в коллекцию
   const collectionScene = this.scene.get('CollectionScene') as any;
@@ -480,14 +486,15 @@ private async loadCurrentAI() {
       const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
 
       // === ФАБРИКА (фрейм + пульсация + корабль) ===
-      const container = UnitVisualFactory.createUnitWithFrame(
-        this,
-        slot.x,
-        slot.y,
-        shipKey,
-        Number(unit.rarity),
-        style.scale * 0.30
-      );
+const container = UnitVisualFactory.createUnitWithFrame(
+  this,
+  slot.x,
+  slot.y,
+  shipKey,
+  Number(unit.rarity),
+  style.scale * 0.30,
+  0.85          // ← корабль на 9% меньше рамки
+);
 
       const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
       if (!ship) {
@@ -556,23 +563,30 @@ private async autoSelectTeam() {
   }
 }
 
-  private clearTeam() {
-    if (this.teamOperationLock) return;
+private clearTeam() {
+  if (this.teamOperationLock) return;
 
-    for (let i = 0; i < this.teamSlotOccupants.length; i++) {
-      const occupant = this.teamSlotOccupants[i];
-      if (occupant) {
-        occupant.destroy();
-        this.teamSlotOccupants[i] = null;
-      }
+  for (let i = 0; i < this.teamSlotOccupants.length; i++) {
+    const occupant = this.teamSlotOccupants[i];
+    if (occupant) {
+      occupant.destroy();
+      this.teamSlotOccupants[i] = null;
     }
-
-    this.team = [];
-    this.originalPositions.clear();
-    if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-
-    console.log('✅ Команда полностью очищена (визуально + данные)');
   }
+
+  this.team = [];
+  this.originalPositions.clear();
+  if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
+
+  // === ВАЖНО: возвращаем интерактивность всем пустым слотам team ===
+  this.gridSlots.forEach(slot => {
+    if (slot) {
+      slot.setInteractive();
+    }
+  });
+
+  console.log('✅ Команда полностью очищена (визуально + данные + интерактивность восстановлена)');
+}
 
   private async updatePlayerProfile() {
     if (!this.account || !this.gameContract) return;
@@ -918,32 +932,15 @@ for (let i = 0; i < 8; i++) {
 
   this.gridSlots.push(slot);
 
-  // === ПУЛЬСАЦИЯ ТОЛЬКО ПРИ ХОВЕРЕ (плавная, без дёрганья) ===
+  // === ХОВЕР РАМКИ — ТОЧНО КАК НА AI TEAM (displayWidth/Height, 1.08x, чистый revert) ===
+  this.addButtonEffects(slot);
+
+  // Tooltip + открытие коллекции
   slot.on('pointerover', () => {
-    if ((slot as any).pulseTween) {
-      (slot as any).pulseTween.stop();
-    }
-
-    const pulse = this.tweens.add({
-      targets: slot,
-      scaleX: 1.06,
-      scaleY: 1.06,
-      duration: 1250,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-    (slot as any).pulseTween = pulse;
-
     this.showTooltip(slot.x + 80, slot.y - 65, "Select a ship in your collection");
   });
 
   slot.on('pointerout', () => {
-    if ((slot as any).pulseTween) {
-      (slot as any).pulseTween.stop();
-      (slot as any).pulseTween = null;
-    }
-    slot.setScale(1);
     this.hideTooltip();
   });
 
@@ -1138,9 +1135,16 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const style = this.getRarityTintAndScale(unit.rarity);
     const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
     const rarityNum = Number(unit.rarity);
-    const baseScale = style.scale * 0.42;
-
-    const container = UnitVisualFactory.createUnitWithFrame(this, slot.x, slot.y, shipKey, rarityNum, baseScale);
+const baseScale = style.scale * 0.42;
+const container = UnitVisualFactory.createUnitWithFrame(
+  this, 
+  slot.x, 
+  slot.y, 
+  shipKey, 
+  rarityNum, 
+  baseScale, 
+  0.75          // ← корабль на 9% меньше рамки
+);
     const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
 
     if (!ship) {
@@ -1156,57 +1160,36 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     container.setDepth(8);
 
     this.teamSlotOccupants[slotIndex] = container;
+
+    // Полностью останавливаем пульсацию пустой ячейки
+    if ((slot as any).pulseTween) {
+      (slot as any).pulseTween.stop();
+      (slot as any).pulseTween = null;
+    }
     slot.disableInteractive();
 
-    // Останавливаем пульсацию ячейки
-if (this.slotPulses[slotIndex]) {
-  this.slotPulses[slotIndex].pause();
-}
-slot.disableInteractive();
-
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
-    // Останавливаем пульсацию и делаем слот неинтерактивным
-if ((slot as any).pulseTween) {
-  (slot as any).pulseTween.stop();
-  (slot as any).pulseTween = null;
-}
-slot.disableInteractive();
 
-    // === ЛЁГКАЯ ПУЛЬСАЦИЯ КОРАБЛЯ (как было раньше) ===
+    // === ПРОСТАЯ МЯГКАЯ ПУЛЬСАЦИЯ ===
     this.tweens.add({
       targets: ship,
-      scale: baseScale * 1.04,
-      duration: 2100,
+      scale: ship.scale * 1.01,
+      duration: 2500,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
-
+        
     const originalWidth = slot.displayWidth;
     const originalHeight = slot.displayHeight;
-    const hoverWidth = originalWidth * 1.08;
-    const hoverHeight = originalHeight * 1.08;
 
+    // === ЧИСТЫЙ ХОВЕР — ТОЛЬКО ТУЛТИП, БЕЗ ИЗМЕНЕНИЯ РАЗМЕРА СЛОТА ===
     ship.on('pointerover', () => {
-      this.tweens.add({
-        targets: slot,
-        displayWidth: hoverWidth,
-        displayHeight: hoverHeight,
-        duration: 120,
-        ease: 'Sine.easeOut'
-      });
       const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
       this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
     });
 
     ship.on('pointerout', () => {
-      this.tweens.add({
-        targets: slot,
-        displayWidth: originalWidth,
-        displayHeight: originalHeight,
-        duration: 120,
-        ease: 'Sine.easeOut'
-      });
       this.hideTooltip();
     });
 
@@ -1266,12 +1249,22 @@ slot.disableInteractive();
     const slot = this.gridSlots[slotIndex];
     if (slot) {
       slot.setInteractive();
-      this.addButtonEffects(slot);
+      if (!(slot as any).pulseTween) {
+        const pulse = this.tweens.add({
+          targets: slot,
+          scaleX: 1.03,
+          scaleY: 1.03,
+          duration: 1300,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
+        (slot as any).pulseTween = pulse;
+      }
     }
     if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
   }
 }
-
 
 
   init(data: any) {
