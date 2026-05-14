@@ -1136,6 +1136,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
     const rarityNum = Number(unit.rarity);
 const baseScale = style.scale * 0.42;
+const finalShipScale = baseScale * 0.75;
 const container = UnitVisualFactory.createUnitWithFrame(
   this, 
   slot.x, 
@@ -1173,13 +1174,13 @@ const container = UnitVisualFactory.createUnitWithFrame(
     // === ПРОСТАЯ МЯГКАЯ ПУЛЬСАЦИЯ ===
     this.tweens.add({
       targets: ship,
-      scale: ship.scale * 1.01,
+      scale: ship.scale * 1.04,
       duration: 2500,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
-        
+
     const originalWidth = slot.displayWidth;
     const originalHeight = slot.displayHeight;
 
@@ -1216,7 +1217,7 @@ const container = UnitVisualFactory.createUnitWithFrame(
 
     ship.on('dragend', () => {
       container.setDepth(8);
-      ship.setScale(baseScale);
+ship.setScale(finalShipScale);
 
       let droppedOnSlot = false;
       for (let s = 0; s < 8; s++) {

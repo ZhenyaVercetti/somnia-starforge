@@ -633,7 +633,15 @@ private showPreview(id: number, isUnit: boolean) {
     const shipKey = this.getShipKey(unit.faction, unit.unitClass);
 
     // === ФАБРИКА С РАМКОЙ ===
-    const container = UnitVisualFactory.createUnitWithFrame(this, 775, 420, shipKey, unit.rarity, 0.6);
+    const container = UnitVisualFactory.createUnitWithFrame(
+      this, 
+      775, 
+      445, 
+      shipKey, 
+      unit.rarity, 
+      0.72,           // масштаб рамки
+      1.0           // масштаб корабля (меньше рамки)
+    );
     container.setDepth(15);
     this.children.bringToTop(container);
 
@@ -641,27 +649,31 @@ private showPreview(id: number, isUnit: boolean) {
 
     const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
     ship.setDepth(16);
+// === НЕЗАВИСИМЫЙ РАЗМЕР КОРАБЛЯ (фиксированный) ===
+    ship.setScale(0.56);   // ← вот это главный размер корабля (меняй только это число)
 
-    // Лёгкая пульсация
+    // === МЯГКАЯ ПУЛЬСАЦИЯ (как в team) ===
+    const currentShipScale = ship.scale;
     this.tweens.add({
       targets: ship,
-      scale: 0.62,
-      duration: 1800,
+      scale: currentShipScale * 1.02,
+      duration: 2800,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
 
-    const t1 = this.add.text(775, 555, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
+// === ТЕКСТ (опущен ещё на 15px) ===
+    const t1 = this.add.text(775, 590, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
       fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
     }).setOrigin(0.5).setDepth(20);
     this.previewTexts.push(t1);
 
-    const t2 = this.add.text(775, 605, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
+    const t2 = this.add.text(775, 640, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
       fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
     }).setOrigin(0.5).setDepth(20);
     this.previewTexts.push(t2);
-
+    
   } else {
     const relicData = this.relicsData.find(r => r.id === id)?.relic;
     if (relicData) {
