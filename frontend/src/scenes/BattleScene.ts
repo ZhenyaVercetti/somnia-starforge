@@ -81,6 +81,21 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('voidborn_dreadnought', 'assets/units/portraits/voidborn_dreadnought.png');
     this.load.image('voidborn_droneswarm', 'assets/units/portraits/voidborn_droneswarm.png');
     this.load.image('voidborn_fighter', 'assets/units/portraits/voidborn_fighter.png');
+    // === УНИЧТОЖЕННЫЕ ВЕРСИИ КОРАБЛЕЙ ===
+this.load.image('emperial_fighter_destroyed', 'assets/units/destroyed/emperial_fighter_destroyed.png');
+this.load.image('emperial_cruiser_destroyed', 'assets/units/destroyed/emperial_cruiser_destroyed.png');
+this.load.image('emperial_dreadnought_destroyed', 'assets/units/destroyed/emperial_dreadnought_destroyed.png');
+this.load.image('emperial_droneswarm_destroyed', 'assets/units/destroyed/emperial_droneswarm_destroyed.png');
+
+this.load.image('voidborn_fighter_destroyed', 'assets/units/destroyed/voidborn_fighter_destroyed.png');
+this.load.image('voidborn_cruiser_destroyed', 'assets/units/destroyed/voidborn_cruiser_destroyed.png');
+this.load.image('voidborn_dreadnought_destroyed', 'assets/units/destroyed/voidborn_dreadnought_destroyed.png');
+this.load.image('voidborn_droneswarm_destroyed', 'assets/units/destroyed/voidborn_droneswarm_destroyed.png');
+
+this.load.image('mechanoid_fighter_destroyed', 'assets/units/destroyed/mechanoid_fighter_destroyed.png');
+this.load.image('mechanoid_cruiser_destroyed', 'assets/units/destroyed/mechanoid_cruiser_destroyed.png');
+this.load.image('mechanoid_dreadnought_destroyed', 'assets/units/destroyed/mechanoid_dreadnought_destroyed.png');
+this.load.image('mechanoid_droneswarm_destroyed', 'assets/units/destroyed/mechanoid_droneswarm_destroyed.png');
 
     // Новая платформа с гридом
     this.load.image('arena_platform', 'assets/background/arena_platform.png');
@@ -189,12 +204,15 @@ private createArenaPlatform() {
 private setupTeams() {
   this.playerShips = []; this.aiShips = [];
   this.playerShadows = []; this.aiShadows = [];
-  this.playerHPLabels = []; this.aiHPLabels = [];
+  this.playerHPLabels = []; this.aiHPLabels = [];   // ← переиспользуем массив под health bars
+
+  const barWidth = 52;
+  const barHeight = 5;
 
   // === Игрок ===
   const playerBaseX = 470;
   const playerBaseY = 385;
-  const playerRowShiftX = 20;     // уменьшил угол
+  const playerRowShiftX = 20;
   const playerSpacingY = 118;
   const playerColSpacing = 122;
 
@@ -205,28 +223,39 @@ private setupTeams() {
 
     let x = playerBaseX + (3 - row) * playerRowShiftX + col * playerColSpacing;
     if (col === 0) x -= 40;
+    if (col === 1) x += 18;
 
     const y = playerBaseY + row * playerSpacingY + depthFactor * 28;
 
     const unit = this.playerUnitsData[i] || { faction: 0, unitClass: 0 };
     const key = this.getShipKey(unit.faction, unit.unitClass);
+    const baseScale = 0.545 - depthFactor * 0.05;
+
     const ship = this.add.sprite(x, y, key)
-      .setScale(0.45 - depthFactor * 0.05)
+      .setScale(baseScale)
       .setDepth(y)
       .setFlipX(true);
 
     const shadow = this.add.sprite(x + 9, y + 22, key)
-      .setScale((0.45 - depthFactor * 0.05) * 0.52)
+      .setScale(baseScale * 0.52)
       .setAlpha(0.26).setTint(0x000000).setDepth(y - 1)
       .setFlipX(true);
     this.playerShadows.push(shadow);
 
     this.playerShips.push(ship);
 
-    const hpLabel = this.add.text(x, y - 55, `HP ${this.playerMaxHp[i] || 100}`, {
-      fontSize: '15px', color: '#00ffcc', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(50);
-    this.playerHPLabels.push(hpLabel);
+    // === Health Bar (поверх корабля) ===
+    const barY = y - 42;
+    const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
+      .setDepth(y + 20)
+      .setVisible(false);
+    const barFill = this.add.rectangle(x, barY, 52, 5, 0x00ff88)
+      .setDepth(y + 21)
+      .setVisible(false);
+
+    (barFill as any).bg = barBg;
+    (barFill as any).maxHp = this.playerMaxHp[i] || 100;
+    this.playerHPLabels.push(barFill);
 
     this.tweens.add({
       targets: ship, y: y - 3, scale: ship.scaleX * 1.015,
@@ -247,38 +276,47 @@ private setupTeams() {
     const depthFactor = row * 0.10;
 
     let x = aiBaseX - (3 - row) * aiRowShiftX + col * aiColSpacing;
-    if (col === 0) x -= 40;
+    if (col === 0) x -= 18;
+    if (col === 1) x += 40;
 
     const y = aiBaseY + row * aiSpacingY + depthFactor * 28;
 
     const unit = this.aiUnitsData[i] || { faction: 1, unitClass: 0 };
     const key = this.getShipKey(unit.faction, unit.unitClass);
+    const baseScale = 0.545 - depthFactor * 0.05;
+
     const ship = this.add.sprite(x, y, key)
-      .setScale(0.45 - depthFactor * 0.05)
+      .setScale(baseScale)
       .setDepth(y)
       .setFlipX(false);
 
     const shadow = this.add.sprite(x + 9, y + 22, key)
-      .setScale((0.45 - depthFactor * 0.05) * 0.52)
+      .setScale(baseScale * 0.52)
       .setAlpha(0.26).setTint(0x000000).setDepth(y - 1)
       .setFlipX(false);
     this.aiShadows.push(shadow);
 
     this.aiShips.push(ship);
 
-    const hpLabel = this.add.text(x, y - 55, `HP ${this.aiMaxHp[i] || 100}`, {
-      fontSize: '15px', color: '#ff88aa', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(50);
-    this.aiHPLabels.push(hpLabel);
+    // === Health Bar (поверх корабля) ===
+    const barY = y - 42;
+    const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
+      .setDepth(y + 20)
+      .setVisible(false);
+    const barFill = this.add.rectangle(x, barY, 52, 5, 0xff6666)
+      .setDepth(y + 21)
+      .setVisible(false);
 
+    (barFill as any).bg = barBg;
+    (barFill as any).maxHp = this.aiMaxHp[i] || 100;
+    this.aiHPLabels.push(barFill);
+    
     this.tweens.add({
       targets: ship, y: y - 3, scale: ship.scaleX * 1.015,
       duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
     });
   }
 }
-
-
 
 
   private getShipKey(faction: number, unitClass: number): string {
@@ -298,6 +336,27 @@ private setupTeams() {
     };
     return map[`${faction}_${unitClass}`] || 'emperial_fighter';
   }
+
+  private getDestroyedShipKey(faction?: number, unitClass?: number): string | null {
+  if (faction === undefined || unitClass === undefined) return null;
+
+  const map: Record<string, string> = {
+    '0_0': 'emperial_fighter_destroyed',
+    '0_1': 'emperial_cruiser_destroyed',
+    '0_2': 'emperial_dreadnought_destroyed',
+    '0_3': 'emperial_droneswarm_destroyed',
+    '1_0': 'voidborn_fighter_destroyed',
+    '1_1': 'voidborn_cruiser_destroyed',
+    '1_2': 'voidborn_dreadnought_destroyed',
+    '1_3': 'voidborn_droneswarm_destroyed',
+    '2_0': 'mechanoid_fighter_destroyed',
+    '2_1': 'mechanoid_cruiser_destroyed',
+    '2_2': 'mechanoid_dreadnought_destroyed',
+    '2_3': 'mechanoid_droneswarm_destroyed',
+  };
+  return map[`${faction}_${unitClass}`] || null;
+}
+
 
 private setupBattleLog() {
   this.logContainer = this.add.container(960, 915);
@@ -341,11 +400,11 @@ private animateEvent(event: BattleEvent) {
   const isPlayer = event.isPlayerSide;
   const attackers = isPlayer ? this.playerShips : this.aiShips;
   const targets = isPlayer ? this.aiShips : this.playerShips;
-  const targetLabels = isPlayer ? this.aiHPLabels : this.playerHPLabels;
+  const healthBars = isPlayer ? this.aiHPLabels : this.playerHPLabels;   // health bars
 
   const attacker = attackers[event.attackerIndex % attackers.length];
   const target = targets[event.targetIndex % targets.length];
-  const targetLabel = targetLabels[event.targetIndex % targetLabels.length];
+  const healthBar = healthBars[event.targetIndex % healthBars.length];
 
   if (!attacker || !target) return;
 
@@ -390,11 +449,41 @@ private animateEvent(event: BattleEvent) {
             });
           }
 
-          if (event.remainingHp <= 0) this.playExplosion(target.x, target.y);
+          // === HEALTH BAR ЛОГИКА ===
+          if (healthBar && event.remainingHp > 0 && event.remainingHp < (healthBar as any).maxHp) {
+            const maxHp = (healthBar as any).maxHp;
+            const percent = event.remainingHp / maxHp;
+            const bg = (healthBar as any).bg;
 
-          if (targetLabel) {
-            targetLabel.setText(`HP ${event.remainingHp}`);
-            if (event.remainingHp <= 0) targetLabel.setFill('#ff4444');
+            healthBar.setVisible(true);
+            if (bg) bg.setVisible(true);
+
+            healthBar.width = 52 * percent;
+            healthBar.setFillStyle(percent > 0.3 ? 0x00ff88 : 0xff4444);
+
+            // Прячем через 900 мс
+            this.time.delayedCall(900, () => {
+              if (healthBar.scene) healthBar.setVisible(false);
+              if (bg && bg.scene) bg.setVisible(false);
+            });
+          }
+
+          if (event.remainingHp <= 0) {
+            this.playExplosion(target.x, target.y);
+
+            const destroyedKey = this.getDestroyedShipKey(
+              isPlayer ? this.playerUnitsData[event.targetIndex]?.faction : this.aiUnitsData[event.targetIndex]?.faction,
+              isPlayer ? this.playerUnitsData[event.targetIndex]?.unitClass : this.aiUnitsData[event.targetIndex]?.unitClass
+            );
+            if (destroyedKey) {
+              target.setTexture(destroyedKey);
+              target.setAlpha(0.75);
+              this.tweens.killTweensOf(target);
+            }
+
+            // Прячем health bar навсегда
+            if (healthBar) healthBar.setVisible(false);
+            if ((healthBar as any).bg) (healthBar as any).bg.setVisible(false);
           }
 
           const attackerName = `${this.getRarityName(event.attackerRarity)} ${this.getClassName(event.attackerClass)}`;
@@ -489,6 +578,19 @@ private showFinalResult() {
     this.playerShadows = []; this.aiShadows = [];
     this.playerHPLabels = []; this.aiHPLabels = [];
     this.battleLogTexts = [];
+    this.playerHPLabels.forEach(bar => {
+  if (bar) bar.destroy();
+  const bg = (bar as any).bg;
+  if (bg) bg.destroy();
+});
+this.aiHPLabels.forEach(bar => {
+  if (bar) bar.destroy();
+  const bg = (bar as any).bg;
+  if (bg) bg.destroy();
+});
+this.playerHPLabels = [];
+this.aiHPLabels = [];
+
   }
 
   shutdown() {

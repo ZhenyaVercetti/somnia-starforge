@@ -35,6 +35,7 @@ export default class PrepareScene extends Phaser.Scene {
   private teamCounterText: Phaser.GameObjects.Text | null = null;
   private teamOperationLock = false;
   private lastKnownLevel: number = 0;
+  private slotPulses: Phaser.Tweens.Tween[] = [];
   
 
   constructor() {
@@ -87,7 +88,19 @@ private removeFromTeam(slotIndex: number) {
   this.originalPositions.delete(tokenId);
   this.updateTeamCounter();
 
-  // Возвращаем ТОЛЬКО этот юнит в коллекцию (улучшенная версия v1.6)
+  // === ВОЗОБНОВЛЯЕМ ПУЛЬСАЦИЮ ПУСТОЙ ЯЧЕЙКИ ===
+  const teamSlot = this.gridSlots[slotIndex];
+  if (teamSlot) {
+    teamSlot.setInteractive();
+
+    // Если вдруг остался старый tween — останавливаем
+    if ((teamSlot as any).pulseTween) {
+      (teamSlot as any).pulseTween.stop();
+      (teamSlot as any).pulseTween = null;
+    }
+  }
+
+  // Возвращаем ТОЛЬКО этот юнит в коллекцию
   const collectionScene = this.scene.get('CollectionScene') as any;
   if (collectionScene && collectionScene.scene.isActive()) {
     const alreadyExists = collectionScene.unitsData.some((u: any) => u.id === tokenId);
@@ -498,37 +511,50 @@ private async loadCurrentAI() {
   }
 }
 
-  private async autoSelectTeam() {
-    if (this.teamOperationLock) return;
-    this.teamOperationLock = true;
+private async autoSelectTeam() {
+  if (this.teamOperationLock) return;
+  this.teamOperationLock = true;
 
-    try {
-      if (this.playerUnitIds.length === 0) {
-        await this.loadOwnedUnits();
-      }
-      if (this.playerUnitIds.length === 0) return;
-
-      this.clearTeam();
-
-      const toSelect = this.playerUnitIds.slice(0, 8);
-      for (let i = 0; i < toSelect.length; i++) {
-        const id = toSelect[i];
-        if (this.team.length >= 8) break;
-        if (!this.team.includes(id)) {
-          const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
-          if (freeSlotIndex !== -1) {
-            this.team.push(id);
-            await this.createTeamUnitVisual(id, freeSlotIndex);
-          }
-        }
-      }
-
-      this.updateTeamCounter();
-      console.log(`✅ Автовыбор завершён: ${this.team.length} юнитов`);
-    } finally {
-      this.teamOperationLock = false;
+  try {
+    if (this.playerUnitIds.length === 0) {
+      await this.loadOwnedUnits();
     }
+    if (this.playerUnitIds.length === 0) return;
+
+    this.clearTeam();
+
+    const unitsWithRarity: { id: number; rarity: number }[] = [];
+
+    for (const id of this.playerUnitIds) {
+      try {
+        const unit = await this.nftContract.read.getUnit([BigInt(id)]);
+        unitsWithRarity.push({ id: Number(id), rarity: Number(unit.rarity) });
+      } catch {}
+    }
+
+    unitsWithRarity.sort((a, b) => b.rarity - a.rarity);
+    const toSelect = unitsWithRarity.slice(0, 8);
+
+    for (let i = 0; i < toSelect.length; i++) {
+      const unitInfo = toSelect[i];
+      if (this.team.length >= 8) break;
+
+      const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
+      if (freeSlotIndex !== -1) {
+        this.team.push(unitInfo.id);
+        await this.createTeamUnitVisual(unitInfo.id, freeSlotIndex);
+
+        // Плавная задержка между добавлениями
+        await new Promise(resolve => setTimeout(resolve, 220));
+      }
+    }
+
+    this.updateTeamCounter();
+
+  } finally {
+    this.teamOperationLock = false;
   }
+}
 
   private clearTeam() {
     if (this.teamOperationLock) return;
@@ -863,11 +889,10 @@ private addGameUI() {
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-// === TEAM GRID (слоты теперь только визуальные, интерактивность убрана — события обрабатывают корабли) ===
-this.gridSlots = [];
-// === TEAM GRID ===
+// === TEAM GRID (финальная версия) ===
 this.gridSlots = [];
 this.teamSlotOccupants = new Array(8).fill(null);
+
 const teamCenterX = 1020;
 const teamCenterY = 560;
 const slotSize = 142;
@@ -892,7 +917,39 @@ for (let i = 0; i < 8; i++) {
     .setDepth(10);
 
   this.gridSlots.push(slot);
-  this.addButtonEffects(slot);   // ← возвращаем hover-эффект для пустых слотов
+
+  // === ПУЛЬСАЦИЯ ТОЛЬКО ПРИ ХОВЕРЕ (плавная, без дёрганья) ===
+  slot.on('pointerover', () => {
+    if ((slot as any).pulseTween) {
+      (slot as any).pulseTween.stop();
+    }
+
+    const pulse = this.tweens.add({
+      targets: slot,
+      scaleX: 1.06,
+      scaleY: 1.06,
+      duration: 1250,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+    (slot as any).pulseTween = pulse;
+
+    this.showTooltip(slot.x + 80, slot.y - 65, "Select a ship in your collection");
+  });
+
+  slot.on('pointerout', () => {
+    if ((slot as any).pulseTween) {
+      (slot as any).pulseTween.stop();
+      (slot as any).pulseTween = null;
+    }
+    slot.setScale(1);
+    this.hideTooltip();
+  });
+
+  slot.on('pointerdown', () => {
+    this.openCollectionScene();
+  });
 }
 
   // === ВНЕШНЯЯ РАМКА ===
@@ -904,77 +961,74 @@ for (let i = 0; i < 8; i++) {
     fontSize: '38px', fill: '#ffff00' 
   }).setOrigin(0.5);
 
-// === EQUIPPED RELICS (слоты только визуальные, интерактивность убрана — события обрабатывают сами реликвии) ===
-this.equippedSlotRects = [];
-const equippedY = teamCenterY + totalHeight / 2 + 80;
-const equippedTotalWidth = 3 * 128 + 2 * 40;
-const equippedStartX = teamCenterX - equippedTotalWidth / 2;
+  // === EQUIPPED RELICS ===
+  this.equippedSlotRects = [];
+  const equippedY = teamCenterY + totalHeight / 2 + 80;
+  const equippedTotalWidth = 3 * 128 + 2 * 40;
+  const equippedStartX = teamCenterX - equippedTotalWidth / 2;
 
-for (let i = 0; i < 3; i++) {
-  const x = equippedStartX + i * (128 + 40);
-  const slot = this.add.image(x, equippedY, 'slot_equipped')
-    .setDisplaySize(128, 128)
-    .setDepth(10);                    // ← добавлено для соответствия таблице
+  for (let i = 0; i < 3; i++) {
+    const x = equippedStartX + i * (128 + 40);
+    const slot = this.add.image(x, equippedY, 'slot_equipped')
+      .setDisplaySize(128, 128)
+      .setDepth(10);
+    this.equippedSlotRects.push(slot);
+  }
 
-  this.equippedSlotRects.push(slot);
-  // .setInteractive() и addButtonEffects УБРАНЫ — реликвия сама обрабатывает hover/tooltip
-}
+  // === КНОПКИ ===
+  const btnAuto = this.add.image(790, 300, 'button_base')
+    .setInteractive()
+    .setDisplaySize(270, 70);
+  const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' }).setOrigin(0.5);
+  (btnAuto as any).linkedText = textAuto;
+  (textAuto as any).originalFill = '#00ff88';
+  btnAuto.on('pointerdown', () => this.autoSelectTeam());
+  this.addButtonEffects(btnAuto);
 
-// === КНОПКИ (все одинакового размера 270×70) ===
-const btnAuto = this.add.image(790, 300, 'button_base')
-  .setInteractive()
-  .setDisplaySize(270, 70);
-const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' }).setOrigin(0.5);
-(btnAuto as any).linkedText = textAuto;
-(textAuto as any).originalFill = '#00ff88';
-btnAuto.on('pointerdown', () => this.autoSelectTeam());
-this.addButtonEffects(btnAuto);
+  const btnClear = this.add.image(1100, 300, 'button_base')
+    .setInteractive()
+    .setDisplaySize(270, 70);
+  const textClear = this.add.text(1100, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
+  (btnClear as any).linkedText = textClear;
+  (textClear as any).originalFill = '#ff6666';
+  btnClear.on('pointerdown', () => this.clearTeam());
+  this.addButtonEffects(btnClear);
 
-const btnClear = this.add.image(1100, 300, 'button_base')
-  .setInteractive()
-  .setDisplaySize(270, 70);
-const textClear = this.add.text(1100, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
-(btnClear as any).linkedText = textClear;
-(textClear as any).originalFill = '#ff6666';
-btnClear.on('pointerdown', () => this.clearTeam());
-this.addButtonEffects(btnClear);
+  const btnReroll = this.add.image(285, 460, 'button_base')
+    .setInteractive()
+    .setDisplaySize(270, 70);
+  const textReroll = this.add.text(285, 460, 'REROLL SHOP', { fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' }).setOrigin(0.5);
+  (btnReroll as any).linkedText = textReroll;
+  (textReroll as any).originalFill = '#ff00ff';
+  btnReroll.on('pointerdown', () => this.rerollShop());
+  this.addButtonEffects(btnReroll);
 
-const btnReroll = this.add.image(285, 460, 'button_base')
-  .setInteractive()
-  .setDisplaySize(270, 70);
-const textReroll = this.add.text(285, 460, 'REROLL SHOP', { fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' }).setOrigin(0.5);
-(btnReroll as any).linkedText = textReroll;
-(textReroll as any).originalFill = '#ff00ff';
-btnReroll.on('pointerdown', () => this.rerollShop());
-this.addButtonEffects(btnReroll);
+  const btnCollection = this.add.image(285, 900, 'button_base')
+    .setInteractive()
+    .setDisplaySize(270, 70);
+  const textCollection = this.add.text(285, 900, 'Collection', { fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+  (btnCollection as any).linkedText = textCollection;
+  (textCollection as any).originalFill = '#ffff00';
+  btnCollection.on('pointerdown', () => this.openCollectionScene());
+  this.addButtonEffects(btnCollection);
 
-const btnCollection = this.add.image(285, 900, 'button_base')
-  .setInteractive()
-  .setDisplaySize(270, 70);
-const textCollection = this.add.text(285, 900, 'Collection', { fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
-(btnCollection as any).linkedText = textCollection;
-(textCollection as any).originalFill = '#ffff00';
-btnCollection.on('pointerdown', () => this.openCollectionScene());
-this.addButtonEffects(btnCollection);
+  const btnBuy = this.add.image(285, 820, 'button_base')
+    .setInteractive()
+    .setDisplaySize(270, 70);
+  const textBuy = this.add.text(285, 820, 'BUY (FREE)', { fontSize: '26px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
+  (btnBuy as any).linkedText = textBuy;
+  (textBuy as any).originalFill = '#00ffff';
+  btnBuy.on('pointerdown', () => this.buyUnit());
+  this.addButtonEffects(btnBuy);
 
-const btnBuy = this.add.image(285, 820, 'button_base')
-  .setInteractive()
-  .setDisplaySize(270, 70);
-const textBuy = this.add.text(285, 820, 'BUY (FREE)', { fontSize: '26px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
-(btnBuy as any).linkedText = textBuy;
-(textBuy as any).originalFill = '#00ffff';
-btnBuy.on('pointerdown', () => this.buyUnit());
-this.addButtonEffects(btnBuy);
-
-// START BATTLE оставляем больше (главная кнопка)
-const btnStart = this.add.image(1600, 900, 'button_start')
-  .setInteractive()
-  .setDisplaySize(400, 90);
-const textStart = this.add.text(1600, 900, '▶ START BATTLE', { fontSize: '36px', fill: '#ff3333', fontStyle: 'bold' }).setOrigin(0.5);
-(btnStart as any).linkedText = textStart;
-(textStart as any).originalFill = '#ff3333';
-btnStart.on('pointerdown', () => this.startBattle());
-this.addButtonEffects(btnStart);
+  const btnStart = this.add.image(1600, 900, 'button_start')
+    .setInteractive()
+    .setDisplaySize(400, 90);
+  const textStart = this.add.text(1600, 900, '▶ START BATTLE', { fontSize: '36px', fill: '#ff3333', fontStyle: 'bold' }).setOrigin(0.5);
+  (btnStart as any).linkedText = textStart;
+  (textStart as any).originalFill = '#ff3333';
+  btnStart.on('pointerdown', () => this.startBattle());
+  this.addButtonEffects(btnStart);
 }
 
 
@@ -1103,7 +1157,20 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
     this.teamSlotOccupants[slotIndex] = container;
     slot.disableInteractive();
+
+    // Останавливаем пульсацию ячейки
+if (this.slotPulses[slotIndex]) {
+  this.slotPulses[slotIndex].pause();
+}
+slot.disableInteractive();
+
     this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
+    // Останавливаем пульсацию и делаем слот неинтерактивным
+if ((slot as any).pulseTween) {
+  (slot as any).pulseTween.stop();
+  (slot as any).pulseTween = null;
+}
+slot.disableInteractive();
 
     // === ЛЁГКАЯ ПУЛЬСАЦИЯ КОРАБЛЯ (как было раньше) ===
     this.tweens.add({
@@ -1319,7 +1386,6 @@ create() {
   this.loadOwnedUnits();
   this.loadPlayerShop();
   this.updatePlayerProfile();
-  this.gridSlots.forEach(slot => slot.disableInteractive());
   // Глобально разрешаем событиям доходить до объектов с меньшей глубиной
 this.input.topOnly = false;
 
