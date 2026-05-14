@@ -602,14 +602,18 @@ setTimeout(() => this.refreshGrid(), 150); // перестраховка
 }
 
 private showPreview(id: number, isUnit: boolean) {
+  // === БЕЗОПАСНЫЙ УНИЧТОЖЕНИЕ ПРЕДЫДУЩЕГО ПРЕВЬЮ ===
   if (this.previewShip) {
-    this.previewShip.destroy(true);
+    const prev = this.previewShip as any;
+    if (prev && typeof prev.destroy === 'function') {
+      prev.destroy(true);
+    }
     this.previewShip = null;
   }
 
   if (this.previewTexts && this.previewTexts.length > 0) {
     this.previewTexts.forEach(t => {
-      if (t && t.destroy) t.destroy(true);
+      if (t && typeof t.destroy === 'function') t.destroy(true);
     });
     this.previewTexts = [];
   }
@@ -627,41 +631,48 @@ private showPreview(id: number, isUnit: boolean) {
     const unit = unitData.unit;
 
     const shipKey = this.getShipKey(unit.faction, unit.unitClass);
-    this.previewShip = this.add.sprite(775, 420, shipKey)
-      .setScale(0.6)
-      .setDepth(8);
 
-// Пульсация
-this.tweens.add({
-  targets: this.previewShip,
-  scale: 0.62,
-  duration: 1800,
-  yoyo: true,
-  repeat: -1,
-  ease: 'Sine.easeInOut'
-});
+    // === ФАБРИКА С РАМКОЙ ===
+    const container = UnitVisualFactory.createUnitWithFrame(this, 775, 420, shipKey, unit.rarity, 0.6);
+    container.setDepth(15);
+    this.children.bringToTop(container);
 
-    const t1 = this.add.text(775, 555, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, { 
+    this.previewShip = container as any;
+
+    const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
+    ship.setDepth(16);
+
+    // Лёгкая пульсация
+    this.tweens.add({
+      targets: ship,
+      scale: 0.62,
+      duration: 1800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    const t1 = this.add.text(775, 555, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
       fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
-    }).setOrigin(0.5).setDepth(6);
+    }).setOrigin(0.5).setDepth(20);
     this.previewTexts.push(t1);
 
-    const t2 = this.add.text(775, 605, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, { 
+    const t2 = this.add.text(775, 605, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
       fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
-    }).setOrigin(0.5).setDepth(6);
+    }).setOrigin(0.5).setDepth(20);
     this.previewTexts.push(t2);
 
   } else {
     const relicData = this.relicsData.find(r => r.id === id)?.relic;
     if (relicData) {
-      const t1 = this.add.text(775, 395, relicData.name, { 
+      const t1 = this.add.text(775, 395, relicData.name, {
         fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
-      }).setOrigin(0.5).setDepth(6);
+      }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t1);
 
-      const t2 = this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, { 
+      const t2 = this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
         fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
-      }).setOrigin(0.5).setDepth(6);
+      }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t2);
     }
   }

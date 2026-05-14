@@ -1285,6 +1285,7 @@ this.load.image('flux_overload', 'assets/relics/flux_overload.png');
 this.load.image('last_stand', 'assets/relics/last_stand.png');
 this.load.image('legendary_frame', 'assets/frames/legendary.png');
 this.load.image('rare_frame', 'assets/frames/rare.png');
+this.load.image('common_frame', 'assets/frames/common.png');
   
 }
 
