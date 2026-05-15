@@ -39,6 +39,7 @@ export default class PrepareScene extends Phaser.Scene {
   private slotPulses: Phaser.Tweens.Tween[] = [];
   private connectModalContainer: Phaser.GameObjects.Container | null = null;
 private isConnectModalOpen = false;
+private walletManager = WalletManager.getInstance();
 
 
 

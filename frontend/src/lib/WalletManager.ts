@@ -1,4 +1,11 @@
-import { createPublicClient, createWalletClient, custom, http, formatEther, type Address } from 'viem';
+import { 
+  createPublicClient, 
+  createWalletClient, 
+  custom, 
+  http, 
+  formatEther, 
+  type Address 
+} from 'viem';
 
 const SOMNIA_TESTNET = {
   id: 50312,
@@ -13,6 +20,8 @@ declare global {
   interface Window {
     ethereum?: {
       request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on?: (event: string, handler: (...args: any[]) => void) => void;
+      removeListener?: (event: string, handler: (...args: any[]) => void) => void;
     };
   }
 }
@@ -22,7 +31,7 @@ class WalletManager {
   public account: Address | null = null;
   public chainId: number | null = null;
   private walletClient: ReturnType<typeof createWalletClient> | null = null;
-  private publicClient = createPublicClient({
+  public publicClient = createPublicClient({
     chain: SOMNIA_TESTNET,
     transport: http('https://dream-rpc.somnia.network'),
   });
@@ -52,7 +61,20 @@ class WalletManager {
       await this.switchChain();
     }
 
+    // Подписываемся на смену аккаунта
+    if (window.ethereum?.on) {
+      window.ethereum.on('accountsChanged', this.handleAccountsChanged.bind(this));
+    }
+
     return this.account;
+  }
+
+  private handleAccountsChanged(accounts: string[]) {
+    if (accounts.length === 0) {
+      this.disconnect();
+    } else {
+      this.account = accounts[0] as Address;
+    }
   }
 
   private async switchChain(): Promise<void> {
@@ -76,6 +98,10 @@ class WalletManager {
     if (!this.account) return '0';
     const balance = await this.publicClient.getBalance({ address: this.account });
     return formatEther(balance);
+  }
+
+  getWalletClient() {
+    return this.walletClient;
   }
 
   disconnect(): void {
