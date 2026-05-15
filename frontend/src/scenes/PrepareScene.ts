@@ -36,6 +36,10 @@ export default class PrepareScene extends Phaser.Scene {
   private teamOperationLock = false;
   private lastKnownLevel: number = 0;
   private slotPulses: Phaser.Tweens.Tween[] = [];
+  private connectModalContainer: Phaser.GameObjects.Container | null = null;
+private isConnectModalOpen = false;
+
+
   
 
   constructor() {
@@ -903,51 +907,48 @@ private addGameUI() {
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-// === TEAM GRID (финальная версия) ===
-this.gridSlots = [];
-this.teamSlotOccupants = new Array(8).fill(null);
+  // === TEAM GRID ===
+  this.gridSlots = [];
+  this.teamSlotOccupants = new Array(8).fill(null);
 
-const teamCenterX = 1020;
-const teamCenterY = 560;
-const slotSize = 142;
-const hSpacing = 23;
-const vSpacing = 23;
-const totalWidth = 4 * slotSize + 3 * hSpacing;
-const totalHeight = 2 * slotSize + vSpacing;
-const teamStartX = teamCenterX - totalWidth / 2;
-const teamStartY = teamCenterY - totalHeight / 2;
+  const teamCenterX = 1020;
+  const teamCenterY = 560;
+  const slotSize = 142;
+  const hSpacing = 23;
+  const vSpacing = 23;
+  const totalWidth = 4 * slotSize + 3 * hSpacing;
+  const totalHeight = 2 * slotSize + vSpacing;
+  const teamStartX = teamCenterX - totalWidth / 2;
+  const teamStartY = teamCenterY - totalHeight / 2;
 
-for (let i = 0; i < 8; i++) {
-  const col = i % 4;
-  const row = Math.floor(i / 4);
-  const x = teamStartX + col * (slotSize + hSpacing);
-  const y = teamStartY + row * (slotSize + vSpacing);
+  for (let i = 0; i < 8; i++) {
+    const col = i % 4;
+    const row = Math.floor(i / 8);
+    const x = teamStartX + col * (slotSize + hSpacing);
+    const y = teamStartY + row * (slotSize + vSpacing);
 
-  this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
+    this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
 
-  const slot = this.add.image(x, y, 'slot_team')
-    .setInteractive()
-    .setDisplaySize(slotSize, slotSize)
-    .setDepth(10);
+    const slot = this.add.image(x, y, 'slot_team')
+      .setInteractive()
+      .setDisplaySize(slotSize, slotSize)
+      .setDepth(10);
 
-  this.gridSlots.push(slot);
+    this.gridSlots.push(slot);
+    this.addButtonEffects(slot);
 
-  // === ХОВЕР РАМКИ — ТОЧНО КАК НА AI TEAM (displayWidth/Height, 1.08x, чистый revert) ===
-  this.addButtonEffects(slot);
+    slot.on('pointerover', () => {
+      this.showTooltip(slot.x + 80, slot.y - 65, "Select a ship in your collection");
+    });
 
-  // Tooltip + открытие коллекции
-  slot.on('pointerover', () => {
-    this.showTooltip(slot.x + 80, slot.y - 65, "Select a ship in your collection");
-  });
+    slot.on('pointerout', () => {
+      this.hideTooltip();
+    });
 
-  slot.on('pointerout', () => {
-    this.hideTooltip();
-  });
-
-  slot.on('pointerdown', () => {
-    this.openCollectionScene();
-  });
-}
+    slot.on('pointerdown', () => {
+      this.openCollectionScene();
+    });
+  }
 
   // === ВНЕШНЯЯ РАМКА ===
   this.add.image(960, 540, 'outer_frame')
@@ -973,60 +974,183 @@ for (let i = 0; i < 8; i++) {
   }
 
   // === КНОПКИ ===
+
+  // AUTO SELECT
   const btnAuto = this.add.image(790, 300, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textAuto = this.add.text(770, 300, 'AUTO SELECT', { fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' }).setOrigin(0.5);
+  const textAuto = this.add.text(770, 300, 'AUTO SELECT', { 
+    fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' 
+  }).setOrigin(0.5);
   (btnAuto as any).linkedText = textAuto;
-  (textAuto as any).originalFill = '#00ff88';
   btnAuto.on('pointerdown', () => this.autoSelectTeam());
   this.addButtonEffects(btnAuto);
 
+  // CLEAR TEAM
   const btnClear = this.add.image(1100, 300, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textClear = this.add.text(1100, 300, 'CLEAR TEAM', { fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5);
+  const textClear = this.add.text(1100, 300, 'CLEAR TEAM', { 
+    fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' 
+  }).setOrigin(0.5);
   (btnClear as any).linkedText = textClear;
-  (textClear as any).originalFill = '#ff6666';
   btnClear.on('pointerdown', () => this.clearTeam());
   this.addButtonEffects(btnClear);
 
+  // === НОВАЯ КНОПКА ПОДКЛЮЧЕНИЯ КОШЕЛЬКА ===
+  const btnConnect = this.add.image(960, 280, 'button_base')
+    .setInteractive()
+    .setDisplaySize(340, 75);
+  const textConnect = this.add.text(960, 280, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
+    fontSize: '26px',
+    fill: '#00f0ff',
+    fontStyle: 'bold'
+  }).setOrigin(0.5);
+
+  btnConnect.on('pointerdown', () => {
+    this.showConnectWalletModal();
+  });
+  this.addButtonEffects(btnConnect);
+
+  // REROLL SHOP
   const btnReroll = this.add.image(285, 460, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textReroll = this.add.text(285, 460, 'REROLL SHOP', { fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' }).setOrigin(0.5);
+  const textReroll = this.add.text(285, 460, 'REROLL SHOP', { 
+    fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' 
+  }).setOrigin(0.5);
   (btnReroll as any).linkedText = textReroll;
-  (textReroll as any).originalFill = '#ff00ff';
   btnReroll.on('pointerdown', () => this.rerollShop());
   this.addButtonEffects(btnReroll);
 
+  // Collection
   const btnCollection = this.add.image(285, 900, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textCollection = this.add.text(285, 900, 'Collection', { fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+  const textCollection = this.add.text(285, 900, 'Collection', { 
+    fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' 
+  }).setOrigin(0.5);
   (btnCollection as any).linkedText = textCollection;
-  (textCollection as any).originalFill = '#ffff00';
   btnCollection.on('pointerdown', () => this.openCollectionScene());
   this.addButtonEffects(btnCollection);
 
+  // BUY
   const btnBuy = this.add.image(285, 820, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textBuy = this.add.text(285, 820, 'BUY (FREE)', { fontSize: '26px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5);
+  const textBuy = this.add.text(285, 820, 'BUY (FREE)', { 
+    fontSize: '26px', fill: '#00ffff', fontStyle: 'bold' 
+  }).setOrigin(0.5);
   (btnBuy as any).linkedText = textBuy;
-  (textBuy as any).originalFill = '#00ffff';
   btnBuy.on('pointerdown', () => this.buyUnit());
   this.addButtonEffects(btnBuy);
 
+  // START BATTLE
   const btnStart = this.add.image(1600, 900, 'button_start')
     .setInteractive()
     .setDisplaySize(400, 90);
-  const textStart = this.add.text(1600, 900, '▶ START BATTLE', { fontSize: '36px', fill: '#ff3333', fontStyle: 'bold' }).setOrigin(0.5);
+  const textStart = this.add.text(1600, 900, '▶ START BATTLE', { 
+    fontSize: '36px', fill: '#ff3333', fontStyle: 'bold' 
+  }).setOrigin(0.5);
   (btnStart as any).linkedText = textStart;
-  (textStart as any).originalFill = '#ff3333';
   btnStart.on('pointerdown', () => this.startBattle());
   this.addButtonEffects(btnStart);
 }
+
+
+private showConnectWalletModal() {
+  if (this.isConnectModalOpen) return;
+  this.isConnectModalOpen = true;
+
+  const centerX = 960;
+  const centerY = 540;
+
+  // Затемнение
+  const overlay = this.add.rectangle(960, 540, 1920, 1080, 0x000000, 0.85)
+    .setDepth(200)
+    .setInteractive();
+
+  const modal = this.add.container(centerX, centerY).setDepth(201);
+
+  // Фон модала
+  const bg = this.add.graphics();
+  bg.fillStyle(0x0a1122, 1);
+  bg.fillRoundedRect(-280, -220, 560, 440, 20);
+  bg.lineStyle(4, 0x00f0ff, 1);
+  bg.strokeRoundedRect(-280, -220, 560, 440, 20);
+  modal.add(bg);
+
+  // Заголовок
+  const title = this.add.text(0, -160, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
+    fontSize: '36px',
+    color: '#00f0ff',
+    fontStyle: 'bold'
+  }).setOrigin(0.5);
+  modal.add(title);
+
+  // Кнопка MetaMask
+  const mmBtn = this.add.rectangle(0, -40, 420, 80, 0x112233)
+    .setStrokeStyle(2, 0x00f0ff)
+    .setInteractive({ useHandCursor: true });
+  modal.add(mmBtn);
+
+  const mmText = this.add.text(0, -40, '🦊   MetaMask', {
+    fontSize: '28px',
+    color: '#ffffff'
+  }).setOrigin(0.5);
+  modal.add(mmText);
+
+  mmBtn.on('pointerdown', async () => {
+    try {
+      const { connect } = await import('wagmi/actions');
+      const { injected } = await import('wagmi/connectors');
+      await connect({ connector: injected() });
+      this.closeConnectWalletModal();
+    } catch (e) {
+      console.error('MetaMask error:', e);
+    }
+  });
+
+  // Кнопка WalletConnect
+  const wcBtn = this.add.rectangle(0, 70, 420, 80, 0x112233)
+    .setStrokeStyle(2, 0x00f0ff)
+    .setInteractive({ useHandCursor: true });
+  modal.add(wcBtn);
+
+  const wcText = this.add.text(0, 70, '🔗   WalletConnect', {
+    fontSize: '28px',
+    color: '#ffffff'
+  }).setOrigin(0.5);
+  modal.add(wcText);
+
+  wcBtn.on('pointerdown', async () => {
+    try {
+      const { connect } = await import('wagmi/actions');
+      const { walletConnect } = await import('wagmi/connectors');
+      await connect({
+        connector: walletConnect({
+          projectId: '79a5509a7deb1555059b927ba77dbad0'
+        })
+      });
+      this.closeConnectWalletModal();
+    } catch (e) {
+      console.error('WalletConnect error:', e);
+    }
+  });
+
+  overlay.on('pointerdown', () => this.closeConnectWalletModal());
+
+  this.connectModalContainer = modal;
+}
+
+private closeConnectWalletModal() {
+  if (this.connectModalContainer) {
+    this.connectModalContainer.destroy();
+    this.connectModalContainer = null;
+  }
+  this.isConnectModalOpen = false;
+}
+
 
 
 
