@@ -3,6 +3,7 @@
 import * as Phaser from 'phaser';
 import { getContract } from 'viem';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
+import WalletManager from '../lib/WalletManager';
 
 export default class PrepareScene extends Phaser.Scene {
   private unitsInTeam: number[] = [];
@@ -1507,9 +1508,100 @@ create() {
   // Глобально разрешаем событиям доходить до объектов с меньшей глубиной
 this.input.topOnly = false;
 
+  this.createWalletUI();
+
   console.log('✅ PrepareScene создана (с очисткой несуществующих токенов)');
 }
 
+
+  private walletManager = WalletManager.getInstance();
+  private walletText: Phaser.GameObjects.Text | null = null;
+  private connectBtn: Phaser.GameObjects.Text | null = null;
+  private disconnectBtn: Phaser.GameObjects.Text | null = null;
+
+createWalletUI(): void {
+  const centerX = this.cameras.main.centerX;
+  const centerY = this.cameras.main.centerY;
+
+  // Заголовок
+  this.add.text(centerX, centerY - 180, 'STARFORGE', {
+    fontFamily: 'Arial Black',
+    fontSize: '64px',
+    color: '#00f9ff',
+    stroke: '#ff00aa',
+    strokeThickness: 6,
+  }).setOrigin(0.5);
+
+  this.add.text(centerX, centerY - 120, 'ON-CHAIN AUTO-BATTLER', {
+    fontSize: '22px',
+    color: '#aaaaaa',
+  }).setOrigin(0.5);
+
+  // Большая неоновая кнопка
+  const connectBtn = this.add.text(centerX, centerY + 20, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
+    fontSize: '32px',
+    color: '#ffffff',
+    backgroundColor: '#1a0033',
+    padding: { x: 50, y: 18 },
+    stroke: '#00f9ff',
+    strokeThickness: 2,
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+  connectBtn.on('pointerover', () => {
+    connectBtn.setStyle({ color: '#00f9ff', backgroundColor: '#330066' });
+  });
+  connectBtn.on('pointerout', () => {
+    connectBtn.setStyle({ color: '#ffffff', backgroundColor: '#1a0033' });
+  });
+
+  connectBtn.on('pointerdown', async () => {
+    connectBtn.setText('ПОДКЛЮЧЕНИЕ...');
+    try {
+      const address = await this.walletManager.connect();
+      const balance = await this.walletManager.getBalance();
+      this.updateWalletUI(address, balance);
+    } catch (error: any) {
+      this.showError(error.message || 'Ошибка подключения');
+      connectBtn.setText('ПОДКЛЮЧИТЬ КОШЕЛЁК');
+    }
+  });
+}
+
+  updateWalletUI(address: string, balance: string): void {
+    // Удаляем старые элементы
+    if (this.connectBtn) this.connectBtn.destroy();
+    if (this.walletText) this.walletText.destroy();
+    if (this.disconnectBtn) this.disconnectBtn.destroy();
+
+    const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+    this.walletText = this.add.text(400, 280, `${shortAddr}  |  ${balance} SOM`, {
+      fontSize: '28px',
+      color: '#00ff9f',
+    }).setOrigin(0.5);
+
+    this.disconnectBtn = this.add.text(400, 360, 'ОТКЛЮЧИТЬСЯ', {
+      fontSize: '28px',
+      color: '#ff3366',
+      backgroundColor: '#330000',
+      padding: { x: 30, y: 10 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    this.disconnectBtn.on('pointerdown', () => {
+      this.walletManager.disconnect();
+      this.scene.restart(); // или переход на другой экран
+    });
+  }
+
+  showError(message: string): void {
+    const errText = this.add.text(400, 420, message, {
+      fontSize: '20px',
+      color: '#ff3366',
+    }).setOrigin(0.5);
+
+    this.time.delayedCall(3000, () => errText.destroy());
+  }
+  
   shutdown() {
     if (this.tooltip) {
       this.tooltip.destroy();
