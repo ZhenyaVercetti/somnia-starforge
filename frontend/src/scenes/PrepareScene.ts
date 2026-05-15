@@ -41,7 +41,76 @@ export default class PrepareScene extends Phaser.Scene {
 private isConnectModalOpen = false;
 
 
-  
+
+  createWalletUI(): void {
+  this.children.getAll().forEach((child: any) => {
+    if (child.text && (child.text.includes('ПОДКЛЮЧИТЬ') || child.text.includes('METAMASK'))) {
+      child.destroy();
+    }
+  });
+
+  const cx = this.cameras.main.centerX;
+  const cy = this.cameras.main.centerY;
+
+  this.add.text(cx, cy - 160, 'STARFORGE', {
+    fontFamily: 'Arial Black', fontSize: '68px', color: '#00f9ff', stroke: '#ff00aa', strokeThickness: 8
+  }).setOrigin(0.5).setDepth(200);
+
+  this.add.text(cx, cy - 100, 'ON-CHAIN AUTO-BATTLER', {
+    fontSize: '24px', color: '#aaaaaa'
+  }).setOrigin(0.5).setDepth(200);
+
+  const btn = this.add.text(cx, cy + 40, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
+    fontSize: '34px', color: '#ffffff', backgroundColor: '#1a0033', padding: { x: 60, y: 20 }
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(200);
+
+  btn.on('pointerover', () => btn.setStyle({ color: '#00f9ff', backgroundColor: '#330066' }));
+  btn.on('pointerout', () => btn.setStyle({ color: '#ffffff', backgroundColor: '#1a0033' }));
+
+  btn.on('pointerdown', async () => {
+    btn.setText('ПОДКЛЮЧЕНИЕ...');
+    try {
+      const addr = await this.walletManager.connect();
+      const bal = await this.walletManager.getBalance();
+      this.updateWalletUI(addr, bal);
+    } catch (e: any) {
+      this.showError(e.message || 'Ошибка');
+      btn.setText('ПОДКЛЮЧИТЬ КОШЕЛЁК');
+    }
+  });
+}
+
+updateWalletUI(address: string, balance: string): void {
+  this.children.getAll().forEach((child: any) => {
+    if (child.text && child.text.includes('ПОДКЛЮЧИТЬ')) child.destroy();
+  });
+
+  const cx = this.cameras.main.centerX;
+  const cy = this.cameras.main.centerY;
+  const short = `${address.slice(0,6)}...${address.slice(-4)}`;
+
+  this.add.text(cx, cy - 20, `${short}  •  ${balance} SOM`, {
+    fontSize: '28px', color: '#00ff9f'
+  }).setOrigin(0.5).setDepth(200);
+
+  const disc = this.add.text(cx, cy + 60, 'ОТКЛЮЧИТЬСЯ', {
+    fontSize: '26px', color: '#ff3366', backgroundColor: '#330000', padding: { x: 40, y: 12 }
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(200);
+
+  disc.on('pointerdown', () => {
+    this.walletManager.disconnect();
+    this.scene.restart();
+  });
+}
+
+showError(msg: string): void {
+  const cx = this.cameras.main.centerX;
+  const err = this.add.text(cx, this.cameras.main.centerY + 120, msg, {
+    fontSize: '20px', color: '#ff3366'
+  }).setOrigin(0.5).setDepth(200);
+  this.time.delayedCall(3500, () => err.destroy());
+}
+
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -998,19 +1067,6 @@ private addGameUI() {
   btnClear.on('pointerdown', () => this.clearTeam());
   this.addButtonEffects(btnClear);
 
-  // === НОВАЯ КНОПКА ПОДКЛЮЧЕНИЯ КОШЕЛЬКА ===
-  const btnConnect = this.add.image(960, 280, 'button_base')
-    .setInteractive()
-    .setDisplaySize(340, 75);
-  const textConnect = this.add.text(960, 280, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
-    fontSize: '26px',
-    fill: '#00f0ff',
-    fontStyle: 'bold'
-  }).setOrigin(0.5);
-
-  btnConnect.on('pointerdown', () => {
-    this.showConnectWalletModal();
-  });
   this.addButtonEffects(btnConnect);
 
   // REROLL SHOP
@@ -1485,6 +1541,7 @@ create() {
     if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
   });
 
+  this.createWalletUI();
   this.team = [];
   this.teamSlotOccupants = new Array(8).fill(null);
   this.originalPositions.clear();
@@ -1520,52 +1577,93 @@ this.input.topOnly = false;
   private disconnectBtn: Phaser.GameObjects.Text | null = null;
 
 createWalletUI(): void {
+  // Уничтожаем все старые кнопки подключения, если они остались
+  this.children.getAll().forEach((child: any) => {
+    if (child.text && (child.text.includes('ПОДКЛЮЧИТЬ') || child.text.includes('METAMASK') || child.text.includes('MetaMask'))) {
+      child.destroy();
+    }
+  });
+
   const centerX = this.cameras.main.centerX;
   const centerY = this.cameras.main.centerY;
 
   // Заголовок
-  this.add.text(centerX, centerY - 180, 'STARFORGE', {
+  this.add.text(centerX, centerY - 160, 'STARFORGE', {
     fontFamily: 'Arial Black',
-    fontSize: '64px',
+    fontSize: '68px',
     color: '#00f9ff',
     stroke: '#ff00aa',
-    strokeThickness: 6,
-  }).setOrigin(0.5);
+    strokeThickness: 8,
+  }).setOrigin(0.5).setDepth(100);
 
-  this.add.text(centerX, centerY - 120, 'ON-CHAIN AUTO-BATTLER', {
-    fontSize: '22px',
+  this.add.text(centerX, centerY - 100, 'ON-CHAIN AUTO-BATTLER', {
+    fontSize: '24px',
     color: '#aaaaaa',
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(100);
 
-  // Большая неоновая кнопка
-  const connectBtn = this.add.text(centerX, centerY + 20, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
-    fontSize: '32px',
+  // Неоновая кнопка
+  const btn = this.add.text(centerX, centerY + 40, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
+    fontSize: '34px',
     color: '#ffffff',
     backgroundColor: '#1a0033',
-    padding: { x: 50, y: 18 },
+    padding: { x: 60, y: 20 },
     stroke: '#00f9ff',
-    strokeThickness: 2,
-  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    strokeThickness: 3,
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(100);
 
-  connectBtn.on('pointerover', () => {
-    connectBtn.setStyle({ color: '#00f9ff', backgroundColor: '#330066' });
-  });
-  connectBtn.on('pointerout', () => {
-    connectBtn.setStyle({ color: '#ffffff', backgroundColor: '#1a0033' });
-  });
+  btn.on('pointerover', () => btn.setStyle({ color: '#00f9ff', backgroundColor: '#330066' }));
+  btn.on('pointerout', () => btn.setStyle({ color: '#ffffff', backgroundColor: '#1a0033' }));
 
-  connectBtn.on('pointerdown', async () => {
-    connectBtn.setText('ПОДКЛЮЧЕНИЕ...');
+  btn.on('pointerdown', async () => {
+    btn.setText('ПОДКЛЮЧЕНИЕ...');
     try {
       const address = await this.walletManager.connect();
       const balance = await this.walletManager.getBalance();
       this.updateWalletUI(address, balance);
     } catch (error: any) {
       this.showError(error.message || 'Ошибка подключения');
-      connectBtn.setText('ПОДКЛЮЧИТЬ КОШЕЛЁК');
+      btn.setText('ПОДКЛЮЧИТЬ КОШЕЛЁК');
     }
   });
 }
+
+updateWalletUI(address: string, balance: string): void {
+  this.children.getAll().forEach((child: any) => {
+    if (child.text && child.text.includes('ПОДКЛЮЧИТЬ')) child.destroy();
+  });
+
+  const centerX = this.cameras.main.centerX;
+  const centerY = this.cameras.main.centerY;
+  const short = `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+  this.add.text(centerX, centerY - 20, `${short}   •   ${balance} SOM`, {
+    fontSize: '28px',
+    color: '#00ff9f',
+  }).setOrigin(0.5).setDepth(100);
+
+  const disconnectBtn = this.add.text(centerX, centerY + 60, 'ОТКЛЮЧИТЬСЯ', {
+    fontSize: '26px',
+    color: '#ff3366',
+    backgroundColor: '#330000',
+    padding: { x: 40, y: 12 },
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(100);
+
+  disconnectBtn.on('pointerdown', () => {
+    this.walletManager.disconnect();
+    this.scene.restart();
+  });
+}
+
+showError(message: string): void {
+  const centerX = this.cameras.main.centerX;
+  const err = this.add.text(centerX, this.cameras.main.centerY + 120, message, {
+    fontSize: '20px',
+    color: '#ff3366',
+  }).setOrigin(0.5).setDepth(100);
+
+  this.time.delayedCall(3500, () => err.destroy());
+}
+
 
   updateWalletUI(address: string, balance: string): void {
     // Удаляем старые элементы
