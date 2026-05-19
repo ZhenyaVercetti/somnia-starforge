@@ -67,6 +67,7 @@ init(data?: any) {
   private publicClient: any;
   private shopBuyButtons: Phaser.GameObjects.Text[] = [];
   private shopContainer: Phaser.GameObjects.Container | null = null;
+  private equippedTexts: Phaser.GameObjects.Text[] = [];
 
   private unitsInTeam: number[] = [];
   private team: number[] = [];
@@ -123,7 +124,37 @@ private createContracts() {
     { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerShop", "outputs": [{ "components": [{ "internalType": "bool", "name": "isRelic", "type": "bool" }, { "internalType": "uint256", "name": "id", "type": "uint256" }, { "internalType": "uint8", "name": "faction", "type": "uint8" }, { "internalType": "uint8", "name": "rarity", "type": "uint8" }, { "internalType": "uint8", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }, { "internalType": "uint8", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "relicValue", "type": "uint8" }], "internalType": "struct StarForgeGame.ShopItem[3]", "name": "", "type": "tuple[3]" }], "stateMutability": "view", "type": "function" },
     { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getCurrentAI", "outputs": [{ "components": [{ "internalType": "bool", "name": "isRelic", "type": "bool" }, { "internalType": "uint256", "name": "id", "type": "uint256" }, { "internalType": "uint8", "name": "faction", "type": "uint8" }, { "internalType": "uint8", "name": "rarity", "type": "uint8" }, { "internalType": "uint8", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }, { "internalType": "uint8", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "relicValue", "type": "uint8" }], "internalType": "struct StarForgeGame.ShopItem[]", "name": "", "type": "tuple[]" }], "stateMutability": "view", "type": "function" },
     { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getEquippedRelics", "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }], "stateMutability": "view", "type": "function" },
-    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getLastBattleResult", "outputs": [{ "internalType": "bool", "name": "playerWon", "type": "bool" }, { "internalType": "tuple[]", "name": "events", "type": "tuple[]" }, { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" }, { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }], "stateMutability": "view", "type": "function" },
+    { 
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], 
+      "name": "getLastBattleResult", 
+      "outputs": [
+        { "internalType": "bool", "name": "playerWon", "type": "bool" },
+        { 
+          "internalType": "tuple[]", 
+          "name": "events", 
+          "type": "tuple[]", 
+          "components": [
+            { "internalType": "uint8", "name": "round", "type": "uint8" },
+            { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
+            { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
+            { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
+            { "internalType": "uint16", "name": "damage", "type": "uint16" },
+            { "internalType": "uint16", "name": "damageDealt", "type": "uint16" },
+            { "internalType": "uint16", "name": "initialHp", "type": "uint16" },
+            { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
+            { "internalType": "string", "name": "specialEffect", "type": "string" },
+            { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
+            { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
+            { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
+            { "internalType": "uint8", "name": "targetClass", "type": "uint8" }
+          ] 
+        },
+        { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" },
+        { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }
+      ], 
+      "stateMutability": "view", 
+      "type": "function" 
+    },
     { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "profiles", "outputs": [{ "components": [{ "internalType": "uint16", "name": "level", "type": "uint16" }, { "internalType": "uint32", "name": "xp", "type": "uint32" }, { "internalType": "uint256", "name": "wins", "type": "uint256" }, { "internalType": "uint256", "name": "losses", "type": "uint256" }, { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }], "internalType": "struct StarForgeGame.PlayerProfile", "name": "", "type": "tuple" }], "stateMutability": "view", "type": "function" }
   ];
 
@@ -163,8 +194,9 @@ private createContracts() {
     client: { public: this.publicClient, wallet: walletClient }
   });
 
-  console.log('✅ Контракты созданы');
+  console.log('✅ Контракты созданы (исправленный ABI BattleEvent)');
 }
+
 
   preload() {
     this.load.image('mainbackground', 'assets/mainbackground.jpg');
@@ -1093,6 +1125,132 @@ private addGameUI() {
   (btnStart as any).linkedText = textStart;
   btnStart.on('pointerdown', () => this.startBattle());
   this.addButtonEffects(btnStart);
+}
+
+private async startBattle() {
+  console.log('🟢 START BATTLE нажат');
+
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Сначала подключи кошелёк');
+  }
+
+  if (this.team.length < 4) {
+    const msg = this.add.text(960, 450, 'Минимум 4 юнита в команде (по правилам контракта)', {
+      fontSize: '36px', fill: '#ff4444', fontStyle: 'bold'
+    }).setOrigin(0.5);
+    setTimeout(() => msg.destroy(), 2800);
+    return;
+  }
+
+  if (this.team.length > 8) {
+    const msg = this.add.text(960, 450, 'Максимум 8 юнитов', {
+      fontSize: '36px', fill: '#ff4444'
+    }).setOrigin(0.5);
+    setTimeout(() => msg.destroy(), 2000);
+    return;
+  }
+
+  try {
+    console.log('📤 Отправляем startMatch... team length:', this.team.length);
+
+    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
+
+    const walletClient = createWalletClient({
+      chain: {
+        id: 50312,
+        name: 'Somnia Testnet',
+        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
+        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
+      },
+      transport: custom((window as any).ethereum)
+    });
+
+    const data = encodeFunctionData({
+      abi: this.gameContract.abi,
+      functionName: 'startMatch',
+      args: [
+        this.team.map(id => BigInt(id)),
+        this.equippedRelics.map(id => BigInt(id))
+      ]
+    });
+
+    const hash = await walletClient.sendTransaction({
+      account: this.account,
+      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
+      data: data,
+      value: 0n
+    });
+
+    console.log('✅ TX startMatch отправлена:', hash);
+
+    const waiting = this.add.text(960, 450, 'TX отправлена... ждём подтверждения (3-4 сек)', {
+      fontSize: '34px', fill: '#ffff00'
+    }).setOrigin(0.5);
+
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    waiting.destroy();
+
+    // === Надёжное чтение результата (через readContract + деструктуризация) ===
+    const GAME_ADDRESS = '0x663FfeB8c82F97F31a5209D01D30354Deba9381a';
+
+    const lastResult = await this.publicClient.readContract({
+      address: GAME_ADDRESS,
+      abi: this.gameContract.abi,
+      functionName: 'getLastBattleResult',
+      args: [this.account]
+    }) as [boolean, any[], number[], number[]];
+
+    const [playerWon, eventsRaw, playerMaxHp, aiMaxHp] = lastResult;
+
+    // Готовим данные для BattleScene
+    const playerUnitsData: any[] = [];
+    for (const id of this.team) {
+      try {
+        const unit = await this.nftContract.read.getUnit([BigInt(id)]);
+        playerUnitsData.push({
+          faction: Number(unit.faction),
+          unitClass: Number(unit.unitClass)
+        });
+      } catch {
+        playerUnitsData.push({ faction: 0, unitClass: 0 });
+      }
+    }
+
+    const aiUnitsData: any[] = [];
+    try {
+      const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+      for (const u of aiData) {
+        aiUnitsData.push({
+          faction: Number(u.faction),
+          unitClass: Number(u.unitClass)
+        });
+      }
+    } catch {
+      for (let i = 0; i < 8; i++) aiUnitsData.push({ faction: 1, unitClass: 0 });
+    }
+
+    const successMsg = this.add.text(960, 380, 'БОЙ ЗАПУЩЕН!', {
+      fontSize: '48px', fill: '#00ff88', fontStyle: 'bold'
+    }).setOrigin(0.5);
+    setTimeout(() => successMsg.destroy(), 900);
+
+    this.scene.start('BattleScene', {
+      events: eventsRaw || [],
+      playerWon: playerWon,
+      playerMaxHp: playerMaxHp || [],
+      aiMaxHp: aiMaxHp || [],
+      playerUnitsData,
+      aiUnitsData
+    });
+
+  } catch (e: any) {
+    console.error('❌ startBattle error:', e);
+    const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
+    const errorText = this.add.text(960, 450, `Ошибка: ${errMsg}`, {
+      fontSize: '34px', fill: '#ff4444'
+    }).setOrigin(0.5);
+    setTimeout(() => errorText.destroy(), 4500);
+  }
 }
 
 private openCollectionScene() {

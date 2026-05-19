@@ -29,15 +29,17 @@ export default class BattleScene extends Phaser.Scene {
   private aiShips: Phaser.GameObjects.Sprite[] = [];
   private playerShadows: Phaser.GameObjects.Sprite[] = [];
   private aiShadows: Phaser.GameObjects.Sprite[] = [];
-  private playerHPLabels: Phaser.GameObjects.Text[] = [];
-  private aiHPLabels: Phaser.GameObjects.Text[] = [];
+  private playerHPLabels: Phaser.GameObjects.Rectangle[] = [];
+  private aiHPLabels: Phaser.GameObjects.Rectangle[] = [];
+  private playerHPBgs: Phaser.GameObjects.Rectangle[] = [];
+  private aiHPBgs: Phaser.GameObjects.Rectangle[] = [];
 
   private currentEventIndex = 0;
   private battleLogTexts: Phaser.GameObjects.Text[] = [];
   private fullBattleLog: string[] = [];
   private logContainer: Phaser.GameObjects.Container | null = null;
   private currentRoundText: Phaser.GameObjects.Text | null = null;
-  private battleSpeedMultiplier = 1;   // 1 = нормально, 0.5 = x2
+  private battleSpeedMultiplier = 1;
 
   private backgroundLayers: Phaser.GameObjects.Image[] = [];
 
@@ -81,72 +83,71 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('voidborn_dreadnought', 'assets/units/portraits/voidborn_dreadnought.png');
     this.load.image('voidborn_droneswarm', 'assets/units/portraits/voidborn_droneswarm.png');
     this.load.image('voidborn_fighter', 'assets/units/portraits/voidborn_fighter.png');
-    // === УНИЧТОЖЕННЫЕ ВЕРСИИ КОРАБЛЕЙ ===
-this.load.image('emperial_fighter_destroyed', 'assets/units/destroyed/emperial_fighter_destroyed.png');
-this.load.image('emperial_cruiser_destroyed', 'assets/units/destroyed/emperial_cruiser_destroyed.png');
-this.load.image('emperial_dreadnought_destroyed', 'assets/units/destroyed/emperial_dreadnought_destroyed.png');
-this.load.image('emperial_droneswarm_destroyed', 'assets/units/destroyed/emperial_droneswarm_destroyed.png');
 
-this.load.image('voidborn_fighter_destroyed', 'assets/units/destroyed/voidborn_fighter_destroyed.png');
-this.load.image('voidborn_cruiser_destroyed', 'assets/units/destroyed/voidborn_cruiser_destroyed.png');
-this.load.image('voidborn_dreadnought_destroyed', 'assets/units/destroyed/voidborn_dreadnought_destroyed.png');
-this.load.image('voidborn_droneswarm_destroyed', 'assets/units/destroyed/voidborn_droneswarm_destroyed.png');
+    // === УНИЧТОЖЕННЫЕ ВЕРСИИ ===
+    this.load.image('emperial_fighter_destroyed', 'assets/units/destroyed/emperial_fighter_destroyed.png');
+    this.load.image('emperial_cruiser_destroyed', 'assets/units/destroyed/emperial_cruiser_destroyed.png');
+    this.load.image('emperial_dreadnought_destroyed', 'assets/units/destroyed/emperial_dreadnought_destroyed.png');
+    this.load.image('emperial_droneswarm_destroyed', 'assets/units/destroyed/emperial_droneswarm_destroyed.png');
 
-this.load.image('mechanoid_fighter_destroyed', 'assets/units/destroyed/mechanoid_fighter_destroyed.png');
-this.load.image('mechanoid_cruiser_destroyed', 'assets/units/destroyed/mechanoid_cruiser_destroyed.png');
-this.load.image('mechanoid_dreadnought_destroyed', 'assets/units/destroyed/mechanoid_dreadnought_destroyed.png');
-this.load.image('mechanoid_droneswarm_destroyed', 'assets/units/destroyed/mechanoid_droneswarm_destroyed.png');
+    this.load.image('voidborn_fighter_destroyed', 'assets/units/destroyed/voidborn_fighter_destroyed.png');
+    this.load.image('voidborn_cruiser_destroyed', 'assets/units/destroyed/voidborn_cruiser_destroyed.png');
+    this.load.image('voidborn_dreadnought_destroyed', 'assets/units/destroyed/voidborn_dreadnought_destroyed.png');
+    this.load.image('voidborn_droneswarm_destroyed', 'assets/units/destroyed/voidborn_droneswarm_destroyed.png');
 
-    // Новая платформа с гридом
+    this.load.image('mechanoid_fighter_destroyed', 'assets/units/destroyed/mechanoid_fighter_destroyed.png');
+    this.load.image('mechanoid_cruiser_destroyed', 'assets/units/destroyed/mechanoid_cruiser_destroyed.png');
+    this.load.image('mechanoid_dreadnought_destroyed', 'assets/units/destroyed/mechanoid_dreadnought_destroyed.png');
+    this.load.image('mechanoid_droneswarm_destroyed', 'assets/units/destroyed/mechanoid_droneswarm_destroyed.png');
+
     this.load.image('arena_platform', 'assets/background/arena_platform.png');
   }
 
-create() {
-  this.shutdownCleanup();
-  this.createParallaxBackground();
-  this.createArenaPlatform();
+  create() {
+    this.shutdownCleanup();
+    this.createParallaxBackground();
+    this.createArenaPlatform();
 
-  this.add.rectangle(960, 540, 1920, 1080, 0x050010).setAlpha(0.22);
+    this.add.rectangle(960, 540, 1920, 1080, 0x050010).setAlpha(0.22);
 
-  // === X2 / X1 кнопка (правый верхний угол) ===
-  const speedBtnBase = this.add.image(1820, 55, 'button_base')
-    .setDisplaySize(78, 48)
-    .setInteractive()
-    .setDepth(200);
+    // === X2 / X1 кнопка ===
+    const speedBtnBase = this.add.image(1820, 55, 'button_base')
+      .setDisplaySize(78, 48)
+      .setInteractive()
+      .setDepth(200);
 
-  const speedBtnText = this.add.text(1820, 55, 'x2', {
-    fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(201);
+    const speedBtnText = this.add.text(1820, 55, 'x2', {
+      fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(201);
 
-  (speedBtnBase as any).linkedText = speedBtnText;
+    (speedBtnBase as any).linkedText = speedBtnText;
 
-  speedBtnBase.on('pointerdown', () => {
-    if (this.battleSpeedMultiplier === 1) {
-      this.battleSpeedMultiplier = 0.5;
-      speedBtnText.setText('x1');
-      speedBtnText.setFill('#ffff00');
+    speedBtnBase.on('pointerdown', () => {
+      if (this.battleSpeedMultiplier === 1) {
+        this.battleSpeedMultiplier = 0.5;
+        speedBtnText.setText('x1');
+        speedBtnText.setFill('#ffff00');
+      } else {
+        this.battleSpeedMultiplier = 1;
+        speedBtnText.setText('x2');
+        speedBtnText.setFill('#ffffff');
+      }
+    });
+
+    this.setupTeams();
+    this.setupBattleLog();
+
+    if (this.battleEvents.length === 0) {
+      this.showFinalResult();
     } else {
-      this.battleSpeedMultiplier = 1;
-      speedBtnText.setText('x2');
-      speedBtnText.setFill('#ffffff');
+      this.currentEventIndex = 0;
+      this.processNextEvent();
     }
-  });
 
-  this.setupTeams();
-  this.setupBattleLog();
-
-  if (this.battleEvents.length === 0) {
-    this.showFinalResult();
-  } else {
-    this.currentEventIndex = 0;
-    this.processNextEvent();
+    this.add.image(960, 540, 'outer_frame')
+      .setDisplaySize(1920, 1080)
+      .setDepth(300);
   }
-  // === Полная рамка сцены ===
-this.add.image(960, 540, 'outer_frame')
-  .setDisplaySize(1920, 1080)
-  .setDepth(300);
-}
-
 
   private createParallaxBackground() {
     const w = this.scale.width;
@@ -171,47 +172,47 @@ this.add.image(960, 540, 'outer_frame')
       .setScrollFactor(0.5)
       .setDepth(2);
     this.backgroundLayers.push(nebulaClose);
-    // === Дыхание космоса (живой эффект) ===
-this.tweens.add({
-  targets: nebulaMid,
-  scaleX: 1.022,
-  scaleY: 1.022,
-  duration: 48000,
-  yoyo: true,
-  repeat: -1,
-  ease: 'Sine.easeInOut'
-});
-// === Очень-очень медленное движение звёзд ===
-this.tweens.add({
-  targets: stars,
-  x: '+=12',
-  y: '+=7',
-  duration: 52000,
-  yoyo: true,
-  repeat: -1,
-  ease: 'Linear'
-});
 
+    this.tweens.add({
+      targets: nebulaMid,
+      scaleX: 1.022,
+      scaleY: 1.022,
+      duration: 48000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: stars,
+      x: '+=12',
+      y: '+=7',
+      duration: 52000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Linear'
+    });
   }
 
-private createArenaPlatform() {
-  const platform = this.add.image(960, 540, 'arena_platform')
-    .setDisplaySize(1920, 1080)
-    .setDepth(5)
-    .setAlpha(0.88);
-}
+  private createArenaPlatform() {
+    this.add.image(960, 540, 'arena_platform')
+      .setDisplaySize(1920, 1080)
+      .setDepth(5)
+      .setAlpha(0.88);
+  }
 
 private setupTeams() {
   this.playerShips = []; this.aiShips = [];
   this.playerShadows = []; this.aiShadows = [];
   this.playerHPLabels = []; this.aiHPLabels = [];
+  this.playerHPBgs = []; this.aiHPBgs = [];
 
   const barWidth = 52;
   const barHeight = 5;
 
   // === Игрок ===
   const playerBaseX = 470;
-  const playerBaseY = 320;           // +50px вверх
+  const playerBaseY = 320;
   const playerRowShiftX = 20;
   const playerSpacingY = 148;
   const playerColSpacing = 122;
@@ -222,9 +223,8 @@ private setupTeams() {
     const depthFactor = row * 0.10;
 
     let x = playerBaseX + (3 - row) * playerRowShiftX + col * playerColSpacing;
-
     if (col === 0) x -= 40;
-    if (col === 1) x += 48;          // ← убрали -50, теперь вправо
+    if (col === 1) x += 48;
 
     const y = playerBaseY + row * playerSpacingY + depthFactor * 28;
 
@@ -246,26 +246,34 @@ private setupTeams() {
     this.playerShips.push(ship);
 
     const barY = y - 42;
-    const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
+    const barBg = this.add.rectangle(x, barY, barWidth, barHeight, 0x222222)
       .setDepth(y + 20)
-      .setVisible(false);
-    const barFill = this.add.rectangle(x, barY, 52, 5, 0x00ff88)
+      .setAlpha(0.85);
+    const barFill = this.add.rectangle(x, barY, barWidth, barHeight, 0x00ff88)
       .setDepth(y + 21)
-      .setVisible(false);
+      .setAlpha(0.85);
 
     (barFill as any).bg = barBg;
     (barFill as any).maxHp = this.playerMaxHp[i] || 100;
+    (barFill as any).currentHp = this.playerMaxHp[i] || 100;
+
+    this.playerHPBgs.push(barBg);
     this.playerHPLabels.push(barFill);
 
     this.tweens.add({
-      targets: ship, y: y - 3, scale: ship.scaleX * 1.015,
-      duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      targets: ship,
+      y: y - 3,
+      scale: ship.scaleX * 1.015,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
     });
   }
 
   // === ИИ ===
   const aiBaseX = 1360;
-  const aiBaseY = 320;               // +50px вверх
+  const aiBaseY = 320;
   const aiRowShiftX = 28;
   const aiSpacingY = 148;
   const aiColSpacing = 122;
@@ -276,7 +284,6 @@ private setupTeams() {
     const depthFactor = row * 0.10;
 
     let x = aiBaseX - (3 - row) * aiRowShiftX + col * aiColSpacing;
-
     if (col === 0) x -= 18 + 50;
     if (col === 1) x += 38;
 
@@ -300,71 +307,84 @@ private setupTeams() {
     this.aiShips.push(ship);
 
     const barY = y - 42;
-    const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
+    const barBg = this.add.rectangle(x, barY, barWidth, barHeight, 0x222222)
       .setDepth(y + 20)
-      .setVisible(false);
-    const barFill = this.add.rectangle(x, barY, 52, 5, 0xff6666)
+      .setAlpha(0.85);
+    const barFill = this.add.rectangle(x, barY, barWidth, barHeight, 0xff6666)
       .setDepth(y + 21)
-      .setVisible(false);
+      .setAlpha(0.85);
 
     (barFill as any).bg = barBg;
     (barFill as any).maxHp = this.aiMaxHp[i] || 100;
+    (barFill as any).currentHp = this.aiMaxHp[i] || 100;
+
+    this.aiHPBgs.push(barBg);
     this.aiHPLabels.push(barFill);
 
     this.tweens.add({
-      targets: ship, y: y - 3, scale: ship.scaleX * 1.015,
-      duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      targets: ship,
+      y: y - 3,
+      scale: ship.scaleX * 1.015,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
     });
   }
 }
 
+  private addEngineParticles(ship: Phaser.GameObjects.Sprite, isPlayer: boolean, baseX: number, baseY: number, baseScale: number) {
+    const offsetX = isPlayer ? -38 : 38; // за кормой
+    const emitter = this.add.particles(baseX + offsetX, baseY + 8, 'laser_blue', {
+      speed: { min: 40, max: 90 },
+      angle: isPlayer ? { min: 150, max: 210 } : { min: -30, max: 30 },
+      scale: { start: 0.18 * baseScale, end: 0.04 },
+      alpha: { start: 0.75, end: 0 },
+      lifespan: 380,
+      quantity: 2,
+      frequency: 55,
+      tint: isPlayer ? 0x00ccff : 0xff8800,
+      blendMode: 'ADD'
+    });
+    emitter.setDepth(ship.depth - 2);
+    this.engineEmitters.push(emitter);
+
+    // Лёгкое мерцание интенсивности
+    this.tweens.add({
+      targets: emitter,
+      alpha: 0.6,
+      duration: 420,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
 
   private getShipKey(faction: number, unitClass: number): string {
     const map: Record<string, string> = {
-      '0_0': 'emperial_fighter',
-      '0_1': 'emperial_cruiser',
-      '0_2': 'emperial_dreadnought',
-      '0_3': 'emperial_droneswarm',
-      '1_0': 'voidborn_fighter',
-      '1_1': 'voidborn_cruiser',
-      '1_2': 'voidborn_dreadnought',
-      '1_3': 'voidborn_droneswarm',
-      '2_0': 'mechanoid_fighter',
-      '2_1': 'mechanoid_cruiser',
-      '2_2': 'mechanoid_dreadnought',
-      '2_3': 'mechanoid_droneswarm',
+      '0_0': 'emperial_fighter', '0_1': 'emperial_cruiser', '0_2': 'emperial_dreadnought', '0_3': 'emperial_droneswarm',
+      '1_0': 'voidborn_fighter', '1_1': 'voidborn_cruiser', '1_2': 'voidborn_dreadnought', '1_3': 'voidborn_droneswarm',
+      '2_0': 'mechanoid_fighter', '2_1': 'mechanoid_cruiser', '2_2': 'mechanoid_dreadnought', '2_3': 'mechanoid_droneswarm',
     };
     return map[`${faction}_${unitClass}`] || 'emperial_fighter';
   }
 
   private getDestroyedShipKey(faction?: number, unitClass?: number): string | null {
-  if (faction === undefined || unitClass === undefined) return null;
+    if (faction === undefined || unitClass === undefined) return null;
+    const map: Record<string, string> = {
+      '0_0': 'emperial_fighter_destroyed', '0_1': 'emperial_cruiser_destroyed', '0_2': 'emperial_dreadnought_destroyed', '0_3': 'emperial_droneswarm_destroyed',
+      '1_0': 'voidborn_fighter_destroyed', '1_1': 'voidborn_cruiser_destroyed', '1_2': 'voidborn_dreadnought_destroyed', '1_3': 'voidborn_droneswarm_destroyed',
+      '2_0': 'mechanoid_fighter_destroyed', '2_1': 'mechanoid_cruiser_destroyed', '2_2': 'mechanoid_dreadnought_destroyed', '2_3': 'mechanoid_droneswarm_destroyed',
+    };
+    return map[`${faction}_${unitClass}`] || null;
+  }
 
-  const map: Record<string, string> = {
-    '0_0': 'emperial_fighter_destroyed',
-    '0_1': 'emperial_cruiser_destroyed',
-    '0_2': 'emperial_dreadnought_destroyed',
-    '0_3': 'emperial_droneswarm_destroyed',
-    '1_0': 'voidborn_fighter_destroyed',
-    '1_1': 'voidborn_cruiser_destroyed',
-    '1_2': 'voidborn_dreadnought_destroyed',
-    '1_3': 'voidborn_droneswarm_destroyed',
-    '2_0': 'mechanoid_fighter_destroyed',
-    '2_1': 'mechanoid_cruiser_destroyed',
-    '2_2': 'mechanoid_dreadnought_destroyed',
-    '2_3': 'mechanoid_droneswarm_destroyed',
-  };
-  return map[`${faction}_${unitClass}`] || null;
-}
-
-
-private setupBattleLog() {
-  this.logContainer = this.add.container(960, 915);
-  this.add.text(960, 890, 'BATTLE LOG', {
-    fontSize: '24px', color: '#ffff00', fontStyle: 'bold'
-  }).setOrigin(0.5);
-}
-
+  private setupBattleLog() {
+    this.logContainer = this.add.container(960, 915);
+    this.add.text(960, 890, 'BATTLE LOG', {
+      fontSize: '24px', color: '#ffff00', fontStyle: 'bold'
+    }).setOrigin(0.5);
+  }
 
   private addToLog(text: string, color = '#d0d0ff') {
     this.fullBattleLog.push(text);
@@ -382,146 +402,161 @@ private setupBattleLog() {
     }
   }
 
-private processNextEvent() {
-  if (this.currentEventIndex >= this.battleEvents.length) {
-    this.showFinalResult();
-    return;
+  private processNextEvent() {
+    if (this.currentEventIndex >= this.battleEvents.length) {
+      this.showFinalResult();
+      return;
+    }
+    const event = this.battleEvents[this.currentEventIndex];
+    this.animateEvent(event);
+    this.currentEventIndex++;
+
+    const delay = 1300 * this.battleSpeedMultiplier;
+    this.time.delayedCall(delay, () => this.processNextEvent());
   }
-  const event = this.battleEvents[this.currentEventIndex];
-  this.animateEvent(event);
-  this.currentEventIndex++;
 
-  const delay = 1300 * this.battleSpeedMultiplier;   // было 650
-  this.time.delayedCall(delay, () => this.processNextEvent());
-}
+  private animateEvent(event: BattleEvent) {
+    const isPlayer = event.isPlayerSide;
+    const attackers = isPlayer ? this.playerShips : this.aiShips;
+    const targets = isPlayer ? this.aiShips : this.playerShips;
+    const healthBars = isPlayer ? this.aiHPLabels : this.playerHPLabels;
+    const healthBgs = isPlayer ? this.aiHPBgs : this.playerHPBgs;
 
+    const attacker = attackers[event.attackerIndex % attackers.length];
+    const target = targets[event.targetIndex % targets.length];
+    const healthBar = healthBars[event.targetIndex % healthBars.length];
+    const healthBg = healthBgs[event.targetIndex % healthBgs.length];
 
-private animateEvent(event: BattleEvent) {
-  const isPlayer = event.isPlayerSide;
-  const attackers = isPlayer ? this.playerShips : this.aiShips;
-  const targets = isPlayer ? this.aiShips : this.playerShips;
-  const healthBars = isPlayer ? this.aiHPLabels : this.playerHPLabels;   // health bars
+    if (!attacker || !target) return;
 
-  const attacker = attackers[event.attackerIndex % attackers.length];
-  const target = targets[event.targetIndex % targets.length];
-  const healthBar = healthBars[event.targetIndex % healthBars.length];
+    const originalX = attacker.x;
+    const originalY = attacker.y;
+    const originalScale = attacker.scaleX;
 
-  if (!attacker || !target) return;
+    const recoilDistance = isPlayer ? -22 : 22;
+    const speed = this.battleSpeedMultiplier;
 
-  const originalX = attacker.x;
-  const originalY = attacker.y;
-  const originalScale = attacker.scaleX;
+    this.tweens.add({
+      targets: attacker,
+      x: attacker.x + recoilDistance,
+      y: attacker.y - 6,
+      scale: originalScale * 0.96,
+      duration: 90 * speed,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        const laserKey = isPlayer ? 'laser_blue' : 'laser_red';
+        const laser = this.add.sprite(attacker.x, attacker.y, laserKey).setDepth(30);
+        const angle = Phaser.Math.Angle.Between(attacker.x, attacker.y, target.x, target.y);
+        laser.setRotation(angle);
+        laser.setScale(0.6);
 
-  const recoilDistance = isPlayer ? -22 : 22;
-  const speed = this.battleSpeedMultiplier;
+        this.tweens.add({
+          targets: laser,
+          x: target.x,
+          y: target.y,
+          duration: 85 * speed,
+          onComplete: () => {
+            laser.destroy();
 
-  this.tweens.add({
-    targets: attacker,
-    x: attacker.x + recoilDistance,
-    y: attacker.y - 6,
-    scale: originalScale * 0.96,
-    duration: 90 * speed,
-    ease: 'Sine.easeOut',
-    onComplete: () => {
-      const laserKey = isPlayer ? 'laser_blue' : 'laser_red';
-      const laser = this.add.sprite(attacker.x, attacker.y, laserKey).setDepth(30);
-      const angle = Phaser.Math.Angle.Between(attacker.x, attacker.y, target.x, target.y);
-      laser.setRotation(angle);
-      laser.setScale(0.6);
-
-      this.tweens.add({
-        targets: laser,
-        x: target.x,
-        y: target.y,
-        duration: 85 * speed,
-        onComplete: () => {
-          laser.destroy();
-
-          const dmg = Number(event.damageDealt);
-          if (dmg > 0) {
-            const color = event.specialEffect === 'CRIT' ? '#ffff00' : '#ff4444';
-            const dmgText = this.add.text(target.x, target.y - 55, `-${dmg}`, {
-              fontSize: '42px', color, fontStyle: 'bold'
-            }).setOrigin(0.5).setDepth(40);
-            this.tweens.add({
-              targets: dmgText, y: dmgText.y - 95, alpha: 0, duration: 580 * speed,
-              onComplete: () => dmgText.destroy()
-            });
-          }
-
-          // === HEALTH BAR ЛОГИКА ===
-          if (healthBar && event.remainingHp > 0 && event.remainingHp < (healthBar as any).maxHp) {
-            const maxHp = (healthBar as any).maxHp;
-            const percent = event.remainingHp / maxHp;
-            const bg = (healthBar as any).bg;
-
-            healthBar.setVisible(true);
-            if (bg) bg.setVisible(true);
-
-            healthBar.width = 52 * percent;
-            healthBar.setFillStyle(percent > 0.3 ? 0x00ff88 : 0xff4444);
-
-            // Прячем через 900 мс
-            this.time.delayedCall(900, () => {
-              if (healthBar.scene) healthBar.setVisible(false);
-              if (bg && bg.scene) bg.setVisible(false);
-            });
-          }
-
-          if (event.remainingHp <= 0) {
-            this.playExplosion(target.x, target.y);
-
-            const destroyedKey = this.getDestroyedShipKey(
-              isPlayer ? this.playerUnitsData[event.targetIndex]?.faction : this.aiUnitsData[event.targetIndex]?.faction,
-              isPlayer ? this.playerUnitsData[event.targetIndex]?.unitClass : this.aiUnitsData[event.targetIndex]?.unitClass
-            );
-            if (destroyedKey) {
-              target.setTexture(destroyedKey);
-              target.setAlpha(0.75);
-              this.tweens.killTweensOf(target);
+            const dmg = Number(event.damageDealt);
+            if (dmg > 0) {
+              const color = event.specialEffect === 'CRIT' ? '#ffff00' : '#ff4444';
+              const dmgText = this.add.text(target.x, target.y - 55, `-${dmg}`, {
+                fontSize: '42px', color, fontStyle: 'bold'
+              }).setOrigin(0.5).setDepth(40);
+              this.tweens.add({
+                targets: dmgText,
+                y: dmgText.y - 95,
+                alpha: 0,
+                duration: 580 * speed,
+                onComplete: () => dmgText.destroy()
+              });
             }
 
-            // Прячем health bar навсегда
-            if (healthBar) healthBar.setVisible(false);
-            if ((healthBar as any).bg) (healthBar as any).bg.setVisible(false);
+            // === LIVE HP BAR UPDATE ===
+            if (healthBar && healthBg && event.remainingHp >= 0) {
+              const maxHp = (healthBar as any).maxHp || 100;
+              const percent = Math.max(0, event.remainingHp / maxHp);
+              (healthBar as any).currentHp = event.remainingHp;
+
+              healthBar.setVisible(true);
+              healthBg.setVisible(true);
+              healthBar.width = 52 * percent;
+
+              let fillColor = 0x00ff88;
+              if (percent < 0.3) fillColor = 0xff4444;
+              else if (percent < 0.6) fillColor = 0xffcc00;
+              healthBar.setFillStyle(fillColor);
+            }
+
+            if (event.remainingHp <= 0) {
+              this.playExplosion(target.x, target.y);
+
+              const destroyedKey = this.getDestroyedShipKey(
+                isPlayer ? this.playerUnitsData[event.targetIndex]?.faction : this.aiUnitsData[event.targetIndex]?.faction,
+                isPlayer ? this.playerUnitsData[event.targetIndex]?.unitClass : this.aiUnitsData[event.targetIndex]?.unitClass
+              );
+              if (destroyedKey) {
+                target.setTexture(destroyedKey);
+                target.setAlpha(0.75);
+                this.tweens.killTweensOf(target);
+              }
+
+              if (healthBar) healthBar.setVisible(false);
+              if (healthBg) healthBg.setVisible(false);
+            }
+
+            const attackerName = `${this.getRarityName(event.attackerRarity)} ${this.getClassName(event.attackerClass)}`;
+            const targetName = `${this.getRarityName(event.targetRarity)} ${this.getClassName(event.targetClass)}`;
+            const side = isPlayer ? 'PLAYER' : 'AI';
+            this.addToLog(`R${event.round} • ${side} • ${attackerName} → ${targetName} • ${dmg} dmg`);
+
+            this.tweens.add({
+              targets: attacker,
+              x: originalX, y: originalY, scale: originalScale,
+              duration: 160 * speed,
+              ease: 'Sine.easeOut'
+            });
           }
-
-          const attackerName = `${this.getRarityName(event.attackerRarity)} ${this.getClassName(event.attackerClass)}`;
-          const targetName = `${this.getRarityName(event.targetRarity)} ${this.getClassName(event.targetClass)}`;
-          const side = isPlayer ? 'PLAYER' : 'AI';
-          this.addToLog(`R${event.round} • ${side} • ${attackerName} → ${targetName} • ${dmg} dmg`);
-
-          this.tweens.add({
-            targets: attacker,
-            x: originalX, y: originalY, scale: originalScale,
-            duration: 160 * speed,
-            ease: 'Sine.easeOut'
-          });
-        }
-      });
-    }
-  });
-}
-
-
-  private playExplosion(x: number, y: number) {
-    const explosion = this.add.sprite(x, y, 'explosion_01').setDepth(35).setScale(0.9);
-    let frame = 1;
-    const timer = this.time.addEvent({
-      delay: 70, repeat: 5,
-      callback: () => {
-        frame++;
-        if (frame <= 6) {
-          explosion.setTexture(`explosion_${frame.toString().padStart(2, '0')}`);
-        } else {
-          timer.remove();
-          this.tweens.add({
-            targets: explosion, alpha: 0, scale: 1.6, duration: 180,
-            onComplete: () => explosion.destroy()
-          });
-        }
+        });
       }
     });
+  }
+
+  private playExplosion(x: number, y: number) {
+    // Улучшенный взрыв: 3 последовательных взрыва + shake
+    for (let i = 0; i < 3; i++) {
+      const delay = i * 90;
+      this.time.delayedCall(delay, () => {
+        const explosion = this.add.sprite(x + (Math.random() - 0.5) * 18, y + (Math.random() - 0.5) * 18, 'explosion_01')
+          .setDepth(35)
+          .setScale(0.75 + i * 0.15);
+
+        let frame = 1;
+        const timer = this.time.addEvent({
+          delay: 55,
+          repeat: 5,
+          callback: () => {
+            frame++;
+            if (frame <= 6) {
+              explosion.setTexture(`explosion_${frame.toString().padStart(2, '0')}`);
+            } else {
+              timer.remove();
+              this.tweens.add({
+                targets: explosion,
+                alpha: 0,
+                scale: 2.1,
+                duration: 140,
+                onComplete: () => explosion.destroy()
+              });
+            }
+          }
+        });
+      });
+    }
+
+    // Screen shake
+    this.cameras.main.shake(180, 0.008);
   }
 
   private getRarityName(rarity?: number): string {
@@ -535,63 +570,49 @@ private animateEvent(event: BattleEvent) {
     return names[unitClass || 0] || 'Unknown';
   }
 
-private showFinalResult() {
-  const resultText = this.playerWon ? 'VICTORY!' : 'DEFEAT';
-  const color = this.playerWon ? '#00ff88' : '#ff3366';
+  private showFinalResult() {
+    const resultText = this.playerWon ? 'VICTORY!' : 'DEFEAT';
+    const color = this.playerWon ? '#00ff88' : '#ff3366';
 
-  // VICTORY / DEFEAT (как кнопка)
-  const resultBase = this.add.image(960, 90, 'button_base')
-    .setDisplaySize(520, 92)
-    .setInteractive()
-    .setDepth(100);
+    const resultBase = this.add.image(960, 90, 'button_base')
+      .setDisplaySize(520, 92)
+      .setInteractive()
+      .setDepth(100);
 
-  const resultLabel = this.add.text(960, 90, resultText, {
-    fontSize: '72px', color, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(101);
+    const resultLabel = this.add.text(960, 90, resultText, {
+      fontSize: '72px', color, fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(101);
 
-  (resultBase as any).linkedText = resultLabel;
+    (resultBase as any).linkedText = resultLabel;
 
-  // GO BACK кнопка
-  const btnBase = this.add.image(960, 190, 'button_base')
-    .setDisplaySize(320, 58)
-    .setInteractive()
-    .setDepth(100);
+    const btnBase = this.add.image(960, 190, 'button_base')
+      .setDisplaySize(320, 58)
+      .setInteractive()
+      .setDepth(100);
 
-  const btnText = this.add.text(960, 190, 'GO BACK', {
-    fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(101);
+    const btnText = this.add.text(960, 190, 'GO BACK', {
+      fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(101);
 
-  (btnBase as any).linkedText = btnText;
+    (btnBase as any).linkedText = btnText;
 
-  btnBase.on('pointerdown', () => this.scene.start('PrepareScene'));
-}
-
-
-  private shutdownCleanup() {
-    this.tweens.killAll();
-    this.time.removeAllEvents();
-    [...this.playerShips, ...this.aiShips, ...this.playerShadows, ...this.aiShadows].forEach(s => s?.destroy());
-    [...this.playerHPLabels, ...this.aiHPLabels].forEach(t => t?.destroy());
-    this.battleLogTexts.forEach(t => t?.destroy());
-
-    this.playerShips = []; this.aiShips = [];
-    this.playerShadows = []; this.aiShadows = [];
-    this.playerHPLabels = []; this.aiHPLabels = [];
-    this.battleLogTexts = [];
-    this.playerHPLabels.forEach(bar => {
-  if (bar) bar.destroy();
-  const bg = (bar as any).bg;
-  if (bg) bg.destroy();
-});
-this.aiHPLabels.forEach(bar => {
-  if (bar) bar.destroy();
-  const bg = (bar as any).bg;
-  if (bg) bg.destroy();
-});
-this.playerHPLabels = [];
-this.aiHPLabels = [];
-
+    btnBase.on('pointerdown', () => this.scene.start('PrepareScene'));
   }
+
+private shutdownCleanup() {
+  this.tweens.killAll();
+  this.time.removeAllEvents();
+
+  [...this.playerShips, ...this.aiShips, ...this.playerShadows, ...this.aiShadows].forEach(s => s?.destroy());
+  [...this.playerHPLabels, ...this.aiHPLabels, ...this.playerHPBgs, ...this.aiHPBgs].forEach(t => t?.destroy());
+  this.battleLogTexts.forEach(t => t?.destroy());
+
+  this.playerShips = []; this.aiShips = [];
+  this.playerShadows = []; this.aiShadows = [];
+  this.playerHPLabels = []; this.aiHPLabels = [];
+  this.playerHPBgs = []; this.aiHPBgs = [];
+  this.battleLogTexts = [];
+}
 
   shutdown() {
     this.shutdownCleanup();

@@ -50,6 +50,7 @@ export default class CollectionScene extends Phaser.Scene {
     super({ key: 'CollectionScene' });
   }
 
+  
   init(data: any) {
     if (data.walletManager) {
       this.walletManager = data.walletManager;
@@ -222,13 +223,14 @@ export default class CollectionScene extends Phaser.Scene {
   }
 
 private createGridContainer() {
-  this.gridContainer = this.add.container(48, 320);
+  this.gridContainer = this.add.container(48, 325);
 
   this.contentContainer = this.add.container(0, 0);
   this.gridContainer.add(this.contentContainer);
 
+  // Маска расширена вверх (Y=305 вместо 315), чтобы крупные рамки не обрезались
   const maskGraphics = this.make.graphics();
-  maskGraphics.fillRect(38, 310, 760, 640);
+  maskGraphics.fillRect(38, 290, 760, 660);
   const mask = maskGraphics.createGeometryMask();
   this.gridContainer.setMask(mask);
 }
@@ -325,37 +327,36 @@ private refreshGrid() {
     });
   }
 
-const spacingX = this.RELIC_SPACING_X;
-const spacingY = this.RELIC_SPACING_Y;
-const startY = 26;
+  const spacingX = this.RELIC_SPACING_X;
+  const spacingY = this.RELIC_SPACING_Y;
+  const startY = 32;                    // чуть поднял, чтобы рамки не вылезали
 
-data.forEach((item, index) => {
-  const col = index % this.ITEMS_PER_ROW;
-  const row = Math.floor(index / this.ITEMS_PER_ROW);
-  const x = this.GRID_START_X + col * spacingX;
-  const y = startY + row * spacingY;
+  data.forEach((item, index) => {
+    const col = index % this.ITEMS_PER_ROW;
+    const row = Math.floor(index / this.ITEMS_PER_ROW);
+    const x = this.GRID_START_X + col * spacingX;
+    const y = startY + row * spacingY;
 
-  if (this.currentTab === 'units') {
-    const card = this.createUnitCard(x, y, item);
-    this.contentContainer!.add(card);
-    this.unitSprites.push(card);
-  } else {
-    const card = this.createRelicCard(x, y, item);
-    this.contentContainer!.add(card);
-    this.relicSprites.push(card);
-  }
-});
+    if (this.currentTab === 'units') {
+      const card = this.createUnitCard(x, y, item);
+      this.contentContainer!.add(card);
+      this.unitSprites.push(card);
+    } else {
+      const card = this.createRelicCard(x, y, item);
+      this.contentContainer!.add(card);
+      this.relicSprites.push(card);
+    }
+  });
 
-
-  // Скролл (только если нужно)
+  // === МАСКА (обновлённая под большие рамки) ===
   if ((this.currentTab === 'relics' || this.currentTab === 'units') && data.length > this.ITEMS_PER_ROW * 5) {
     const totalRows = Math.ceil(data.length / this.ITEMS_PER_ROW);
     const totalHeight = totalRows * spacingY;
-    const visibleHeight = 5 * spacingY + 30;
+    const visibleHeight = 5 * spacingY + 60;           // увеличил видимую область
     const maxScroll = Math.max(0, totalHeight - visibleHeight);
 
     const maskGraphics = this.make.graphics();
-    maskGraphics.fillRect(38, 310, 760, visibleHeight);
+    maskGraphics.fillRect(38, 290, 760, visibleHeight);   // ← 290 вместо 310
     const mask = maskGraphics.createGeometryMask();
     this.gridContainer!.setMask(mask);
 
@@ -394,7 +395,7 @@ data.forEach((item, index) => {
     this.input.off('wheel');
 
     const maskGraphics = this.make.graphics();
-    maskGraphics.fillRect(38, 310, 760, 640);
+    maskGraphics.fillRect(38, 290, 760, 660);   // ← 290 вместо 310
     const mask = maskGraphics.createGeometryMask();
     this.gridContainer!.setMask(mask);
   }
@@ -403,18 +404,22 @@ data.forEach((item, index) => {
 
 private createUnitCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
   const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
-  
-  // Используем фабрику (она правильно масштабирует и рамку, и корабль)
+
+  // === УВЕЛИЧИВАЕМ РАМКУ НА 15%, КОРАБЛЬ ОСТАЁТСЯ ТЕМ ЖЕ РАЗМЕРОМ ===
+  const frameScale = 0.21 * 1.20;           // рамка +15%
+  const shipScaleMultiplier = 1 / 1.30;     // компенсируем, чтобы корабль не вырос
+
   const container = UnitVisualFactory.createUnitWithFrame(
-    this, 
-    x, 
-    y, 
-    shipKey, 
-    item.unit.rarity, 
-    0.21          // чуть уменьшил, чтобы корабли не вылезали
+    this,
+    x,
+    y,
+    shipKey,
+    item.unit.rarity,
+    frameScale,
+    shipScaleMultiplier
   );
 
-  // === ЖЁЛТАЯ РАМКА ВЫБОРА (добавляем поверх) ===
+  // === ЖЁЛТАЯ РАМКА ВЫБОРА (поверх всего) ===
   const selectionBorder = this.add.rectangle(0, 0, 68, 68)
     .setStrokeStyle(4, 0xffff00)
     .setFillStyle(0x000000, 0)
@@ -423,18 +428,17 @@ private createUnitCard(x: number, y: number, item: any): Phaser.GameObjects.Cont
   container.add(selectionBorder);
   (container as any).selectionBorder = selectionBorder;
 
-  // === ИНТЕРАКТИВНЫЙ ФОН ===
-  const bg = this.add.rectangle(0, 0, 58, 58, 0x112233)
-    .setStrokeStyle(2, 0x444444)
+  // === ИНТЕРАКТИВНАЯ ЗОНА (прозрачная) ===
+  const hitArea = this.add.rectangle(0, 0, 58, 58, 0x000000, 0)
     .setInteractive();
-  container.add(bg);
+  container.add(hitArea);
 
-  (bg as any).unitId = item.id;
+  (hitArea as any).unitId = item.id;
   (container as any).unitId = item.id;
 
   let clickCount = 0;
 
-  bg.on('pointerdown', () => {
+  hitArea.on('pointerdown', () => {
     clickCount++;
     if (clickCount === 1) {
       this.toggleUnitSelection(item.id, container);
@@ -456,11 +460,12 @@ private createUnitCard(x: number, y: number, item: any): Phaser.GameObjects.Cont
     setTimeout(() => { clickCount = 0; }, 450);
   });
 
-  bg.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
-  bg.on('pointerout', () => this.hideTooltip());
+  hitArea.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+  hitArea.on('pointerout', () => this.hideTooltip());
 
   return container;
 }
+
 
 private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
   const relicMap: Record<number, string> = {
