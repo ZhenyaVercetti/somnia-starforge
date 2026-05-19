@@ -56,7 +56,17 @@ export default class CollectionScene extends Phaser.Scene {
   return map[`${faction}_${unitClass}`] || 'emperial_fighter';
 }
 
-  init(data: any) {
+init(data: any) {
+  if (data.walletManager) {
+    this.walletManager = data.walletManager;
+    this.gameContract = data.gameContract || this.walletManager.gameContract;
+    this.nftContract = data.nftContract || this.walletManager.nftContract;
+    this.relicContract = data.relicContract || this.walletManager.relicContract;
+    this.account = data.account || this.walletManager.account;
+    this.publicClient = data.publicClient || this.walletManager.getPublicClient();
+    this.returnToScene = data.returnTo || 'PrepareScene';
+    this.equippedRelicIds = data.equippedRelicIds || [];
+  } else {
     this.gameContract = data.gameContract;
     this.nftContract = data.nftContract;
     this.relicContract = data.relicContract;
@@ -65,6 +75,7 @@ export default class CollectionScene extends Phaser.Scene {
     this.returnToScene = data.returnTo || 'PrepareScene';
     this.equippedRelicIds = data.equippedRelicIds || [];
   }
+}
 
 
 
@@ -572,7 +583,9 @@ private activateSelectedRelics() {
   const prepareScene = this.scene.get('PrepareScene') as any;
   if (prepareScene && typeof prepareScene.addMultipleRelicsToEquipped === 'function') {
     prepareScene.addMultipleRelicsToEquipped([...this.selectedRelicIds]);
+    
   }
+  
 
   // Удаляем активированные из коллекции
   this.relicsData = this.relicsData.filter(r => !this.selectedRelicIds.includes(r.id));
@@ -632,51 +645,80 @@ private showPreview(id: number, isUnit: boolean) {
 
     const shipKey = this.getShipKey(unit.faction, unit.unitClass);
 
-    // === ФАБРИКА С РАМКОЙ ===
-    const container = UnitVisualFactory.createUnitWithFrame(this, 775, 420, shipKey, unit.rarity, 0.6);
-    container.setDepth(15);
-    this.children.bringToTop(container);
+// === ФАБРИКА С РАМКОЙ ===
+const container = UnitVisualFactory.createUnitWithFrame(
+  this, 
+  775, 440,           // новые координаты
+  shipKey, 
+  unit.rarity, 
+  0.72,               // масштаб РАМКИ
+  0.65                // масштаб КОРАБЛЯ (меньше рамки!)
+);
 
-    this.previewShip = container as any;
+container.setDepth(15);
+this.children.bringToTop(container);
 
-    const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
-    ship.setDepth(16);
+this.previewShip = container as any;
 
-    // Лёгкая пульсация
-    this.tweens.add({
-      targets: ship,
-      scale: 0.62,
-      duration: 1800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
+const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
+ship.setDepth(16);
 
-    const t1 = this.add.text(775, 555, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
+// Лёгкая пульсация (теперь только корабль)
+this.tweens.add({
+  targets: ship,
+  scale: ship.scale * 1.04,   // лёгкая пульсация относительно текущего размера
+  duration: 1800,
+  yoyo: true,
+  repeat: -1,
+  ease: 'Sine.easeInOut'
+});
+
+    const t1 = this.add.text(775, 585, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
       fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
     }).setOrigin(0.5).setDepth(20);
     this.previewTexts.push(t1);
 
-    const t2 = this.add.text(775, 605, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
+    const t2 = this.add.text(775, 635, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
       fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
     }).setOrigin(0.5).setDepth(20);
     this.previewTexts.push(t2);
 
-  } else {
-    const relicData = this.relicsData.find(r => r.id === id)?.relic;
-    if (relicData) {
-      const t1 = this.add.text(775, 395, relicData.name, {
-        fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
-      }).setOrigin(0.5).setDepth(20);
-      this.previewTexts.push(t1);
+} else {
+  const relicData = this.relicsData.find(r => r.id === id)?.relic;
+  if (relicData) {
 
-      const t2 = this.add.text(775, 460, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
-        fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
-      }).setOrigin(0.5).setDepth(20);
-      this.previewTexts.push(t2);
-    }
+    // === ОТОБРАЖЕНИЕ РЕЛИКВИИ (в верхней части) ===
+    const relicMap: Record<number, string> = {
+      0: 'quantum_strike',
+      1: 'void_shield',
+      2: 'nebula_dash',
+      3: 'echo_core',
+      4: 'flux_overload',
+      5: 'last_stand'
+    };
+
+    const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
+
+    const relicSprite = this.add.sprite(775, 420, relicKey)
+      .setScale(1.15)
+      .setDepth(16);
+
+    this.previewShip = relicSprite as any;
+
+    // === ТЕКСТ (в нижней части) ===
+    const t1 = this.add.text(775, 565, relicData.name.replace(/\s*\+\d+/, ''), {
+        fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
+    }).setOrigin(0.5).setDepth(20);
+    this.previewTexts.push(t1);
+
+    const t2 = this.add.text(775, 635, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
+      fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
+    }).setOrigin(0.5).setDepth(20);
+    this.previewTexts.push(t2);
   }
-}
+} 
+} 
+
 
 
 private addSingleUnitToTeam(unitId: number) {
@@ -726,7 +768,7 @@ private equipSingleRelic(relicId: number) {
     if (unit) {
       text = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
     } else if (relic) {
-      text = `${relic.name}\n+${relic.value} ${this.getRelicEffectDescription(relic.relicType)}`;
+text = `${relic.name.replace(/\s*\+\d+/, '')}\n+${relic.value} ${this.getRelicEffectDescription(relic.relicType)}`;
     }
 
     this.tooltip.setText(text);

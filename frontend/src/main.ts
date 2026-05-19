@@ -1,7 +1,9 @@
 // @ts-nocheck
-// // frontend/src/main.ts
+// frontend/src/main.ts
+import './main-react';
 import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
+import WalletSelectScene from './scenes/WalletSelectScene';
 import PrepareScene from './scenes/PrepareScene';
 import BattleScene from './scenes/BattleScene';
 import CollectionScene from './scenes/CollectionScene';
@@ -12,7 +14,7 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 1080,
   parent: 'game',
   backgroundColor: '#0a0022',
-  scene: [BootScene, PrepareScene, BattleScene, CollectionScene],
+  scene: [BootScene, WalletSelectScene, PrepareScene, BattleScene, CollectionScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
@@ -20,3 +22,4 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 new Phaser.Game(config);
+(window as any).game = game;
