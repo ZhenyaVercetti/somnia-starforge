@@ -10,7 +10,7 @@
 ## Порядок обновления контрактов
 
 **При обновлении StarForgeGame.sol:**
-1. Деплоим **НОВЫЙ** StarForgeGame с параметром `_unitNFT = 0x9D00dB7fb6faF315C9c63971ae34380d5b831a56`
+1. Деплоим **НОВЫЙ** StarForgeGame с параметром `_unitNFT = 0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d`
 2. В StarForgeUnitNFT вызываем `setGameContract(новый_адрес_Game)`
 3. В новом StarForgeGame вызываем `setRelicContract(0x83930224Ced8cEB6350fC9F41202B8fAA0033173)`
 4. В Relic вызываем `setGameContract(новый_адрес_StarForgeGame)`

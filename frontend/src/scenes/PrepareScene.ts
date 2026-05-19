@@ -954,7 +954,7 @@ private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
   bg.setDisplaySize(1920, 1080);
 
-  // === PROFILE ===
+  // === PROFILE (слева сверху) ===
   const profileX = 45;
   const profileY = 28;
 
@@ -978,7 +978,7 @@ private addGameUI() {
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-  // === TEAM GRID ===
+  // === TEAM GRID (центр) ===
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
 
@@ -994,7 +994,7 @@ private addGameUI() {
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
-    const row = Math.floor(i / 8);
+    const row = Math.floor(i / 4);
     const x = teamStartX + col * (slotSize + hSpacing);
     const y = teamStartY + row * (slotSize + vSpacing);
 
@@ -1026,8 +1026,8 @@ private addGameUI() {
     .setDisplaySize(1920, 1080)
     .setDepth(200);
 
-  this.teamCounterText = this.add.text(940, 670, 'TEAM: 0/8', { 
-    fontSize: '38px', fill: '#ffff00' 
+  this.teamCounterText = this.add.text(940, 670, 'TEAM: 0/8', {
+    fontSize: '38px', fill: '#ffff00'
   }).setOrigin(0.5);
 
   // === EQUIPPED RELICS ===
@@ -1047,35 +1047,33 @@ private addGameUI() {
   // === КНОПКИ ===
 
   // AUTO SELECT
-  const btnAuto = this.add.image(790, 300, 'button_base')
+  const btnAuto = this.add.image(790, 285, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textAuto = this.add.text(770, 300, 'AUTO SELECT', { 
-    fontSize: '26px', fill: '#00ff88', fontStyle: 'bold' 
+  const textAuto = this.add.text(790, 285, 'AUTO SELECT', {
+    fontSize: '26px', fill: '#00ff88', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnAuto as any).linkedText = textAuto;
   btnAuto.on('pointerdown', () => this.autoSelectTeam());
   this.addButtonEffects(btnAuto);
 
   // CLEAR TEAM
-  const btnClear = this.add.image(1100, 300, 'button_base')
+  const btnClear = this.add.image(1100, 285, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textClear = this.add.text(1100, 300, 'CLEAR TEAM', { 
-    fontSize: '26px', fill: '#ff6666', fontStyle: 'bold' 
+  const textClear = this.add.text(1100, 285, 'CLEAR TEAM', {
+    fontSize: '26px', fill: '#ff6666', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnClear as any).linkedText = textClear;
   btnClear.on('pointerdown', () => this.clearTeam());
   this.addButtonEffects(btnClear);
 
-  this.addButtonEffects(btnConnect);
-
   // REROLL SHOP
-  const btnReroll = this.add.image(285, 460, 'button_base')
+  const btnReroll = this.add.image(285, 445, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textReroll = this.add.text(285, 460, 'REROLL SHOP', { 
-    fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold' 
+  const textReroll = this.add.text(285, 445, 'REROLL SHOP', {
+    fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnReroll as any).linkedText = textReroll;
   btnReroll.on('pointerdown', () => this.rerollShop());
@@ -1085,19 +1083,19 @@ private addGameUI() {
   const btnCollection = this.add.image(285, 900, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textCollection = this.add.text(285, 900, 'Collection', { 
-    fontSize: '26px', fill: '#ffff00', fontStyle: 'bold' 
+  const textCollection = this.add.text(285, 900, 'Collection', {
+    fontSize: '26px', fill: '#ffff00', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnCollection as any).linkedText = textCollection;
   btnCollection.on('pointerdown', () => this.openCollectionScene());
   this.addButtonEffects(btnCollection);
 
   // BUY
-  const btnBuy = this.add.image(285, 820, 'button_base')
+  const btnBuy = this.add.image(285, 805, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
-  const textBuy = this.add.text(285, 820, 'BUY (FREE)', { 
-    fontSize: '26px', fill: '#00ffff', fontStyle: 'bold' 
+  const textBuy = this.add.text(285, 805, 'BUY (FREE)', {
+    fontSize: '26px', fill: '#00ffff', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnBuy as any).linkedText = textBuy;
   btnBuy.on('pointerdown', () => this.buyUnit());
@@ -1107,8 +1105,8 @@ private addGameUI() {
   const btnStart = this.add.image(1600, 900, 'button_start')
     .setInteractive()
     .setDisplaySize(400, 90);
-  const textStart = this.add.text(1600, 900, '▶ START BATTLE', { 
-    fontSize: '36px', fill: '#ff3333', fontStyle: 'bold' 
+  const textStart = this.add.text(1600, 900, '▶ START BATTLE', {
+    fontSize: '36px', fill: '#ff3333', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnStart as any).linkedText = textStart;
   btnStart.on('pointerdown', () => this.startBattle());

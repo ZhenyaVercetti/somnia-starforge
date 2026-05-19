@@ -1,6 +1,21 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <style>
+  #react-root {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 99999;
+    pointer-events: none;
+  }
+  
+  #react-root > * {
+    pointer-events: all;
+  }
+</style>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

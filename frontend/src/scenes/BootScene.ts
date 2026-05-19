@@ -31,18 +31,50 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('rare_frame', 'assets/frames/rare.png');
   }
 
-  create() {
-    // Фон (если ассет не загрузился — просто тёмный)
-    try {
-      this.add.image(960, 540, 'bg').setAlpha(0.6);
-    } catch {
-      this.add.rectangle(960, 540, 1920, 1080, 0x0a0022);
+create() {
+  // Тёмный фон
+  this.add.rectangle(960, 540, 1920, 1080, 0x0a0022);
+
+  // Логотип
+  this.add.text(960, 380, 'SOMNIA STARFORGE', {
+    fontSize: '72px',
+    color: '#00ffff',
+    fontFamily: 'Arial Black',
+  }).setOrigin(0.5);
+
+  // Ждём, пока React назначит функцию openWalletModal
+  const waitForModal = setInterval(() => {
+    if ((window as any).openWalletModal) {
+      clearInterval(waitForModal);
+      (window as any).openWalletModal();
+      console.log('✅ RainbowKit модал открыт');
     }
+  }, 100);
 
-    this.walletManager = WalletManager.getInstance();
+  // Кнопка "НАЧАТЬ ИГРУ" (пока скрыта)
+  this.playBtn = this.add.text(960, 520, 'НАЧАТЬ ИГРУ', {
+    fontSize: '48px',
+    fontFamily: 'Arial Black',
+    color: '#ff00aa',
+    stroke: '#00f9ff',
+    strokeThickness: 5,
+    shadow: { offsetX: 0, offsetY: 0, color: '#ff00aa', blur: 20, fill: true }
+  })
+    .setOrigin(0.5)
+    .setInteractive({ cursor: 'pointer' })
+    .setVisible(false);
 
-    this.createNeonConnectButton();
-  }
+  this.playBtn.on('pointerover', () => this.playBtn?.setScale(1.08));
+  this.playBtn.on('pointerout', () => this.playBtn?.setScale(1));
+  this.playBtn.on('pointerdown', () => {
+    this.scene.start('PrepareScene', {
+      walletManager: this.walletManager
+    });
+  });
+
+  console.log('✅ BootScene готова — ждём RainbowKit');
+}
+
 
   private createNeonConnectButton() {
     this.connectBtn = this.add.text(960, 520, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
