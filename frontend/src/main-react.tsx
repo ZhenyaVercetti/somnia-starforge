@@ -52,9 +52,9 @@ export function startGame() {
       console.log('✅ Запускаем PrepareScene');
       game.scene.start('PrepareScene');
     } else {
-      console.log('❌ game или scene не найдены');
+      console.log('❌ game не найден');
     }
-  }, 300);
+  }, 200);
 }
 
 (window as any).openWalletModal = openWalletModal;

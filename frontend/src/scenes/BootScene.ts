@@ -1,5 +1,6 @@
 // @ts-nocheck
 import * as Phaser from 'phaser';
+import WalletManager from '../lib/WalletManager';
 
 export default class BootScene extends Phaser.Scene {
   constructor() {
@@ -20,10 +21,9 @@ export default class BootScene extends Phaser.Scene {
       color: '#8888ff',
     }).setOrigin(0.5);
 
-    // Регистрируем startGame
-    (window as any).startGame = () => {
-      this.scene.start('PrepareScene');
-    };
+    // Инициализируем walletManager и сохраняем в window
+    const walletManager = WalletManager.getInstance();
+    (window as any).walletManager = walletManager;
 
     // Автоматически открываем RainbowKit
     setTimeout(() => {
@@ -31,5 +31,12 @@ export default class BootScene extends Phaser.Scene {
         (window as any).openWalletModal();
       }
     }, 400);
+
+    // Автоматический переход в PrepareScene через 4 секунды
+    setTimeout(() => {
+      this.scene.start('PrepareScene', {
+        walletManager: walletManager
+      });
+    }, 4000);
   }
 }

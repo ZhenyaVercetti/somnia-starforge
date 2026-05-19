@@ -22,4 +22,4 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
-(window as any).game = game;   // ← должно быть так
+(window as any).game = game;

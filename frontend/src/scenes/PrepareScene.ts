@@ -8,26 +8,33 @@ import { UnitVisualFactory } from '../utils/UnitVisualFactory';
 export default class PrepareScene extends Phaser.Scene {
   
 init(data?: any) {
+  console.log('PrepareScene init — данные:', data);
+
+  // Пытаемся получить walletManager из разных источников
   if (data?.walletManager) {
     this.walletManager = data.walletManager;
-    this.account = this.walletManager.account;
-    this.publicClient = this.walletManager.getPublicClient();
+  } else if ((window as any).walletManager) {
+    this.walletManager = (window as any).walletManager;
   } else {
-    this.walletManager = (window as any).walletManager || WalletManager.getInstance();
-    this.account = this.walletManager.account;
-    this.publicClient = this.walletManager.getPublicClient();
+    this.walletManager = WalletManager.getInstance();
   }
 
-  this.isWalletReady = true;
+  this.account = this.walletManager?.account || null;
+  this.publicClient = this.walletManager?.getPublicClient() || null;
 
-  // Создаём контракты
+  if (!this.account || !this.publicClient) {
+    console.error('❌ account или publicClient не инициализированы в init()');
+    // Не возвращаем return, а пытаемся создать контракты позже
+  }
+
+  this.isWalletReady = !!(this.account && this.publicClient);
   this.createContracts();
 
   if (data?.addUnits && Array.isArray(data.addUnits)) {
     setTimeout(() => this.addMultipleUnitsToTeam(data.addUnits), 350);
   }
 
-  console.log('✅ PrepareScene init — данные получены');
+  console.log('✅ PrepareScene init — данные получены, account:', this.account);
 }
 
   // ... остальной код класса
@@ -75,6 +82,10 @@ init(data?: any) {
   
 
   private createContracts() {
+    if (!this.account || !this.publicClient) {
+    console.error('❌ Невозможно создать контракты — account или publicClient отсутствуют');
+    return;
+  }
     const GAME_ADDRESS = '0x663FfeB8c82F97F31a5209D01D30354Deba9381a';
     const NFT_ADDRESS = '0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d';
     const RELIC_ADDRESS = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
@@ -888,6 +899,7 @@ private addGameUI() {
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
+    const x = teamStartX + col * (slotSize + hSpacing);   // ← ЭТА СТРОКА БЫЛА ПРОПУЩЕНА
     const y = teamStartY + row * (slotSize + vSpacing);
 
     this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);

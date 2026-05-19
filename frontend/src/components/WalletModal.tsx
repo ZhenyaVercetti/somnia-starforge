@@ -1,12 +1,26 @@
 // @ts-nocheck
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount } from 'wagmi';
 
 interface WalletModalProps {
   onClose: () => void;
 }
 
 export const WalletModal: React.FC<WalletModalProps> = ({ onClose }) => {
+  const { isConnected } = useAccount();
+
+  // Автоматически закрываем модал после успешного подключения
+  useEffect(() => {
+    if (isConnected) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 800); // закрываем через 0.8 сек после подключения
+
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected, onClose]);
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
@@ -27,8 +41,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ onClose }) => {
           <ConnectButton />
         </div>
 
-        <p style={{ color: '#888', fontSize: '14px', marginTop: '20px' }}>
-          После подключения ты автоматически попадёшь в игру
+        <p style={{ color: '#888', fontSize: '14px' }}>
+          После подключения модал закроется автоматически
         </p>
       </div>
     </div>
