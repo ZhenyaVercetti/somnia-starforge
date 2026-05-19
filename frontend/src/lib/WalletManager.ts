@@ -1,38 +1,15 @@
-import { 
-  createPublicClient, 
-  createWalletClient, 
-  custom, 
-  http, 
-  formatEther, 
-  type Address 
-} from 'viem';
-
-const SOMNIA_TESTNET = {
-  id: 50312,
-  name: 'Somnia Testnet',
-  nativeCurrency: { name: 'SOM', symbol: 'SOM', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://dream-rpc.somnia.network'] },
-  },
-} as const;
-
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      on?: (event: string, handler: (...args: any[]) => void) => void;
-      removeListener?: (event: string, handler: (...args: any[]) => void) => void;
-    };
-  }
-}
+// frontend/src/lib/WalletManager.ts
+import { createPublicClient, http, formatEther, type Address } from 'viem';
+import { somniaTestnet } from 'viem/chains';
 
 class WalletManager {
   private static instance: WalletManager;
+  
   public account: Address | null = null;
-  public chainId: number | null = null;
-  private walletClient: ReturnType<typeof createWalletClient> | null = null;
-  public publicClient = createPublicClient({
-    chain: SOMNIA_TESTNET,
+  public chainId: number = 50312;
+
+  private publicClient = createPublicClient({
+    chain: somniaTestnet,
     transport: http('https://dream-rpc.somnia.network'),
   });
 
@@ -44,54 +21,12 @@ class WalletManager {
   }
 
   async connect(): Promise<Address> {
-    if (typeof window === 'undefined' || !window.ethereum) {
-      throw new Error('MetaMask не найден. Установи расширение.');
+    // Здесь будет реальное подключение через RainbowKit
+    // Пока заглушка, чтобы не падало
+    if (!this.account) {
+      this.account = '0x0000000000000000000000000000000000000001'; // временно
     }
-
-    this.walletClient = createWalletClient({
-      chain: SOMNIA_TESTNET,
-      transport: custom(window.ethereum),
-    });
-
-    const addresses = await this.walletClient.requestAddresses();
-    this.account = addresses[0] as Address;
-    this.chainId = await this.walletClient.getChainId();
-
-    if (this.chainId !== 50312) {
-      await this.switchChain();
-    }
-
-    // Подписываемся на смену аккаунта
-    if (window.ethereum?.on) {
-      window.ethereum.on('accountsChanged', this.handleAccountsChanged.bind(this));
-    }
-
     return this.account;
-  }
-
-  private handleAccountsChanged(accounts: string[]) {
-    if (accounts.length === 0) {
-      this.disconnect();
-    } else {
-      this.account = accounts[0] as Address;
-    }
-  }
-
-  private async switchChain(): Promise<void> {
-    if (!this.walletClient) return;
-
-    try {
-      await this.walletClient.switchChain({ id: 50312 });
-      this.chainId = 50312;
-    } catch (error: any) {
-      if (error.code === 4902) {
-        await this.walletClient.addChain({ chain: SOMNIA_TESTNET });
-        await this.walletClient.switchChain({ id: 50312 });
-        this.chainId = 50312;
-      } else {
-        throw error;
-      }
-    }
   }
 
   async getBalance(): Promise<string> {
@@ -100,14 +35,12 @@ class WalletManager {
     return formatEther(balance);
   }
 
-  getWalletClient() {
-    return this.walletClient;
+  getPublicClient() {
+    return this.publicClient;
   }
 
   disconnect(): void {
     this.account = null;
-    this.chainId = null;
-    this.walletClient = null;
   }
 
   isConnected(): boolean {

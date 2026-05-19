@@ -204,16 +204,16 @@ private createArenaPlatform() {
 private setupTeams() {
   this.playerShips = []; this.aiShips = [];
   this.playerShadows = []; this.aiShadows = [];
-  this.playerHPLabels = []; this.aiHPLabels = [];   // ← переиспользуем массив под health bars
+  this.playerHPLabels = []; this.aiHPLabels = [];
 
   const barWidth = 52;
   const barHeight = 5;
 
   // === Игрок ===
   const playerBaseX = 470;
-  const playerBaseY = 385;
+  const playerBaseY = 320;           // +50px вверх
   const playerRowShiftX = 20;
-  const playerSpacingY = 118;
+  const playerSpacingY = 148;
   const playerColSpacing = 122;
 
   for (let i = 0; i < Math.min(8, this.playerMaxHp.length); i++) {
@@ -222,14 +222,15 @@ private setupTeams() {
     const depthFactor = row * 0.10;
 
     let x = playerBaseX + (3 - row) * playerRowShiftX + col * playerColSpacing;
+
     if (col === 0) x -= 40;
-    if (col === 1) x += 18;
+    if (col === 1) x += 48;          // ← убрали -50, теперь вправо
 
     const y = playerBaseY + row * playerSpacingY + depthFactor * 28;
 
     const unit = this.playerUnitsData[i] || { faction: 0, unitClass: 0 };
     const key = this.getShipKey(unit.faction, unit.unitClass);
-    const baseScale = 0.545 - depthFactor * 0.05;
+    const baseScale = 0.654 - depthFactor * 0.05;
 
     const ship = this.add.sprite(x, y, key)
       .setScale(baseScale)
@@ -244,7 +245,6 @@ private setupTeams() {
 
     this.playerShips.push(ship);
 
-    // === Health Bar (поверх корабля) ===
     const barY = y - 42;
     const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
       .setDepth(y + 20)
@@ -264,10 +264,10 @@ private setupTeams() {
   }
 
   // === ИИ ===
-  const aiBaseX = 1410;
-  const aiBaseY = 385;
+  const aiBaseX = 1360;
+  const aiBaseY = 320;               // +50px вверх
   const aiRowShiftX = 28;
-  const aiSpacingY = 118;
+  const aiSpacingY = 148;
   const aiColSpacing = 122;
 
   for (let i = 0; i < Math.min(8, this.aiMaxHp.length); i++) {
@@ -276,14 +276,15 @@ private setupTeams() {
     const depthFactor = row * 0.10;
 
     let x = aiBaseX - (3 - row) * aiRowShiftX + col * aiColSpacing;
-    if (col === 0) x -= 18;
-    if (col === 1) x += 40;
+
+    if (col === 0) x -= 18 + 50;
+    if (col === 1) x += 38;
 
     const y = aiBaseY + row * aiSpacingY + depthFactor * 28;
 
     const unit = this.aiUnitsData[i] || { faction: 1, unitClass: 0 };
     const key = this.getShipKey(unit.faction, unit.unitClass);
-    const baseScale = 0.545 - depthFactor * 0.05;
+    const baseScale = 0.654 - depthFactor * 0.05;
 
     const ship = this.add.sprite(x, y, key)
       .setScale(baseScale)
@@ -298,7 +299,6 @@ private setupTeams() {
 
     this.aiShips.push(ship);
 
-    // === Health Bar (поверх корабля) ===
     const barY = y - 42;
     const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
       .setDepth(y + 20)
@@ -310,7 +310,7 @@ private setupTeams() {
     (barFill as any).bg = barBg;
     (barFill as any).maxHp = this.aiMaxHp[i] || 100;
     this.aiHPLabels.push(barFill);
-    
+
     this.tweens.add({
       targets: ship, y: y - 3, scale: ship.scaleX * 1.015,
       duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
@@ -552,12 +552,12 @@ private showFinalResult() {
   (resultBase as any).linkedText = resultLabel;
 
   // GO BACK кнопка
-  const btnBase = this.add.image(960, 230, 'button_base')
+  const btnBase = this.add.image(960, 190, 'button_base')
     .setDisplaySize(320, 58)
     .setInteractive()
     .setDepth(100);
 
-  const btnText = this.add.text(960, 230, 'GO BACK', {
+  const btnText = this.add.text(960, 190, 'GO BACK', {
     fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(101);
 
