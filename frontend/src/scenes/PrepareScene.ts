@@ -65,6 +65,8 @@ init(data?: any) {
   private relicContract: any;
   private account: `0x${string}` | null = null;
   private publicClient: any;
+  private shopBuyButtons: Phaser.GameObjects.Text[] = [];
+  private shopContainer: Phaser.GameObjects.Container | null = null;
 
   private unitsInTeam: number[] = [];
   private team: number[] = [];
@@ -246,121 +248,126 @@ private createContracts() {
     }
   }
 
-  private async loadPlayerShop() {
-    if (!this.account || !this.gameContract) return;
+private async loadPlayerShop() {
+  if (!this.account || !this.gameContract) return;
 
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.Text) {
-        const txt = child as Phaser.GameObjects.Text;
-        if (txt.y > 480 && txt.y < 720 && txt.x > 80 && txt.x < 600 && txt.text !== 'REROLL SHOP') {
-          txt.destroy();
-        }
-      }
-      if ((child instanceof Phaser.GameObjects.Rectangle || child instanceof Phaser.GameObjects.Image) &&
-          child.x > 80 && child.x < 600 && child.y > 480 && child.y < 720) {
-        child.destroy();
-      }
-    });
-
-    this.shopSprites = [];
-
-    try {
-      const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
-
-      const shopCenterX = 340;
-      const shopY = 560;
-      const shopSlotSize = 120;
-      const shopSpacing = 55;
-      const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
-      const shopStartX = shopCenterX - shopTotalWidth / 2;
-
-      for (let i = 0; i < 3; i++) {
-        const item = shopData[i];
-        const x = shopStartX + i * (shopSlotSize + shopSpacing);
-        const y = shopY;
-
-        this.add.rectangle(x, y, shopSlotSize - 10, shopSlotSize - 10, 0x0a1122).setDepth(1);
-
-        const slotImage = this.add.image(x, y, 'slot_shop')
-          .setInteractive()
-          .setDisplaySize(120, 120)
-          .setDepth(10);
-
-        this.addButtonEffects(slotImage);
-
-        let displayName = 'RELIC';
-        let tooltipText = `RELIC SLOT ${i}`;
-
-        if (item.isRelic) {
-          const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
-          const typeName = typeNames[item.relicType] || 'Unknown Relic';
-          displayName = typeName;
-          tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
-        }
-
-        const relicMap: Record<number, string> = {
-          0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-          3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-        };
-
-        const relicKey = relicMap[item.relicType] || 'quantum_strike';
-
-        const sprite = this.add.sprite(x, y, relicKey)
-          .setInteractive()
-          .setScale(0.85)
-          .setDepth(4);
-
-        (sprite as any).shopSlot = i;
-
-        this.add.text(x, y + 82, displayName, {
-          fontSize: '22px', fill: '#ffff00', align: 'center', wordWrap: { width: 165 }
-        }).setOrigin(0.5);
-
-this.add.text(x - 30, y + 118, 'BUY', { fontSize: '30px', fill: '#00ff00' })
-          .setInteractive()
-          .on('pointerdown', () => this.buyFromShopSlot(i));
-
-        sprite.on('pointerover', () => this.showTooltip(x + 135, y - 45, tooltipText));
-        sprite.on('pointerout', () => this.hideTooltip());
-
-        this.shopSprites.push(sprite);
-      }
-
-      // AI Grid
-      this.aiGridSlots = [];
-      const aiCenterX = 1640;
-      const aiCenterY = 610;
-      const aiSlotSize = 95;
-      const aiHSpacing = 15;
-      const aiVSpacing = 15;
-      const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
-      const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
-      const aiStartX = aiCenterX - aiTotalWidth / 2;
-      const aiStartY = aiCenterY - aiTotalHeight / 2;
-
-      for (let i = 0; i < 8; i++) {
-        const col = i % 4;
-        const row = Math.floor(i / 4);
-        const x = aiStartX + col * (aiSlotSize + aiHSpacing);
-        const y = aiStartY + row * (aiSlotSize + aiVSpacing);
-
-        this.add.rectangle(x, y, aiSlotSize - 6, aiSlotSize - 6, 0x0a1122).setDepth(1);
-
-        const slot = this.add.image(x, y, 'slot_ai')
-          .setInteractive()
-          .setDisplaySize(aiSlotSize, aiSlotSize)
-          .setDepth(10);
-
-        this.aiGridSlots.push(slot);
-        this.addButtonEffects(slot);
-      }
-
-      this.loadCurrentAI();
-
-    } catch (e) {
-      console.error('loadPlayerShop error', e);
-    }
+  // Полная очистка
+  if (this.shopContainer) {
+    this.shopContainer.destroy(true);
+    this.shopContainer = null;
   }
+  this.shopSprites = [];
+  this.shopTexts = [];
+  this.shopBuyButtons = [];
+
+  try {
+    const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
+
+    this.shopContainer = this.add.container(0, 0);
+
+    const shopCenterX = 340;
+    const shopY = 560;
+    const shopSlotSize = 128;           // новый размер
+    const shopSpacing = 48;             // чуть уменьшил для 128px
+    const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
+    const shopStartX = shopCenterX - shopTotalWidth / 2;
+
+for (let i = 0; i < 3; i++) {
+  const item = shopData[i] || { isRelic: false, relicType: 0, relicValue: 0 };
+  const x = shopStartX + i * (shopSlotSize + shopSpacing);
+  const y = shopY;
+
+  const bg = this.add.rectangle(x, y, 120, 120, 0x0a1122).setDepth(1);
+  this.shopContainer.add(bg);
+
+  const slotImage = this.add.image(x, y, 'slot_shop')
+    .setInteractive()
+    .setDisplaySize(128, 128)
+    .setDepth(10);
+  // this.addButtonEffects(slotImage);   // ← УБРАНО (чтобы рамка не пульсировала)
+
+  this.shopContainer.add(slotImage);
+
+  let displayName = 'EMPTY';
+  let tooltipText = 'Empty slot';
+  let relicKey = '';
+  let iconScale = 0.88;   // ← УВЕЛИЧЕНО
+
+  if (item.isRelic) {
+    const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
+    displayName = typeNames[item.relicType] || 'Unknown Relic';
+    tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
+
+    const relicMap: Record<number, string> = {
+      0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
+      3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
+    };
+    relicKey = relicMap[item.relicType] || 'quantum_strike';
+  }
+
+  const sprite = this.add.sprite(x, y, relicKey || 'slot_shop')
+    .setInteractive()
+    .setScale(relicKey ? iconScale : 1)
+    .setDepth(4);
+  (sprite as any).shopSlot = i;
+  this.shopContainer.add(sprite);
+  this.shopSprites.push(sprite);
+
+  const nameText = this.add.text(x, y + 85, displayName, {
+    fontSize: '18px', fill: '#ffff00', align: 'center', wordWrap: { width: 120 }
+  }).setOrigin(0.5);
+  this.shopContainer.add(nameText);
+  this.shopTexts.push(nameText);
+
+  const buyBtn = this.add.text(x - 28, y + 115, 'BUY', {
+    fontSize: '26px', fill: '#00ff00'
+  })
+    .setInteractive()
+    .on('pointerdown', () => this.buyFromShopSlot(i));
+  this.shopContainer.add(buyBtn);
+  this.shopBuyButtons.push(buyBtn);
+
+  sprite.on('pointerover', () => this.showTooltip(x + 140, y - 40, tooltipText));
+  sprite.on('pointerout', () => this.hideTooltip());
+}
+
+
+    // AI GRID (без изменений)
+    this.aiGridSlots = [];
+    const aiCenterX = 1640;
+    const aiCenterY = 610;
+    const aiSlotSize = 95;
+    const aiHSpacing = 15;
+    const aiVSpacing = 15;
+    const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
+    const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
+    const aiStartX = aiCenterX - aiTotalWidth / 2;
+    const aiStartY = aiCenterY - aiTotalHeight / 2;
+
+    for (let i = 0; i < 8; i++) {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const x = aiStartX + col * (aiSlotSize + aiHSpacing);
+      const y = aiStartY + row * (aiSlotSize + aiVSpacing);
+
+      this.add.rectangle(x, y, aiSlotSize - 6, aiSlotSize - 6, 0x0a1122).setDepth(1);
+
+      const slot = this.add.image(x, y, 'slot_ai')
+        .setInteractive()
+        .setDisplaySize(aiSlotSize, aiSlotSize)
+        .setDepth(10);
+
+      this.aiGridSlots.push(slot);
+      this.addButtonEffects(slot);
+    }
+
+    this.loadCurrentAI();
+
+  } catch (e) {
+    console.error('loadPlayerShop error', e);
+  }
+}
+
 
   private async refreshRelics() {
     await this.loadEquippedRelics();
