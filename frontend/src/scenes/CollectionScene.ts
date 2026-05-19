@@ -375,13 +375,16 @@ private async loadCollectionData() {
   }
 
 private refreshGrid() {
-  this.unitSprites.forEach(s => s.destroy());
-  this.relicSprites.forEach(s => s.destroy());
+  // === ПОЛНАЯ ОЧИСТКА ГРИДА (решает проблему наложения) ===
+  if (this.gridContainer) {
+    this.gridContainer.removeAll(true); // true = уничтожить все дочерние объекты
+  }
   this.unitSprites = [];
   this.relicSprites = [];
 
   let data = this.currentTab === 'units' ? this.unitsData : this.relicsData;
 
+  // Фильтрация только для юнитов
   if (this.currentTab === 'units') {
     data = data.filter((item: any) => {
       const u = item.unit;
@@ -405,6 +408,7 @@ private refreshGrid() {
     const y = startY + row * spacingY;
 
     if (this.currentTab === 'units') {
+      // === ЮНИТЫ ===
       const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
       const container = UnitVisualFactory.createUnitWithFrame(this, x, y, shipKey, item.unit.rarity, 0.20);
       this.gridContainer!.add(container);
@@ -440,7 +444,7 @@ private refreshGrid() {
 
       this.unitSprites.push(container);
     } else {
-      // === РЕЛИКВИИ (упрощённо) ===
+      // === РЕЛИКВИИ (теперь тоже в контейнере — без наложений) ===
       const isSelected = this.selectedRelicIds.includes(item.id);
       const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
       const strokeWidth = isSelected ? 6 : 4;
@@ -453,29 +457,30 @@ private refreshGrid() {
         4: 'flux_overload',
         5: 'last_stand'
       };
-
       const relicKey = relicMap[item.relic.relicType] || 'quantum_strike';
 
-      // Прямоугольник (фон + рамка)
-      const bg = this.add.rectangle(x, y, 52, 52, 0x112233)
+      // Контейнер реликвии (решает проблему наложения)
+      const relicContainer = this.add.container(x, y);
+
+      const bg = this.add.rectangle(0, 0, 52, 52, 0x112233)
         .setStrokeStyle(strokeWidth, borderColor)
         .setInteractive();
 
-      // Спрайт реликвии
-      const relicSprite = this.add.sprite(x, y, relicKey)
+      const relicSprite = this.add.sprite(0, 0, relicKey)
         .setScale(0.65);
 
-      this.gridContainer!.add(bg);
-      this.gridContainer!.add(relicSprite);
+      relicContainer.add([bg, relicSprite]);
+      this.gridContainer!.add(relicContainer);
 
       (bg as any).relicId = item.id;
       (bg as any).isRelic = true;
+      (relicContainer as any).relicId = item.id;
 
       let clickCount = 0;
       bg.on('pointerdown', () => {
         clickCount++;
         if (clickCount === 1) {
-          this.toggleRelicSelection(item.id, bg);
+          this.toggleRelicSelection(item.id, relicContainer);
         }
         if (clickCount === 2) {
           const prepare = this.scene.get('PrepareScene') as any;
@@ -497,7 +502,7 @@ private refreshGrid() {
       bg.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
       bg.on('pointerout', () => this.hideTooltip());
 
-      this.relicSprites.push(bg);
+      this.relicSprites.push(relicContainer);
     }
   });
 }
@@ -527,16 +532,6 @@ private toggleRelicSelection(id: number, sprite: any) {
   this.showFloatingMultiSelectPanel();
   this.showPreview(id, false);
   
-  // === ОБНОВЛЯЕМ ТОЛЬКО ПОДСВЕТКУ (без refreshGrid) ===
-  this.relicSprites.forEach((cont: any) => {
-    if (cont.relicId && cont.bg) {
-      if (this.selectedRelicIds.includes(cont.relicId)) {
-        cont.bg.setStrokeStyle(6, 0x00ff00);
-      } else {
-        cont.bg.setStrokeStyle(4, 0xffaa00);
-      }
-    }
-  });
 }
 
 
