@@ -4,7 +4,6 @@ import * as Phaser from 'phaser';
 import { getContract } from 'viem';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
-import WalletManager from '../lib/WalletManager';
 
 export default class PrepareScene extends Phaser.Scene {
   
@@ -889,8 +888,6 @@ private addGameUI() {
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const row = Math.floor(i / 4);
-    const x = teamStartX + col * (slotSize + hSpacing);
     const y = teamStartY + row * (slotSize + vSpacing);
 
     this.add.rectangle(x, y, slotSize - 8, slotSize - 8, 0x0a1122).setDepth(1);
@@ -943,7 +940,6 @@ private addGameUI() {
 
   // AUTO SELECT
   const btnAuto = this.add.image(790, 285, 'button_base')
-  const btnAuto = this.add.image(790, 285, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
   const textAuto = this.add.text(790, 285, 'AUTO SELECT', {
@@ -955,7 +951,6 @@ private addGameUI() {
 
   // CLEAR TEAM
   const btnClear = this.add.image(1100, 285, 'button_base')
-  const btnClear = this.add.image(1100, 285, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
   const textClear = this.add.text(1100, 285, 'CLEAR TEAM', {
@@ -966,7 +961,6 @@ private addGameUI() {
   this.addButtonEffects(btnClear);
 
   // REROLL SHOP
-  const btnReroll = this.add.image(285, 445, 'button_base')
   const btnReroll = this.add.image(285, 445, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);
@@ -989,7 +983,6 @@ private addGameUI() {
   this.addButtonEffects(btnCollection);
 
   // BUY
-  const btnBuy = this.add.image(285, 805, 'button_base')
   const btnBuy = this.add.image(285, 805, 'button_base')
     .setInteractive()
     .setDisplaySize(270, 70);

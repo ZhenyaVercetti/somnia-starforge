@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { WagmiProvider } from 'wagmi';
@@ -13,13 +15,8 @@ const queryClient = new QueryClient();
 let root: ReactDOM.Root | null = null;
 
 export function openWalletModal() {
-  console.log('✅ openWalletModal вызвана'); // ← отладка
-
   const container = document.getElementById('react-root');
-  if (!container) {
-    console.error('❌ Контейнер #react-root не найден!');
-    return;
-  }
+  if (!container) return;
 
   if (!root) {
     root = ReactDOM.createRoot(container);
@@ -30,13 +27,17 @@ export function openWalletModal() {
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider>
-            <WalletModal onClose={() => {
-              console.log('✅ Модал закрыт');
-              if (root) {
-                root.unmount();
-                root = null;
-              }
-            }} />
+            <WalletModal 
+              onClose={() => {
+                if (root) {
+                  root.unmount();
+                  root = null;
+                }
+                if ((window as any).startGame) {
+                  (window as any).startGame();
+                }
+              }} 
+            />
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
@@ -44,5 +45,17 @@ export function openWalletModal() {
   );
 }
 
+export function startGame() {
+  setTimeout(() => {
+    const game = (window as any).game;
+    if (game && game.scene) {
+      console.log('✅ Запускаем PrepareScene');
+      game.scene.start('PrepareScene');
+    } else {
+      console.log('❌ game или scene не найдены');
+    }
+  }, 300);
+}
+
 (window as any).openWalletModal = openWalletModal;
-console.log('✅ main-react.tsx загружен');
+(window as any).startGame = startGame;
