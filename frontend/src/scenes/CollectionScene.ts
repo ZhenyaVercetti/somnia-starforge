@@ -592,7 +592,7 @@ private activateSelectedRelics() {
   this.selectedRelicIds = [];
 
   this.refreshGrid();
-  // НЕ закрываем сцену!
+  // НЕ закрываем сцену
 }
 
 
