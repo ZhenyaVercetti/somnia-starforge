@@ -4,6 +4,7 @@ import * as Phaser from 'phaser';
 import { getContract } from 'viem';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
+import WalletManager from '../lib/WalletManager';
 
 export default class PrepareScene extends Phaser.Scene {
   
