@@ -10,7 +10,27 @@ export default class PrepareScene extends Phaser.Scene {
 init(data?: any) {
   console.log('PrepareScene init — данные:', data);
 
-  // Пытаемся получить walletManager из разных источников
+  // 1. Пробуем взять из data (переданные из main-react)
+  if (data?.account && data?.publicClient) {
+    this.account = data.account;
+    this.publicClient = data.publicClient;
+    this.isWalletReady = true;
+    this.createContracts();
+    console.log('✅ PrepareScene готов (из data), account:', this.account);
+    return;
+  }
+
+  // 2. Пробуем взять из window (сохранённые WalletModal)
+  if ((window as any).account && (window as any).publicClient) {
+    this.account = (window as any).account;
+    this.publicClient = (window as any).publicClient;
+    this.isWalletReady = true;
+    this.createContracts();
+    console.log('✅ PrepareScene готов (из window), account:', this.account);
+    return;
+  }
+
+  // 3. Пробуем из walletManager
   if (data?.walletManager) {
     this.walletManager = data.walletManager;
   } else if ((window as any).walletManager) {
@@ -23,11 +43,11 @@ init(data?: any) {
   this.publicClient = this.walletManager?.getPublicClient() || null;
 
   if (!this.account || !this.publicClient) {
-    console.error('❌ account или publicClient не инициализированы в init()');
-    // Не возвращаем return, а пытаемся создать контракты позже
+    console.error('❌ account или publicClient не инициализированы');
+    return;
   }
 
-  this.isWalletReady = !!(this.account && this.publicClient);
+  this.isWalletReady = true;
   this.createContracts();
 
   if (data?.addUnits && Array.isArray(data.addUnits)) {
@@ -81,63 +101,68 @@ init(data?: any) {
 
   
 
-  private createContracts() {
-    if (!this.account || !this.publicClient) {
+private createContracts() {
+  if (!this.account || !this.publicClient) {
     console.error('❌ Невозможно создать контракты — account или publicClient отсутствуют');
     return;
   }
-    const GAME_ADDRESS = '0x663FfeB8c82F97F31a5209D01D30354Deba9381a';
-    const NFT_ADDRESS = '0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d';
-    const RELIC_ADDRESS = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
 
-    const gameAbi = [
-      { "inputs": [], "name": "buyUnit", "outputs": [], "stateMutability": "payable", "type": "function" },
-      { "inputs": [], "name": "rerollShop", "outputs": [], "stateMutability": "payable", "type": "function" },
-      { "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }], "name": "buyFromShop", "outputs": [], "stateMutability": "payable", "type": "function" },
-      { "inputs": [{ "internalType": "uint256[]", "name": "team", "type": "uint256[]" }, { "internalType": "uint256[]", "name": "equipped", "type": "uint256[]" }], "name": "startMatch", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerUnits", "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }], "stateMutability": "view", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerRelics", "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }], "stateMutability": "view", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerShop", "outputs": [{ "components": [{ "internalType": "bool", "name": "isRelic", "type": "bool" }, { "internalType": "uint256", "name": "id", "type": "uint256" }, { "internalType": "uint8", "name": "faction", "type": "uint8" }, { "internalType": "uint8", "name": "rarity", "type": "uint8" }, { "internalType": "uint8", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }, { "internalType": "uint8", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "relicValue", "type": "uint8" }], "internalType": "struct StarForgeGame.ShopItem[3]", "name": "", "type": "tuple[3]" }], "stateMutability": "view", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getCurrentAI", "outputs": [{ "components": [{ "internalType": "bool", "name": "isRelic", "type": "bool" }, { "internalType": "uint256", "name": "id", "type": "uint256" }, { "internalType": "uint8", "name": "faction", "type": "uint8" }, { "internalType": "uint8", "name": "rarity", "type": "uint8" }, { "internalType": "uint8", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }, { "internalType": "uint8", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "relicValue", "type": "uint8" }], "internalType": "struct StarForgeGame.ShopItem[]", "name": "", "type": "tuple[]" }], "stateMutability": "view", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getEquippedRelics", "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }], "stateMutability": "view", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getLastBattleResult", "outputs": [{ "internalType": "bool", "name": "playerWon", "type": "bool" }, { "internalType": "tuple[]", "name": "events", "type": "tuple[]" }, { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" }, { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }], "stateMutability": "view", "type": "function" },
-      { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "profiles", "outputs": [{ "components": [{ "internalType": "uint16", "name": "level", "type": "uint16" }, { "internalType": "uint32", "name": "xp", "type": "uint32" }, { "internalType": "uint256", "name": "wins", "type": "uint256" }, { "internalType": "uint256", "name": "losses", "type": "uint256" }, { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }], "internalType": "struct StarForgeGame.PlayerProfile", "name": "", "type": "tuple" }], "stateMutability": "view", "type": "function" }
-    ];
+  const GAME_ADDRESS = '0x663FfeB8c82F97F31a5209D01D30354Deba9381a';
+  const NFT_ADDRESS = '0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d';
+  const RELIC_ADDRESS = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
 
-    const nftAbi = [{
-      "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-      "name": "getUnit",
-      "outputs": [{ "components": [{ "internalType": "enum StarForgeUnitNFT.Faction", "name": "faction", "type": "uint8" }, { "internalType": "enum StarForgeUnitNFT.Rarity", "name": "rarity", "type": "uint8" }, { "internalType": "enum StarForgeUnitNFT.UnitClass", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }], "internalType": "struct StarForgeUnitNFT.Unit", "name": "", "type": "tuple" }],
-      "stateMutability": "view",
-      "type": "function"
-    }];
+  const gameAbi = [
+    { "inputs": [], "name": "buyUnit", "outputs": [], "stateMutability": "payable", "type": "function" },
+    { "inputs": [], "name": "rerollShop", "outputs": [], "stateMutability": "payable", "type": "function" },
+    { "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }], "name": "buyFromShop", "outputs": [], "stateMutability": "payable", "type": "function" },
+    { "inputs": [{ "internalType": "uint256[]", "name": "team", "type": "uint256[]" }, { "internalType": "uint256[]", "name": "equipped", "type": "uint256[]" }], "name": "startMatch", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerUnits", "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerRelics", "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getPlayerShop", "outputs": [{ "components": [{ "internalType": "bool", "name": "isRelic", "type": "bool" }, { "internalType": "uint256", "name": "id", "type": "uint256" }, { "internalType": "uint8", "name": "faction", "type": "uint8" }, { "internalType": "uint8", "name": "rarity", "type": "uint8" }, { "internalType": "uint8", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }, { "internalType": "uint8", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "relicValue", "type": "uint8" }], "internalType": "struct StarForgeGame.ShopItem[3]", "name": "", "type": "tuple[3]" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getCurrentAI", "outputs": [{ "components": [{ "internalType": "bool", "name": "isRelic", "type": "bool" }, { "internalType": "uint256", "name": "id", "type": "uint256" }, { "internalType": "uint8", "name": "faction", "type": "uint8" }, { "internalType": "uint8", "name": "rarity", "type": "uint8" }, { "internalType": "uint8", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }, { "internalType": "uint8", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "relicValue", "type": "uint8" }], "internalType": "struct StarForgeGame.ShopItem[]", "name": "", "type": "tuple[]" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getEquippedRelics", "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "getLastBattleResult", "outputs": [{ "internalType": "bool", "name": "playerWon", "type": "bool" }, { "internalType": "tuple[]", "name": "events", "type": "tuple[]" }, { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" }, { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "player", "type": "address" }], "name": "profiles", "outputs": [{ "components": [{ "internalType": "uint16", "name": "level", "type": "uint16" }, { "internalType": "uint32", "name": "xp", "type": "uint32" }, { "internalType": "uint256", "name": "wins", "type": "uint256" }, { "internalType": "uint256", "name": "losses", "type": "uint256" }, { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }], "internalType": "struct StarForgeGame.PlayerProfile", "name": "", "type": "tuple" }], "stateMutability": "view", "type": "function" }
+  ];
 
-    const relicAbi = [{
-      "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
-      "name": "getRelic",
-      "outputs": [{ "components": [{ "internalType": "enum StarForgeRelic.RelicType", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "value", "type": "uint8" }, { "internalType": "string", "name": "name", "type": "string" }], "internalType": "struct StarForgeRelic.RelicData", "name": "", "type": "tuple" }],
-      "stateMutability": "view",
-      "type": "function"
-    }];
+  const nftAbi = [{
+    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
+    "name": "getUnit",
+    "outputs": [{ "components": [{ "internalType": "enum StarForgeUnitNFT.Faction", "name": "faction", "type": "uint8" }, { "internalType": "enum StarForgeUnitNFT.Rarity", "name": "rarity", "type": "uint8" }, { "internalType": "enum StarForgeUnitNFT.UnitClass", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }], "internalType": "struct StarForgeUnitNFT.Unit", "name": "", "type": "tuple" }],
+    "stateMutability": "view",
+    "type": "function"
+  }];
 
-    this.gameContract = getContract({
-      address: GAME_ADDRESS,
-      abi: gameAbi,
-      client: { public: this.publicClient, wallet: (this.walletManager as any).walletClient, account: this.account }
-    });
+  const relicAbi = [{
+    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
+    "name": "getRelic",
+    "outputs": [{ "components": [{ "internalType": "enum StarForgeRelic.RelicType", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "value", "type": "uint8" }, { "internalType": "string", "name": "name", "type": "string" }], "internalType": "struct StarForgeRelic.RelicData", "name": "", "type": "tuple" }],
+    "stateMutability": "view",
+    "type": "function"
+  }];
 
-    this.nftContract = getContract({
-      address: NFT_ADDRESS,
-      abi: nftAbi,
-      client: { public: this.publicClient, wallet: (this.walletManager as any).walletClient, account: this.account }
-    });
+  const walletClient = (this.walletManager as any).walletClient;
 
-    this.relicContract = getContract({
-      address: RELIC_ADDRESS,
-      abi: relicAbi,
-      client: { public: this.publicClient, wallet: (this.walletManager as any).walletClient, account: this.account }
-    });
-  }
+  this.gameContract = getContract({
+    address: GAME_ADDRESS,
+    abi: gameAbi,
+    client: { public: this.publicClient, wallet: walletClient }
+  });
+
+  this.nftContract = getContract({
+    address: NFT_ADDRESS,
+    abi: nftAbi,
+    client: { public: this.publicClient, wallet: walletClient }
+  });
+
+  this.relicContract = getContract({
+    address: RELIC_ADDRESS,
+    abi: relicAbi,
+    client: { public: this.publicClient, wallet: walletClient }
+  });
+
+  console.log('✅ Контракты созданы');
+}
 
   preload() {
     this.load.image('mainbackground', 'assets/mainbackground.jpg');
@@ -180,9 +205,6 @@ init(data?: any) {
   create() {
    
 
-    this.children.getAll().forEach(child => {
-      if (child instanceof Phaser.GameObjects.GameObject) child.destroy();
-    });
 
     this.team = [];
     this.teamSlotOccupants = new Array(8).fill(null);
@@ -203,6 +225,11 @@ init(data?: any) {
     this.input.topOnly = false;
 
     console.log('✅ PrepareScene создана');
+    console.log('🔍 Диагностика кнопок:');
+  console.log('  isWalletReady:', this.isWalletReady);
+  console.log('  gameContract:', !!this.gameContract);
+  console.log('  account:', this.account);
+  console.log('  publicClient:', !!this.publicClient);
   }
 
   private async loadOwnedUnits() {
@@ -709,148 +736,192 @@ private async autoSelectTeam() {
     return names[unitClass] || 'Unknown';
   }
 
-  private async buyUnit() {
-    if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) return alert('Сначала подключи кошелёк');
+private async buyUnit() {
+  console.log('🟢 BUY нажат');
 
-    try {
-      const hash = await this.gameContract.write.buyUnit([], { account: this.account, value: 0n });
-      const waiting = this.add.text(600, 450, 'TX buyUnit отправлена... ждём on-chain (3 сек)', { fontSize: '36px', fill: '#ffff00' });
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-      waiting.destroy();
-
-      const msg = this.add.text(600, 450, 'Юнит куплен on-chain!', { fontSize: '48px', fill: '#00ff00' });
-      setTimeout(() => msg.destroy(), 2200);
-
-      setTimeout(() => {
-        this.loadOwnedUnits();
-        this.loadPlayerShop();
-      }, 3000);
-    } catch (e: any) {
-      const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
-      const errorText = this.add.text(600, 450, `Ошибка: ${errMsg}`, { fontSize: '36px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 4000);
-    }
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Сначала подключи кошелёк');
   }
-
-  private async buyFromShopSlot(slot: number) {
-    if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) return alert('Сначала подключи кошелёк');
-
-    try {
-      const hash = await this.gameContract.write.buyFromShop([BigInt(slot)], { account: this.account, value: 0n });
-      const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] отправлена... ждём on-chain (3 сек)`, { fontSize: '36px', fill: '#ffff00' });
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-      waiting.destroy();
-
-      const msg = this.add.text(600, 450, `Артефакт куплен!`, { fontSize: '42px', fill: '#00ff00' });
-      setTimeout(() => msg.destroy(), 1800);
-
-      setTimeout(() => {
-        this.loadPlayerShop();
-        this.loadCurrentAI();
-      }, 3000);
-    } catch (e: any) {
-      const errMsg = e.shortMessage || e.message || 'Ошибка';
-      const errorText = this.add.text(600, 450, `Ошибка: ${errMsg}`, { fontSize: '36px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 4000);
-    }
-  }
-
-  private async rerollShop() {
-    if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) return alert('Сначала подключи кошелёк');
-
-    try {
-      const hash = await this.gameContract.write.rerollShop([], { account: this.account, value: 0n });
-      const waiting = this.add.text(600, 510, 'TX reroll отправлена... ждём on-chain (3 сек)', { fontSize: '42px', fill: '#ffff00' });
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-      waiting.destroy();
-
-      const msg = this.add.text(600, 510, 'Shop rerolled — новые артефакты', { fontSize: '42px', fill: '#ffff00' });
-      setTimeout(() => msg.destroy(), 1800);
-
-      this.clearTemporaryTexts();
-
-      setTimeout(() => {
-        this.loadPlayerShop();
-        this.loadCurrentAI();
-      }, 3000);
-    } catch (e: any) {
-      const errMsg = e.shortMessage || e.message || 'Ошибка rerollShop';
-      const errorText = this.add.text(600, 510, `Ошибка: ${errMsg}`, { fontSize: '36px', fill: '#ff4444' });
-      setTimeout(() => errorText.destroy(), 4000);
-    }
-  }
-
-private async startBattle() {
-  if (this.team.length < 4 || this.team.length > 8) {
-    return this.add.text(750, 750, `Нужно 4-8 юнитов! Сейчас: ${this.team.length}`, { 
-      fontSize: '42px', fill: '#ff0000' 
-    });
-  }
-
-  // === ТЕСТОВЫЙ РЕЖИМ (без реального вызова контракта) ===
-  const tempTeam = [...this.team];
 
   try {
-    // Загружаем данные юнитов для визуализации боя
-    const playerUnitsData: any[] = [];
-    for (const id of this.team) {
-      try {
-        const unit = await this.nftContract?.read.getUnit([BigInt(id)]);
-        if (unit) {
-          playerUnitsData.push({
-            id: Number(id),
-            faction: Number(unit.faction),
-            unitClass: Number(unit.unitClass),
-            rarity: Number(unit.rarity),
-            attack: Number(unit.attack),
-            defense: Number(unit.defense),
-            speed: Number(unit.speed)
-          });
-        }
-      } catch {}
-    }
+    console.log('📤 Отправляем buyUnit...');
 
-    // Загружаем AI
-    let aiUnitsData: any[] = [];
-    try {
-      const aiData: any[] = await this.gameContract?.read.getCurrentAI([this.account]);
-      aiUnitsData = aiData.map((unit: any) => ({
-        faction: Number(unit.faction),
-        unitClass: Number(unit.unitClass),
-        rarity: Number(unit.rarity),
-        attack: Number(unit.attack),
-        defense: Number(unit.defense),
-        speed: Number(unit.speed)
-      }));
-    } catch {}
-
-    // Очищаем команду
-    this.team = [];
-    this.clearTeamVisuals();
-    if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
-
-    // Переходим в BattleScene (тестовый бой)
-    this.scene.start('BattleScene', {
-      events: [],
-      playerWon: Math.random() > 0.5, // случайный результат
-      playerMaxHp: [100, 100, 100, 100, 100, 100, 100, 100],
-      aiMaxHp: [100, 100, 100, 100, 100, 100, 100, 100],
-      playerUnitsData,
-      aiUnitsData
+    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
+    
+    const walletClient = createWalletClient({
+      chain: {
+        id: 50312,
+        name: 'Somnia Testnet',
+        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
+        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
+      },
+      transport: custom((window as any).ethereum)
     });
 
-  } catch (e: any) {
-    console.error('startBattle error:', e);
-    this.team = tempTeam;
-    this.clearTeamVisuals();
-    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+    const data = encodeFunctionData({
+      abi: this.gameContract.abi,
+      functionName: 'buyUnit',
+      args: []
+    });
 
-    this.add.text(600, 450, `ОШИБКА: ${e.message || 'Неизвестная ошибка'}`, { 
-      fontSize: '36px', fill: '#ff4444', align: 'center' 
-    }).setOrigin(0.5);
+    const hash = await walletClient.sendTransaction({
+      account: this.account,
+      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
+      data: data,
+      value: 0n
+    });
+
+    console.log('✅ TX отправлена:', hash);
+
+    const waiting = this.add.text(600, 450, 'TX buyUnit отправлена... ждём on-chain (3 сек)', { 
+      fontSize: '36px', fill: '#ffff00' 
+    });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    waiting.destroy();
+
+    const msg = this.add.text(600, 450, 'Юнит куплен on-chain!', { 
+      fontSize: '48px', fill: '#00ff00' 
+    });
+    setTimeout(() => msg.destroy(), 2200);
+
+    // Обновляем ТОЛЬКО список юнитов игрока (без реликвий и AI)
+    setTimeout(() => {
+      this.loadOwnedUnits();
+    }, 3000);
+  } catch (e: any) {
+    console.error('❌ buyUnit error:', e);
+    const errMsg = e.shortMessage || e.message || 'Неизвестная ошибка';
+    const errorText = this.add.text(600, 450, `Ошибка: ${errMsg}`, { 
+      fontSize: '36px', fill: '#ff4444' 
+    });
+    setTimeout(() => errorText.destroy(), 4000);
+  }
+}
+
+private async buyFromShopSlot(slot: number) {
+  console.log('🟢 BUY FROM SHOP нажат, slot:', slot);
+
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Сначала подключи кошелёк');
+  }
+
+  try {
+    console.log('📤 Отправляем buyFromShop...');
+
+    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
+    
+    const walletClient = createWalletClient({
+      chain: {
+        id: 50312,
+        name: 'Somnia Testnet',
+        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
+        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
+      },
+      transport: custom((window as any).ethereum)
+    });
+
+    const data = encodeFunctionData({
+      abi: this.gameContract.abi,
+      functionName: 'buyFromShop',
+      args: [BigInt(slot)]
+    });
+
+    const hash = await walletClient.sendTransaction({
+      account: this.account,
+      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
+      data: data,
+      value: 0n
+    });
+
+    console.log('✅ TX отправлена:', hash);
+
+    const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] отправлена... ждём on-chain (3 сек)`, { 
+      fontSize: '36px', fill: '#ffff00' 
+    });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    waiting.destroy();
+
+    const msg = this.add.text(600, 450, `Артефакт куплен!`, { 
+      fontSize: '42px', fill: '#00ff00' 
+    });
+    setTimeout(() => msg.destroy(), 1800);
+
+    setTimeout(() => {
+      this.loadPlayerShop();
+      this.loadCurrentAI();
+    }, 3000);
+  } catch (e: any) {
+    console.error('❌ buyFromShopSlot error:', e);
+    const errMsg = e.shortMessage || e.message || 'Ошибка';
+    const errorText = this.add.text(600, 450, `Ошибка: ${errMsg}`, { 
+      fontSize: '36px', fill: '#ff4444' 
+    });
+    setTimeout(() => errorText.destroy(), 4000);
+  }
+}
+
+private async rerollShop() {
+  console.log('🟢 REROLL нажат');
+
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Сначала подключи кошелёк');
+  }
+
+  try {
+    console.log('📤 Отправляем rerollShop...');
+
+    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
+    
+    const walletClient = createWalletClient({
+      chain: {
+        id: 50312,
+        name: 'Somnia Testnet',
+        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
+        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
+      },
+      transport: custom((window as any).ethereum)
+    });
+
+    const data = encodeFunctionData({
+      abi: this.gameContract.abi,
+      functionName: 'rerollShop',
+      args: []
+    });
+
+    const hash = await walletClient.sendTransaction({
+      account: this.account,
+      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
+      data: data,
+      value: 0n
+    });
+
+    console.log('✅ TX отправлена:', hash);
+
+    const waiting = this.add.text(600, 510, 'TX reroll отправлена... ждём on-chain (3 сек)', { 
+      fontSize: '42px', fill: '#ffff00' 
+    });
+
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    waiting.destroy();
+
+    const msg = this.add.text(600, 510, 'Shop rerolled — новые артефакты', { 
+      fontSize: '42px', fill: '#00ff00' 
+    });
+    setTimeout(() => msg.destroy(), 1800);
+
+    setTimeout(() => {
+      this.loadPlayerShop();
+      this.loadCurrentAI();
+    }, 3000);
+  } catch (e: any) {
+    console.error('❌ rerollShop error:', e);
+    const errMsg = e.shortMessage || e.message || 'Ошибка rerollShop';
+    const errorText = this.add.text(600, 510, `Ошибка: ${errMsg}`, { 
+      fontSize: '36px', fill: '#ff4444' 
+    });
+    setTimeout(() => errorText.destroy(), 4000);
   }
 }
 

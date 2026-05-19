@@ -1,25 +1,28 @@
 // @ts-nocheck
 import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 
 interface WalletModalProps {
   onClose: () => void;
 }
 
 export const WalletModal: React.FC<WalletModalProps> = ({ onClose }) => {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
 
-  // Автоматически закрываем модал после успешного подключения
   useEffect(() => {
-    if (isConnected) {
-      const timer = setTimeout(() => {
+    if (isConnected && address && publicClient) {
+      // Сохраняем account и publicClient в window
+      (window as any).account = address;
+      (window as any).publicClient = publicClient;
+      
+      // Закрываем модал через 0.8 сек
+      setTimeout(() => {
         onClose();
-      }, 800); // закрываем через 0.8 сек после подключения
-
-      return () => clearTimeout(timer);
+      }, 800);
     }
-  }, [isConnected, onClose]);
+  }, [isConnected, address, publicClient, onClose]);
 
   return (
     <div style={{

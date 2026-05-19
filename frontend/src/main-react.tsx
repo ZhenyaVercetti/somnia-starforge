@@ -49,10 +49,14 @@ export function startGame() {
   setTimeout(() => {
     const game = (window as any).game;
     if (game && game.scene) {
-      console.log('✅ Запускаем PrepareScene');
-      game.scene.start('PrepareScene');
-    } else {
-      console.log('❌ game не найден');
+      // Сохраняем account и publicClient глобально
+      const account = (window as any).account;
+      const publicClient = (window as any).publicClient;
+      
+      game.scene.start('PrepareScene', {
+        account: account || null,
+        publicClient: publicClient || null
+      });
     }
   }, 200);
 }

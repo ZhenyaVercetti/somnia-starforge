@@ -394,94 +394,111 @@ private refreshGrid() {
 
   const startX = 32;
   const startY = 76;
-  const spacingX = 68;
-  const spacingY = 78;
+  const itemsPerRow = 7;
+  const spacingX = this.currentTab === 'units' ? 68 : 85;
+  const spacingY = this.currentTab === 'units' ? 78 : 95;
 
   data.forEach((item, index) => {
-    const col = index % 8;
-    const row = Math.floor(index / 8);
+    const col = index % itemsPerRow;
+    const row = Math.floor(index / itemsPerRow);
     const x = startX + col * spacingX;
     const y = startY + row * spacingY;
 
-let visual: Phaser.GameObjects.GameObject;
+    if (this.currentTab === 'units') {
+      const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
+      const container = UnitVisualFactory.createUnitWithFrame(this, x, y, shipKey, item.unit.rarity, 0.20);
+      this.gridContainer!.add(container);
 
-if (this.currentTab === 'units') {
-  const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
-  const container = UnitVisualFactory.createUnitWithFrame(this, x, y, shipKey, item.unit.rarity, 0.20);
-  this.gridContainer!.add(container);
+      const ship = container.last as Phaser.GameObjects.Sprite;
+      (ship as any).unitId = item.id;
+      (ship as any).isUnit = true;
+      ship.setInteractive().setDepth(8);
 
-  const ship = container.last as Phaser.GameObjects.Sprite;
-  (ship as any).unitId = item.id;
-  (ship as any).isUnit = true;
-  ship.setInteractive().setDepth(8);
-
-  let clickCount = 0;
-  ship.on('pointerdown', () => {
-    clickCount++;
-    if (clickCount === 1) {
-      this.toggleUnitSelection(item.id, ship);
-    }
-    if (clickCount === 2) {
-      const prepareScene = this.scene.get('PrepareScene') as any;
-      if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
-        const success = prepareScene.addSingleUnitToTeam(item.id);
-        if (success) {
-          const idx = this.selectedUnitIds.indexOf(item.id);
-          if (idx > -1) this.selectedUnitIds.splice(idx, 1);
-          this.showFloatingMultiSelectPanel();
+      let clickCount = 0;
+      ship.on('pointerdown', () => {
+        clickCount++;
+        if (clickCount === 1) {
+          this.toggleUnitSelection(item.id, ship);
         }
-      }
-      clickCount = 0;
-    }
-    setTimeout(() => { clickCount = 0; }, 500);
-  });
-
-  ship.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
-  ship.on('pointerout', () => this.hideTooltip());
-
-  visual = container;
-} else {
-  const isSelected = this.selectedRelicIds.includes(item.id);
-  const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
-  const strokeWidth = isSelected ? 6 : 4;
-
-  visual = this.add.rectangle(x, y, 52, 52, 0x112233)
-    .setStrokeStyle(strokeWidth, borderColor)
-    .setInteractive();
-
-  (visual as any).relicId = item.id;
-  (visual as any).isRelic = true;
-
-  let clickCount = 0;
-  visual.on('pointerdown', () => {
-    clickCount++;
-    if (clickCount === 1) {
-      this.toggleRelicSelection(item.id, visual);
-    }
-    if (clickCount === 2) {
-      const prepare = this.scene.get('PrepareScene') as any;
-      if (prepare && typeof prepare.equipSingleRelic === 'function') {
-        const success = prepare.equipSingleRelic(item.id);
-        if (success) {
-          const idx = this.selectedRelicIds.indexOf(item.id);
-          if (idx > -1) this.selectedRelicIds.splice(idx, 1);
-          this.showFloatingMultiSelectPanel();
-          this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
-          this.refreshGrid();
+        if (clickCount === 2) {
+          const prepareScene = this.scene.get('PrepareScene') as any;
+          if (prepareScene && typeof prepareScene.addSingleUnitToTeam === 'function') {
+            const success = prepareScene.addSingleUnitToTeam(item.id);
+            if (success) {
+              const idx = this.selectedUnitIds.indexOf(item.id);
+              if (idx > -1) this.selectedUnitIds.splice(idx, 1);
+              this.showFloatingMultiSelectPanel();
+            }
+          }
+          clickCount = 0;
         }
-      }
-      clickCount = 0;
+        setTimeout(() => { clickCount = 0; }, 500);
+      });
+
+      ship.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+      ship.on('pointerout', () => this.hideTooltip());
+
+      this.unitSprites.push(container);
+    } else {
+      // === РЕЛИКВИИ (упрощённо) ===
+      const isSelected = this.selectedRelicIds.includes(item.id);
+      const borderColor = isSelected ? 0x00ff00 : 0xffaa00;
+      const strokeWidth = isSelected ? 6 : 4;
+
+      const relicMap: Record<number, string> = {
+        0: 'quantum_strike',
+        1: 'void_shield',
+        2: 'nebula_dash',
+        3: 'echo_core',
+        4: 'flux_overload',
+        5: 'last_stand'
+      };
+
+      const relicKey = relicMap[item.relic.relicType] || 'quantum_strike';
+
+      // Прямоугольник (фон + рамка)
+      const bg = this.add.rectangle(x, y, 52, 52, 0x112233)
+        .setStrokeStyle(strokeWidth, borderColor)
+        .setInteractive();
+
+      // Спрайт реликвии
+      const relicSprite = this.add.sprite(x, y, relicKey)
+        .setScale(0.65);
+
+      this.gridContainer!.add(bg);
+      this.gridContainer!.add(relicSprite);
+
+      (bg as any).relicId = item.id;
+      (bg as any).isRelic = true;
+
+      let clickCount = 0;
+      bg.on('pointerdown', () => {
+        clickCount++;
+        if (clickCount === 1) {
+          this.toggleRelicSelection(item.id, bg);
+        }
+        if (clickCount === 2) {
+          const prepare = this.scene.get('PrepareScene') as any;
+          if (prepare && typeof prepare.equipSingleRelic === 'function') {
+            const success = prepare.equipSingleRelic(item.id);
+            if (success) {
+              const idx = this.selectedRelicIds.indexOf(item.id);
+              if (idx > -1) this.selectedRelicIds.splice(idx, 1);
+              this.showFloatingMultiSelectPanel();
+              this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
+              this.refreshGrid();
+            }
+          }
+          clickCount = 0;
+        }
+        setTimeout(() => { clickCount = 0; }, 450);
+      });
+
+      bg.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
+      bg.on('pointerout', () => this.hideTooltip());
+
+      this.relicSprites.push(bg);
     }
-    setTimeout(() => { clickCount = 0; }, 450);
-  });
-
-  visual.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
-  visual.on('pointerout', () => this.hideTooltip());
-}
-
-this.gridContainer!.add(visual);
-if (this.currentTab === 'units') this.unitSprites.push(visual);
-else this.relicSprites.push(visual);
   });
 }
 
@@ -506,10 +523,20 @@ private toggleRelicSelection(id: number, sprite: any) {
   } else if (this.selectedRelicIds.length < 3) {
     this.selectedRelicIds.push(id);
   }
-  // refreshGrid убрали, чтобы не ломать двойной клик
+  
   this.showFloatingMultiSelectPanel();
   this.showPreview(id, false);
-  // Рамка обновится при следующем refreshGrid (или можно добавить ручное обновление бордера)
+  
+  // === ОБНОВЛЯЕМ ТОЛЬКО ПОДСВЕТКУ (без refreshGrid) ===
+  this.relicSprites.forEach((cont: any) => {
+    if (cont.relicId && cont.bg) {
+      if (this.selectedRelicIds.includes(cont.relicId)) {
+        cont.bg.setStrokeStyle(6, 0x00ff00);
+      } else {
+        cont.bg.setStrokeStyle(4, 0xffaa00);
+      }
+    }
+  });
 }
 
 
@@ -581,18 +608,17 @@ private activateSelectedRelics() {
   if (this.selectedRelicIds.length === 0) return;
 
   const prepareScene = this.scene.get('PrepareScene') as any;
-  if (prepareScene && typeof prepareScene.addMultipleRelicsToEquipped === 'function') {
-    prepareScene.addMultipleRelicsToEquipped([...this.selectedRelicIds]);
-    
-  }
-  
+  if (!prepareScene || typeof prepareScene.addMultipleRelicsToEquipped !== 'function') return;
 
-  // Удаляем активированные из коллекции
+  // Заменяем справа налево
+  prepareScene.addMultipleRelicsToEquipped([...this.selectedRelicIds]);
+
+  // Убираем из коллекции
   this.relicsData = this.relicsData.filter(r => !this.selectedRelicIds.includes(r.id));
   this.selectedRelicIds = [];
 
+  this.showFloatingMultiSelectPanel();
   this.refreshGrid();
-  // НЕ закрываем сцену
 }
 
 
@@ -684,38 +710,40 @@ this.tweens.add({
     this.previewTexts.push(t2);
 
 } else {
+console.log('🟢 showPreview для реликвии, id:', id);
   const relicData = this.relicsData.find(r => r.id === id)?.relic;
-  if (relicData) {
+  console.log('relicData:', relicData);
+  
+  if (!relicData) {
+    console.error('❌ relicData не найден!');
+    return;
+    }
+  const relicMap: Record<number, string> = {
+    0: 'quantum_strike',
+    1: 'void_shield',
+    2: 'nebula_dash',
+    3: 'echo_core',
+    4: 'flux_overload',
+    5: 'last_stand'
+  };
 
-    // === ОТОБРАЖЕНИЕ РЕЛИКВИИ (в верхней части) ===
-    const relicMap: Record<number, string> = {
-      0: 'quantum_strike',
-      1: 'void_shield',
-      2: 'nebula_dash',
-      3: 'echo_core',
-      4: 'flux_overload',
-      5: 'last_stand'
-    };
+  const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
 
-    const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
+  const relicSprite = this.add.sprite(775, 420, relicKey)
+    .setScale(1.15)
+    .setDepth(16);
 
-    const relicSprite = this.add.sprite(775, 420, relicKey)
-      .setScale(1.15)
-      .setDepth(16);
+  this.previewShip = relicSprite as any;
 
-    this.previewShip = relicSprite as any;
+  const t1 = this.add.text(775, 565, relicData.name.replace(/\s*\+\d+/, ''), {
+    fontSize: '29px', fill: '#ff00ff', wordWrap: { width: 230 }, align: 'center'
+  }).setOrigin(0.5).setDepth(20);
+  this.previewTexts.push(t1);
 
-    // === ТЕКСТ (в нижней части) ===
-    const t1 = this.add.text(775, 565, relicData.name.replace(/\s*\+\d+/, ''), {
-        fontSize: '29px', fill: '#ff00ff', wordWrap: { width: wrapWidth }, align: 'center'
-    }).setOrigin(0.5).setDepth(20);
-    this.previewTexts.push(t1);
-
-    const t2 = this.add.text(775, 635, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
-      fontSize: '25px', fill: '#ffff88', wordWrap: { width: wrapWidth }, align: 'center'
-    }).setOrigin(0.5).setDepth(20);
-    this.previewTexts.push(t2);
-  }
+  const t2 = this.add.text(775, 635, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
+    fontSize: '25px', fill: '#ffff88', wordWrap: { width: 230 }, align: 'center'
+  }).setOrigin(0.5).setDepth(20);
+  this.previewTexts.push(t2);
 } 
 } 
 
@@ -742,18 +770,17 @@ private addSingleUnitToTeam(unitId: number) {
 
 private equipSingleRelic(relicId: number) {
   const prepareScene = this.scene.get('PrepareScene') as any;
-  if (prepareScene && typeof prepareScene.equipSingleRelic === 'function') {
-    prepareScene.equipSingleRelic(relicId);
-  }
+  if (!prepareScene || typeof prepareScene.equipSingleRelic !== 'function') return;
 
-  // Удаляем реликвию из списка выбранных
-  const idx = this.selectedRelicIds.indexOf(relicId);
-  if (idx > -1) {
-    this.selectedRelicIds.splice(idx, 1);
+  // Заменяем справа налево
+  const success = prepareScene.equipSingleRelic(relicId);
+  if (success) {
+    // Убираем из коллекции
+    this.relicsData = this.relicsData.filter(r => r.id !== relicId);
+    this.selectedRelicIds = this.selectedRelicIds.filter(id => id !== relicId);
+    this.showFloatingMultiSelectPanel();
+    this.refreshGrid();
   }
-
-  this.showFloatingMultiSelectPanel();
-  this.refreshGrid();
 }
 
   private showCollectionTooltip(x: number, y: number, unit?: any, relic?: any) {

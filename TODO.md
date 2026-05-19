@@ -1,6 +1,13 @@
 # TODO — Somnia StarForge
 
 ## Приоритет 0 (Блокер)
+- [ ] Доработать BattleScene: частицы двигателей, улучшенные взрывы, live HP бары
+- [x] Полностью переработанная CollectionScene с фильтрами и multi-select
+- [x] Полная механика equipped relics (drag, swap, unequip)
+- [x] Исправлена система глубин и input во всех сценах
+- [ ] Финальное тестирование и полировка BattleScene
+- [ ] Подготовка к mainnet (оптимизация газа)
+- [ ] Анти-абуз минтинга: daily limit 10 buyUnit + +1 бесплатный корабль за level-up  
 - [x] Полностью переработать BattleScene (2.5D + частицы + анимации) — завершено в v1.6
 
 ## Приоритет 1 (Высокий) — Актуально на 13.05.2026
@@ -12,7 +19,7 @@
   - Внешняя рамка: depth 200
 - [x] Починить hover, drag, double-click на юнитах в команде (PrepareScene)
 - [x] Добавить полноценный drag + click (unequip/swap) для equipped relics
-- [ ] Доработать BattleScene: частицы двигателей, улучшенные взрывы, live HP бары
+
 
 ## Приоритет 2 (Средний)
 - [x] Полная переработка CollectionScene (фильтры, multi-select, превью, floating panel)
