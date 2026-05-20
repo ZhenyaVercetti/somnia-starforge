@@ -225,14 +225,8 @@ private createContracts() {
             { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
             { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
             { "internalType": "uint16", "name": "damage", "type": "uint16" },
-            { "internalType": "uint16", "name": "damageDealt", "type": "uint16" },
-            { "internalType": "uint16", "name": "initialHp", "type": "uint16" },
             { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
-            { "internalType": "string", "name": "specialEffect", "type": "string" },
-            { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
-            { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
-            { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
-            { "internalType": "uint8", "name": "targetClass", "type": "uint8" }
+            { "internalType": "string", "name": "specialEffect", "type": "string" }
           ],
           "internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
           "name": "",
@@ -526,6 +520,17 @@ private normalizeUnit(unit: any) {
   };
 }
 
+private safeBigIntToNumber(value: bigint | number | undefined): number {
+  if (value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+    console.warn('BigInt out of safe integer range, defaulting to 0');
+    return 0;
+  }
+  return Number(value);
+}
+
+
 private async loadOwnedUnits() {
   if (!this.account || !this.gameContract || !this.nftContract) return;
 
@@ -547,7 +552,7 @@ private async loadOwnedUnits() {
 private async loadPlayerShop() {
   if (!this.account || !this.gameContract) return;
 
-  // Полная очистка
+  // Full cleanup of previous shop visuals
   if (this.shopContainer) {
     this.shopContainer.destroy(true);
     this.shopContainer = null;
@@ -563,72 +568,70 @@ private async loadPlayerShop() {
 
     const shopCenterX = 340;
     const shopY = 560;
-    const shopSlotSize = 128;           // новый размер
-    const shopSpacing = 48;             // чуть уменьшил для 128px
+    const shopSlotSize = 128;
+    const shopSpacing = 48;
     const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
     const shopStartX = shopCenterX - shopTotalWidth / 2;
 
-for (let i = 0; i < 3; i++) {
-  const item = shopData[i] || { isRelic: false, relicType: 0, relicValue: 0 };
-  const x = shopStartX + i * (shopSlotSize + shopSpacing);
-  const y = shopY;
+    for (let i = 0; i < 3; i++) {
+      const item = shopData[i] || { isRelic: false, relicType: 0, relicValue: 0 };
+      const x = shopStartX + i * (shopSlotSize + shopSpacing);
+      const y = shopY;
 
-  const bg = this.add.rectangle(x, y, 120, 120, 0x0a1122).setDepth(1);
-  this.shopContainer.add(bg);
+      const bg = this.add.rectangle(x, y, 120, 120, 0x0a1122).setDepth(1);
+      this.shopContainer.add(bg);
 
-  const slotImage = this.add.image(x, y, 'slot_shop')
-    .setInteractive()
-    .setDisplaySize(128, 128)
-    .setDepth(10);
-  // this.addButtonEffects(slotImage);   // ← УБРАНО (чтобы рамка не пульсировала)
+      const slotImage = this.add.image(x, y, 'slot_shop')
+        .setInteractive()
+        .setDisplaySize(128, 128)
+        .setDepth(10);
 
-  this.shopContainer.add(slotImage);
+      this.shopContainer.add(slotImage);
 
-  let displayName = 'EMPTY';
-  let tooltipText = 'Empty slot';
-  let relicKey = '';
-  let iconScale = 0.88;   // ← УВЕЛИЧЕНО
+      let displayName = 'EMPTY';
+      let tooltipText = 'Empty slot';
+      let relicKey = '';
+      let iconScale = 0.88;
 
-  if (item.isRelic) {
-    const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
-    displayName = typeNames[item.relicType] || 'Unknown Relic';
-    tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
+      if (item.isRelic) {
+        const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
+        displayName = typeNames[item.relicType] || 'Unknown Relic';
+        tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
 
-    const relicMap: Record<number, string> = {
-      0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-      3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-    };
-    relicKey = relicMap[item.relicType] || 'quantum_strike';
-  }
+        const relicMap: Record<number, string> = {
+          0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
+          3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
+        };
+        relicKey = relicMap[item.relicType] || 'quantum_strike';
+      }
 
-  const sprite = this.add.sprite(x, y, relicKey || 'slot_shop')
-    .setInteractive()
-    .setScale(relicKey ? iconScale : 1)
-    .setDepth(4);
-  (sprite as any).shopSlot = i;
-  this.shopContainer.add(sprite);
-  this.shopSprites.push(sprite);
+      const sprite = this.add.sprite(x, y, relicKey || 'slot_shop')
+        .setInteractive()
+        .setScale(relicKey ? iconScale : 1)
+        .setDepth(4);
+      (sprite as any).shopSlot = i;
+      this.shopContainer.add(sprite);
+      this.shopSprites.push(sprite);
 
-  const nameText = this.add.text(x, y + 85, displayName, {
-    fontSize: '18px', fill: '#ffff00', align: 'center', wordWrap: { width: 120 }
-  }).setOrigin(0.5);
-  this.shopContainer.add(nameText);
-  this.shopTexts.push(nameText);
+      const nameText = this.add.text(x, y + 85, displayName, {
+        fontSize: '18px', fill: '#ffff00', align: 'center', wordWrap: { width: 120 }
+      }).setOrigin(0.5);
+      this.shopContainer.add(nameText);
+      this.shopTexts.push(nameText);
 
-  const buyBtn = this.add.text(x - 28, y + 115, 'BUY', {
-    fontSize: '26px', fill: '#00ff00'
-  })
-    .setInteractive()
-    .on('pointerdown', () => this.buyFromShopSlot(i));
-  this.shopContainer.add(buyBtn);
-  this.shopBuyButtons.push(buyBtn);
+      const buyBtn = this.add.text(x - 28, y + 115, 'BUY', {
+        fontSize: '26px', fill: '#00ff00'
+      })
+        .setInteractive()
+        .on('pointerdown', () => this.buyFromShopSlot(i));
+      this.shopContainer.add(buyBtn);
+      this.shopBuyButtons.push(buyBtn);
 
-  sprite.on('pointerover', () => this.showTooltip(x + 140, y - 40, tooltipText));
-  sprite.on('pointerout', () => this.hideTooltip());
-}
+      sprite.on('pointerover', () => this.showTooltip(x + 140, y - 40, tooltipText));
+      sprite.on('pointerout', () => this.hideTooltip());
+    }
 
-
-    // AI GRID (без изменений)
+    // AI GRID setup (moved here only for reroll safety)
     this.aiGridSlots = [];
     const aiCenterX = 1640;
     const aiCenterY = 610;
@@ -1116,105 +1119,26 @@ private async buyUnit() {
 }
 
 private async buyFromShopSlot(slot: number) {
-
-  console.log('🟢 BUY FROM SHOP pressed, slot:', slot);
-
-  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
-  }
-
-  try {
-    console.log('📤 Sending buyFromShop...');
-    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 10000000000000000n); // 0.01 ETH
-
-    console.log('✅ TX sent:', hash);
-
-    const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] sent... waiting for on-chain (3 sec)`, { 
-      fontSize: '36px', fill: '#ffff00' 
-    }).setDepth(500);
-
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-    waiting.destroy();
-
-    const msg = this.add.text(600, 450, `Artifact purchased!`, { 
-      fontSize: '42px', fill: '#00ff00' 
-    }).setDepth(500);
-    setTimeout(() => msg.destroy(), 1800);
-
-    setTimeout(() => {
-      this.loadPlayerShop();
-      this.loadCurrentAI();
-    }, 3000);
-  } catch (e: any) {
-    console.error('❌ buyFromShopSlot error:', e);
-    const errMsg = e.shortMessage || e.message || 'Error';
-    const errorText = this.add.text(600, 450, `Error: ${errMsg}`, { 
-      fontSize: '36px', fill: '#ff4444' 
-    }).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4000);
-  }
-}
-
-
-private async rerollShop() {
-  console.log('🟢 REROLL pressed');
+  console.log('BUY FROM SHOP pressed, slot:', slot);
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     return alert('Connect wallet first');
   }
 
   try {
-    console.log('📤 Sending rerollShop...');
-    const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n);
-
-    console.log('✅ TX sent:', hash);
-
-    const waiting = this.add.text(600, 510, 'TX reroll sent... waiting for on-chain (2 sec)', {
-      fontSize: '42px', fill: '#ffff00'
-    }).setDepth(500);
-
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-    waiting.destroy();
-
-    // Immediate refresh without timeout
-    await this.loadPlayerShop();
-    await this.loadCurrentAI();
-
-    const msg = this.add.text(600, 510, 'Shop rerolled — new artifacts', {
-      fontSize: '42px', fill: '#00ff00'
-    }).setDepth(500);
-    setTimeout(() => msg.destroy(), 1800);
-
-  } catch (e: any) {
-    console.error('❌ rerollShop error:', e);
-    const errMsg = e.shortMessage || e.message || 'Reroll error';
-    const errorText = this.add.text(600, 510, `Error: ${errMsg}`, {
-      fontSize: '36px', fill: '#ff4444'
-    }).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4000);
-  }
-}
-
-private async buyFromShopSlot(slot: number) {
-  console.log('🟢 BUY FROM SHOP pressed, slot:', slot);
-
-  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
-  }
-
-  try {
-    console.log('📤 Sending buyFromShop...');
+    console.log('Sending buyFromShop...');
     const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 10000000000000000n);
 
-    console.log('✅ TX sent:', hash);
+    console.log('TX sent:', hash);
 
-    const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] sent... waiting for on-chain (2 sec)`, {
+    const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] sent... waiting for on-chain (3 sec)`, {
       fontSize: '36px', fill: '#ffff00'
     }).setDepth(500);
 
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
     waiting.destroy();
 
+    await new Promise(resolve => setTimeout(resolve, 1500));
     await this.loadPlayerShop();
     await this.loadCurrentAI();
 
@@ -1224,7 +1148,7 @@ private async buyFromShopSlot(slot: number) {
     setTimeout(() => msg.destroy(), 1800);
 
   } catch (e: any) {
-    console.error('❌ buyFromShopSlot error:', e);
+    console.error('buyFromShopSlot error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
     const errorText = this.add.text(600, 450, `Error: ${errMsg}`, {
       fontSize: '36px', fill: '#ff4444'
@@ -1232,6 +1156,47 @@ private async buyFromShopSlot(slot: number) {
     setTimeout(() => errorText.destroy(), 4000);
   }
 }
+
+
+private async rerollShop() {
+  console.log('REROLL pressed');
+
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Connect wallet first');
+  }
+
+  try {
+    console.log('Sending rerollShop...');
+    const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n);
+
+    console.log('TX sent:', hash);
+
+    const waiting = this.add.text(600, 510, 'TX reroll sent... waiting for on-chain (3 sec)', {
+      fontSize: '42px', fill: '#ffff00'
+    }).setDepth(500);
+
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
+    waiting.destroy();
+
+    await new Promise(resolve => setTimeout(resolve, 2200));
+    await this.loadPlayerShop();
+    await this.loadCurrentAI();
+
+    const msg = this.add.text(600, 510, 'Shop rerolled — new artifacts', {
+      fontSize: '42px', fill: '#00ff00'
+    }).setDepth(500);
+    setTimeout(() => msg.destroy(), 1800);
+
+  } catch (e: any) {
+    console.error('rerollShop error:', e);
+    const errMsg = e.shortMessage || e.message || 'Reroll error';
+    const errorText = this.add.text(600, 510, `Error: ${errMsg}`, {
+      fontSize: '36px', fill: '#ff4444'
+    }).setDepth(500);
+    setTimeout(() => errorText.destroy(), 4000);
+  }
+}
+
 
 private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
@@ -1448,28 +1413,21 @@ private async startBattle() {
       fill: '#ffff00'
     }).setOrigin(0.5).setDepth(500);
 
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
     waitingText.destroy();
 
-    await new Promise(resolve => setTimeout(resolve, 800));
-    let lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
+    await new Promise(resolve => setTimeout(resolve, 1800));
 
-    if (!lastResult[3] || lastResult[3] === '0x0000000000000000000000000000000000000000000000000000000000000000') {
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      lastResult = await this.gameContract.read.getLastBattleResult([this.account]);
-    }
+    const lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
+    console.log('getLastBattleResult raw data:', lastResult);
 
     const playerWon: boolean = lastResult[0] ?? false;
     const playerMaxHpBig: bigint[] = lastResult[1] ?? [];
     const aiMaxHpBig: bigint[] = lastResult[2] ?? [];
     const battleId: string = lastResult[3] ?? '0x0';
 
-    let playerMaxHp: number[] = Array.isArray(playerMaxHpBig) 
-      ? playerMaxHpBig.map((n: bigint) => Number(n)) 
-      : [];
-    let aiMaxHp: number[] = Array.isArray(aiMaxHpBig) 
-      ? aiMaxHpBig.map((n: bigint) => Number(n)) 
-      : [];
+    let playerMaxHp: number[] = playerMaxHpBig.map((n: bigint) => this.safeBigIntToNumber(n));
+    let aiMaxHp: number[] = aiMaxHpBig.map((n: bigint) => this.safeBigIntToNumber(n));
 
     const playerUnitsData: any[] = [];
     for (const id of this.team) {
@@ -1522,6 +1480,8 @@ private async startBattle() {
       aiUnitsData,
       battleId
     });
+
+    setTimeout(() => this.updatePlayerProfile(), 2000);
 
   } catch (e: any) {
     console.error('startBattle error:', e);

@@ -125,29 +125,7 @@ export default class CollectionScene extends Phaser.Scene {
     });
   }
 
-  private normalizeUnit(unit: any) {
-  if (!unit) {
-    return { faction: 0, rarity: 0, unitClass: 0, attack: 0, defense: 0, speed: 0 };
-  }
-  if (Array.isArray(unit)) {
-    return {
-      faction: Number(unit[0]),
-      rarity: Number(unit[1]),
-      unitClass: Number(unit[2]),
-      attack: Number(unit[3]),
-      defense: Number(unit[4]),
-      speed: Number(unit[5])
-    };
-  }
-  return {
-    faction: Number(unit.faction),
-    rarity: Number(unit.rarity),
-    unitClass: Number(unit.unitClass),
-    attack: Number(unit.attack),
-    defense: Number(unit.defense),
-    speed: Number(unit.speed)
-  };
-}
+  
   private createTabs() {
     const unitsBtn = this.add.image(380, 135, 'button_base')
       .setDisplaySize(160, 55)

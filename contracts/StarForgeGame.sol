@@ -26,6 +26,9 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint16[]) public lastAIMaxHp;
     bytes32 public lastBattleId;
 
+    // RESTORED: full battle events storage for replay
+    mapping(address => StarForgeBattleLibrary.BattleEvent[]) public lastBattleEvents;
+
     // ==================== CONFIGURABLE PRICES ====================
 
     uint256 public buyUnitPrice = 0.01 ether;
@@ -263,15 +266,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             activeEquipped = equipped;
         }
 
-        // NEW: explicit relic validation before simulation (prevents revert deep in library)
-        for (uint256 i = 0; i < activeEquipped.length; i++) {
-            if (activeEquipped[i] != 0) {
-                // will revert with "Relic does not exist" if invalid
-                relicContract.getRelic(activeEquipped[i]);
-            }
-        }
-
-        // Generate 8 AI units (on-chain, deterministic)
+        // Generate 8 AI units
         StarForgeBattleLibrary.ShopItem[] memory aiTeam = new StarForgeBattleLibrary.ShopItem[](8);
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, block.number)));
 
@@ -343,6 +338,12 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             lastAIMaxHp[msg.sender].push(result.aiMaxHp[i]);
         }
 
+        // RESTORED: store full events for replay
+        delete lastBattleEvents[msg.sender];
+        for (uint256 i = 0; i < result.events.length; i++) {
+            lastBattleEvents[msg.sender].push(result.events[i]);
+        }
+
         emit BattleResolved(battleId, msg.sender, result.playerWon, result.playerMaxHp, result.aiMaxHp);
 
         for (uint256 i = 0; i < result.events.length; i++) {
@@ -371,13 +372,12 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         bytes32,
         StarForgeBattleLibrary.BattleEvent[] memory
     ) {
-        StarForgeBattleLibrary.BattleEvent[] memory emptyEvents = new StarForgeBattleLibrary.BattleEvent[](0);
         return (
             lastPlayerWon[player],
             lastPlayerMaxHp[player],
             lastAIMaxHp[player],
             lastBattleId,
-            emptyEvents
+            lastBattleEvents[player]
         );
     }
 
@@ -447,5 +447,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         delete equippedRelics[msg.sender];
         delete lastPlayerMaxHp[msg.sender];
         delete lastAIMaxHp[msg.sender];
+        delete lastBattleEvents[msg.sender];
     }
 }

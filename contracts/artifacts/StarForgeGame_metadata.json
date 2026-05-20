@@ -742,6 +742,90 @@
 				"type": "function"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "lastBattleEvents",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "round",
+						"type": "uint8"
+					},
+					{
+						"internalType": "bool",
+						"name": "isPlayerSide",
+						"type": "bool"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerIndex",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetIndex",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint16",
+						"name": "damage",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "damageDealt",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "initialHp",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "remainingHp",
+						"type": "uint16"
+					},
+					{
+						"internalType": "string",
+						"name": "specialEffect",
+						"type": "string"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerRarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerClass",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetRarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetClass",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [],
 				"name": "lastBattleId",
 				"outputs": [
@@ -1349,11 +1433,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0x727328919a518718d926867b7ed2b8d96cc8af38f04792e3cd4a2c87a32f6424",
+			"keccak256": "0xeebeb78dffaf01e909c20846a0fb3cb5d393d2dc361cd18c4d2c3b9d5bc7c558",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://32a65b8b561a6190e5db53a60e0278c47b27d7cb62fa94a407efd582db380e37",
-				"dweb:/ipfs/QmRiknZ7oUxAucWnQTrURsbRCxqXiiUa5rqa1z48RyriSv"
+				"bzz-raw://2170fefbfd2be95abc068ae69a876a8acd74955ee497f9cac89e0555b8cec8c5",
+				"dweb:/ipfs/QmRU1H9aE933MA7kdaZJ6sMUmKT9J722gDKic3s6f3XS1M"
 			]
 		},
 		"StarForgeRelic.sol": {
