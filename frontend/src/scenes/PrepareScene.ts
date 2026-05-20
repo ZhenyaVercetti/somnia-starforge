@@ -119,12 +119,11 @@ if (this.account && this.gameContract) {
 
 private createContracts() {
   if (!this.account || !this.publicClient) {
-    console.error('❌ Cannot create contracts — account or publicClient missing');
+    console.error('Cannot create contracts — account or publicClient missing');
     return;
   }
 
   const gameAbi = [
-    // Profile
     {
       "inputs": [],
       "name": "createProfile",
@@ -152,8 +151,6 @@ private createContracts() {
       "stateMutability": "view",
       "type": "function"
     },
-
-    // Economy
     {
       "inputs": [],
       "name": "buyUnit",
@@ -203,8 +200,6 @@ private createContracts() {
       "stateMutability": "view",
       "type": "function"
     },
-
-    // Battle
     {
       "inputs": [
         { "internalType": "uint256[]", "name": "team", "type": "uint256[]" },
@@ -272,8 +267,6 @@ private createContracts() {
       "stateMutability": "view",
       "type": "function"
     },
-
-    // Equip
     {
       "inputs": [{ "internalType": "uint256[3]", "name": "relics", "type": "uint256[3]" }],
       "name": "equipRelics",
@@ -288,8 +281,6 @@ private createContracts() {
       "stateMutability": "view",
       "type": "function"
     },
-
-    // View functions
     {
       "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
       "name": "getPlayerUnits",
@@ -335,14 +326,19 @@ private createContracts() {
     {
       "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
       "name": "getUnit",
-      "outputs": [
-        { "internalType": "uint8", "name": "faction", "type": "uint8" },
-        { "internalType": "uint8", "name": "rarity", "type": "uint8" },
-        { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
-        { "internalType": "uint8", "name": "attack", "type": "uint8" },
-        { "internalType": "uint8", "name": "defense", "type": "uint8" },
-        { "internalType": "uint8", "name": "speed", "type": "uint8" }
-      ],
+      "outputs": [{
+        "components": [
+          { "internalType": "uint8", "name": "faction", "type": "uint8" },
+          { "internalType": "uint8", "name": "rarity", "type": "uint8" },
+          { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
+          { "internalType": "uint8", "name": "attack", "type": "uint8" },
+          { "internalType": "uint8", "name": "defense", "type": "uint8" },
+          { "internalType": "uint8", "name": "speed", "type": "uint8" }
+        ],
+        "internalType": "struct StarForgeUnitNFT.Unit",
+        "name": "",
+        "type": "tuple"
+      }],
       "stateMutability": "view",
       "type": "function"
     }
@@ -506,19 +502,47 @@ create() {
   console.log('  publicClient:', !!this.publicClient);
 }
 
-  private async loadOwnedUnits() {
-    if (!this.account || !this.gameContract || !this.nftContract) return;
-
-    this.ownedSprites.forEach(s => s.destroy());
-    this.ownedSprites = [];
-
-    try {
-      const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
-      this.playerUnitIds = ownedIds.map(id => Number(id));
-    } catch (e) {
-      console.error('loadOwnedUnits error', e);
-    }
+private normalizeUnit(unit: any) {
+  if (!unit) {
+    return { faction: 0, rarity: 0, unitClass: 0, attack: 0, defense: 0, speed: 0 };
   }
+  if (Array.isArray(unit)) {
+    return {
+      faction: Number(unit[0]),
+      rarity: Number(unit[1]),
+      unitClass: Number(unit[2]),
+      attack: Number(unit[3]),
+      defense: Number(unit[4]),
+      speed: Number(unit[5])
+    };
+  }
+  return {
+    faction: Number(unit.faction),
+    rarity: Number(unit.rarity),
+    unitClass: Number(unit.unitClass),
+    attack: Number(unit.attack),
+    defense: Number(unit.defense),
+    speed: Number(unit.speed)
+  };
+}
+
+private async loadOwnedUnits() {
+  if (!this.account || !this.gameContract || !this.nftContract) return;
+
+  this.ownedSprites.forEach(s => s.destroy());
+  this.ownedSprites = [];
+
+  try {
+    const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
+    this.playerUnitIds = ownedIds.map(id => Number(id));
+
+    this.team = this.team.filter(id => this.playerUnitIds.includes(id));
+    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+
+  } catch (e) {
+    console.error('loadOwnedUnits error', e);
+  }
+}
 
 private async loadPlayerShop() {
   if (!this.account || !this.gameContract) return;
@@ -1383,7 +1407,7 @@ private addGameUI() {
 }
 
 private async startBattle() {
-  console.log('🟢 START BATTLE pressed');
+  console.log('START BATTLE pressed');
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     return alert('Connect wallet first');
@@ -1406,7 +1430,7 @@ private async startBattle() {
   }
 
   try {
-    console.log('📤 Sending startMatch... team length:', this.team.length);
+    console.log('Sending startMatch... team length:', this.team.length);
 
     const hash = await this.sendGameTransaction(
       'startMatch',
@@ -1417,7 +1441,7 @@ private async startBattle() {
       0n
     );
 
-    console.log('✅ TX startMatch sent:', hash);
+    console.log('TX startMatch sent:', hash);
 
     const waitingText = this.add.text(960, 450, 'Transaction sent. Waiting for confirmation...', {
       fontSize: '32px',
@@ -1427,11 +1451,9 @@ private async startBattle() {
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waitingText.destroy();
 
-    // Double read with small delay to ensure state is indexed
     await new Promise(resolve => setTimeout(resolve, 800));
     let lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
 
-    // Fallback re-read if battleId is still zero
     if (!lastResult[3] || lastResult[3] === '0x0000000000000000000000000000000000000000000000000000000000000000') {
       await new Promise(resolve => setTimeout(resolve, 1200));
       lastResult = await this.gameContract.read.getLastBattleResult([this.account]);
@@ -1452,10 +1474,11 @@ private async startBattle() {
     const playerUnitsData: any[] = [];
     for (const id of this.team) {
       try {
-        const unit = await this.nftContract.read.getUnit([BigInt(id)]);
+        const rawUnit = await this.nftContract.read.getUnit([BigInt(id)]);
+        const unit = this.normalizeUnit(rawUnit);
         playerUnitsData.push({
-          faction: Number(unit.faction),
-          unitClass: Number(unit.unitClass)
+          faction: unit.faction,
+          unitClass: unit.unitClass
         });
       } catch {
         playerUnitsData.push({ faction: 0, unitClass: 0 });
@@ -1501,7 +1524,7 @@ private async startBattle() {
     });
 
   } catch (e: any) {
-    console.error('❌ startBattle error:', e);
+    console.error('startBattle error:', e);
     const errMsg = e.shortMessage || e.message || 'Unknown error';
     const errorText = this.add.text(960, 450, `Error: ${errMsg}`, {
       fontSize: '34px', fill: '#ff4444'
@@ -1600,11 +1623,13 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   if (!this.nftContract || !this.gridSlots[slotIndex]) return;
 
   try {
-    const unit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
+    const rawUnit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
+    const unit = this.normalizeUnit(rawUnit);
+
     const slot = this.gridSlots[slotIndex];
     const style = this.getRarityTintAndScale(unit.rarity);
-    const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
-    const rarityNum = Number(unit.rarity);
+    const shipKey = this.getShipKey(unit.faction, unit.unitClass);
+    const rarityNum = unit.rarity;
     const baseScale = style.scale * 0.42;
     const finalShipScale = baseScale * 0.75;
 
