@@ -262,38 +262,50 @@ export default class CollectionScene extends Phaser.Scene {
     backBtn.on('pointerdown', () => this.returnToPrepare());
   }
 
-  private async loadCollectionData() {
-    if (!this.account || !this.gameContract || !this.nftContract) {
-      console.error('CollectionScene: missing contracts');
-      return;
-    }
-
-    try {
-      const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
-      this.unitsData = await Promise.all(
-        unitIds.map(async (idBig) => {
-          const id = Number(idBig);
-          const unit = await this.nftContract.read.getUnit([idBig]);
-          return { id, unit, inTeam: false };
-        })
-      );
-
-      const relicIds: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
-      this.relicsData = await Promise.all(
-        relicIds.map(async (idBig) => {
-          const id = Number(idBig);
-          const relic = await this.relicContract.read.getRelic([idBig]);
-          return { id, relic };
-        })
-      );
-
-      this.relicsData = this.relicsData.filter(r => !this.equippedRelicIds.includes(r.id));
-      this.refreshGrid();
-
-    } catch (e) {
-      console.error('loadCollectionData error:', e);
-    }
+private async loadCollectionData() {
+  if (!this.account || !this.gameContract || !this.nftContract) {
+    console.error('CollectionScene: missing contracts');
+    return;
   }
+
+  try {
+    const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
+    this.unitsData = await Promise.all(
+      unitIds.map(async (idBig) => {
+        const id = Number(idBig);
+        try {
+          const unit = await this.nftContract.read.getUnit([idBig]);
+          if (!unit) return null;
+          return { id, unit, inTeam: false };
+        } catch {
+          return null;
+        }
+      })
+    );
+    this.unitsData = this.unitsData.filter(Boolean);
+
+    const relicIds: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+    this.relicsData = await Promise.all(
+      relicIds.map(async (idBig) => {
+        const id = Number(idBig);
+        try {
+          const relic = await this.relicContract.read.getRelic([idBig]);
+          if (!relic) return null;
+          return { id, relic };
+        } catch {
+          return null;
+        }
+      })
+    );
+    this.relicsData = this.relicsData.filter(Boolean);
+    this.relicsData = this.relicsData.filter(r => !this.equippedRelicIds.includes(r.id));
+
+    this.refreshGrid();
+
+  } catch (e) {
+    console.error('loadCollectionData error:', e);
+  }
+}
 
   private clearGrid() {
     if (this.contentContainer) {
@@ -311,19 +323,22 @@ export default class CollectionScene extends Phaser.Scene {
   }
 
   private refreshGrid() {
-    this.clearGrid();
+  this.clearGrid();
 
-    let data = this.currentTab === 'units' ? this.unitsData : this.relicsData;
+  let data = this.currentTab === 'units' ? this.unitsData : this.relicsData;
+  if (!data || data.length === 0) return;
 
-    if (this.currentTab === 'units') {
-      data = data.filter((item: any) => {
-        const u = item.unit;
-        if (this.filters.rarity !== 'all' && String(u.rarity) !== this.filters.rarity) return false;
-        if (this.filters.faction !== 'all' && String(u.faction) !== this.filters.faction) return false;
-        if (this.filters.unitClass !== 'all' && String(u.unitClass) !== this.filters.unitClass) return false;
-        return true;
-      });
-    }
+  if (this.currentTab === 'units') {
+    data = data.filter((item: any) => {
+      if (!item || !item.unit) return false;
+      const u = item.unit;
+      if (this.filters.rarity !== 'all' && String(u.rarity) !== this.filters.rarity) return false;
+      if (this.filters.faction !== 'all' && String(u.faction) !== this.filters.faction) return false;
+      if (this.filters.unitClass !== 'all' && String(u.unitClass) !== this.filters.unitClass) return false;
+      return true;
+    });
+  }
+  
 
     const spacingX = this.RELIC_SPACING_X;
     const spacingY = this.RELIC_SPACING_Y;
