@@ -6,7 +6,7 @@
 - **StarForgeUnitNFT**: `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1`
 - **StarForgeRelic**: `0x619e19df1975A8D289545834aAff3FEEf1b84909`
 - **StarForgePlayerProfile**: `0x48820B6263920fBD843F203E982cCa908Bd12dB3`
-- **StarForgeGame** (новый): `0xB0768AE07a84F8172424ED331c80525D1B4564de` ← **актуальный**
+- **StarForgeGame** (новый): `0xFA2f9a1Fb13fDd513eb20bd38Bac90E9C0507E08` ← **актуальный**
 
 ## Порядок деплоя и связывания контрактов
 

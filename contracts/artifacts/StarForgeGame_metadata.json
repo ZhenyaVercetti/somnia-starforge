@@ -189,19 +189,6 @@
 						"internalType": "address",
 						"name": "player",
 						"type": "address"
-					}
-				],
-				"name": "ProfileCreated",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
 					},
 					{
 						"indexed": false,
@@ -427,6 +414,92 @@
 						"type": "address"
 					}
 				],
+				"name": "getLastBattleEvents",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint8",
+								"name": "round",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bool",
+								"name": "isPlayerSide",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint16",
+								"name": "damage",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "damageDealt",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "initialHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "remainingHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "string",
+								"name": "specialEffect",
+								"type": "string"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerClass",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetClass",
+								"type": "uint8"
+							}
+						],
+						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
+						"name": "",
+						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
 				"name": "getLastBattleResult",
 				"outputs": [
 					{
@@ -520,6 +593,52 @@
 						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
 						"name": "",
 						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
+					}
+				],
+				"name": "getLastBattleSummary",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "bool",
+								"name": "playerWon",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint16[]",
+								"name": "playerFinalHp",
+								"type": "uint16[]"
+							},
+							{
+								"internalType": "uint16[]",
+								"name": "aiFinalHp",
+								"type": "uint16[]"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "battleId",
+								"type": "bytes32"
+							},
+							{
+								"internalType": "uint64",
+								"name": "timestamp",
+								"type": "uint64"
+							}
+						],
+						"internalType": "struct StarForgeGame.BattleSummary",
+						"name": "",
+						"type": "tuple"
 					}
 				],
 				"stateMutability": "view",
@@ -716,30 +835,6 @@
 						"type": "uint256"
 					}
 				],
-				"name": "lastAIMaxHp",
-				"outputs": [
-					{
-						"internalType": "uint16",
-						"name": "",
-						"type": "uint16"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
 				"name": "lastBattleEvents",
 				"outputs": [
 					{
@@ -812,43 +907,6 @@
 				"type": "function"
 			},
 			{
-				"inputs": [],
-				"name": "lastBattleId",
-				"outputs": [
-					{
-						"internalType": "bytes32",
-						"name": "",
-						"type": "bytes32"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
-				"name": "lastPlayerMaxHp",
-				"outputs": [
-					{
-						"internalType": "uint16",
-						"name": "",
-						"type": "uint16"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -856,12 +914,22 @@
 						"type": "address"
 					}
 				],
-				"name": "lastPlayerWon",
+				"name": "lastBattleSummary",
 				"outputs": [
 					{
 						"internalType": "bool",
-						"name": "",
+						"name": "playerWon",
 						"type": "bool"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "battleId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint64",
+						"name": "timestamp",
+						"type": "uint64"
 					}
 				],
 				"stateMutability": "view",
@@ -1422,11 +1490,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0xf2dbb07fc22de61fae6aed6b19ffc29bfb6d9bf432d74c117c06710414d97cde",
+			"keccak256": "0xd5fc53cc4b08a7ef728fa4e22ddebd81bf944f94ad9df5430fe0d9e1faea1fc2",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://31453ba5920e050d06704fa19597abc8746796d9159b5643f85466c1f9c8566b",
-				"dweb:/ipfs/QmbfN6u6vkbCj3eipDt5WPqGB1C7dBraK97Md45Jd2KDs3"
+				"bzz-raw://a7988d1f8fb29b3d8cec4189ba714a6f5787b572aa064c3967e73f53d5a89b43",
+				"dweb:/ipfs/QmaHvHiegiNXq75nrgGdnATfeASTJU5dqrHrWGVhwxwCwM"
 			]
 		},
 		"StarForgePlayerProfile.sol": {
