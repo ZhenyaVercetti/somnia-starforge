@@ -1,25 +1,30 @@
 # DEPLOYMENT.md
-**Актуально на 29 апреля 2026 — единственный источник правды по адресам**
+**Актуально на 20 мая 2026 — единственный источник правды по адресам**
 
 ## Актуальные адреса (testnet)
 
-- **StarForgeUnitNFT** (новый): `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1` ← **актуальный**
-- **StarForgeGame**: `0xeCF482a79c9F1FB6E89450C5FC07d0d41912A752`   ← **актуальный**
+- **StarForgeUnitNFT**: `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1`
 - **StarForgeRelic**: `0x619e19df1975A8D289545834aAff3FEEf1b84909`
+- **StarForgePlayerProfile**: `0x48820B6263920fBD843F203E982cCa908Bd12dB3`
+- **StarForgeGame** (новый): `0xB0768AE07a84F8172424ED331c80525D1B4564de` ← **актуальный**
 
-## Порядок обновления контрактов
+## Порядок деплоя и связывания контрактов
 
-**При обновлении StarForgeGame.sol:**
-1. Деплоим **НОВЫЙ** StarForgeGame с параметром `_unitNFT = 0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d`
-2. В StarForgeUnitNFT вызываем `setGameContract(новый_адрес_Game)`
-3. В новом StarForgeGame вызываем `setRelicContract(0x83930224Ced8cEB6350fC9F41202B8fAA0033173)`
-4. В Relic вызываем `setGameContract(новый_адрес_StarForgeGame)`
+**При деплое нового StarForgeGame:**
 
-**При обновлении StarForgeRelic.sol:**
-1. Деплоим **НОВЫЙ** StarForgeRelic
-2. В новом Relic вызываем `setGameContract(текущий_адрес_StarForgeGame)`
-3. В текущем StarForgeGame вызываем `setRelicContract(новый_адрес_Relic)`
+1. Деплоим **НОВЫЙ** `StarForgeGame` с параметрами:
+   - `_unitNFT` = `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1`
+   - `_relic` = `0x619e19df1975A8D289545834aAff3FEEf1b84909`
+   - `_playerProfile` = `0x48820B6263920fBD843F203E982cCa908Bd12dB3`
 
-## RPC и Chain ID
-- Testnet RPC: `https://dream-rpc.somnia.network`
-- Chain ID: `50312`
+2. После деплоя выполняем:
+
+```solidity
+// 1. NFT → новый Game
+StarForgeUnitNFT.setGameContract(0xB0768AE07a84F8172424ED331c80525D1B4564de)
+
+// 2. Relic → новый Game
+StarForgeRelic.setGameContract(0xB0768AE07a84F8172424ED331c80525D1B4564de)
+
+// 3. PlayerProfile → новый Game
+StarForgePlayerProfile.setGameContract(0xB0768AE07a84F8172424ED331c80525D1B4564de)

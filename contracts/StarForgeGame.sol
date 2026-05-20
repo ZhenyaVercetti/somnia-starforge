@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import "./StarForgeBattleLibrary.sol";
 import "./StarForgeUnitNFT.sol";
 import "./StarForgeRelic.sol";
+import "./StarForgePlayerProfile.sol";
 import "@openzeppelin/contracts@4.9.3/access/Ownable.sol";
 import "@openzeppelin/contracts@4.9.3/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts@4.9.3/security/Pausable.sol";
@@ -13,8 +14,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     // ==================== STORAGE ====================
 
-    mapping(address => bool) public hasProfile;
-    mapping(address => PlayerProfile) public profiles;
     mapping(address => uint256[]) public playerUnits;
     mapping(address => uint256[]) public playerRelics;
     mapping(address => uint256[3]) public equippedRelics;
@@ -26,7 +25,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint16[]) public lastAIMaxHp;
     bytes32 public lastBattleId;
 
-    // RESTORED: full battle events storage for replay
     mapping(address => StarForgeBattleLibrary.BattleEvent[]) public lastBattleEvents;
 
     // ==================== CONFIGURABLE PRICES ====================
@@ -64,14 +62,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     // ==================== STRUCTS ====================
 
-    struct PlayerProfile {
-        uint16 level;
-        uint32 xp;
-        uint256 wins;
-        uint256 losses;
-        uint16 currentAITier;
-    }
-
     struct ShopItem {
         bool isRelic;
         uint256 id;
@@ -89,12 +79,18 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     StarForgeUnitNFT public unitNFT;
     StarForgeRelic public relicContract;
+    StarForgePlayerProfile public playerProfileContract;
 
     // ==================== CONSTRUCTOR ====================
 
-    constructor(address _unitNFT, address _relic) Ownable() {
+    constructor(
+        address _unitNFT,
+        address _relic,
+        address _playerProfile
+    ) Ownable() {
         unitNFT = StarForgeUnitNFT(_unitNFT);
         relicContract = StarForgeRelic(_relic);
+        playerProfileContract = StarForgePlayerProfile(_playerProfile);
     }
 
     // ==================== ADMIN ====================
@@ -105,6 +101,10 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     function setRelicContract(address _relic) external onlyOwner {
         relicContract = StarForgeRelic(_relic);
+    }
+
+    function setPlayerProfileContract(address _playerProfile) external onlyOwner {
+        playerProfileContract = StarForgePlayerProfile(_playerProfile);
     }
 
     function setPrices(
@@ -134,20 +134,10 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         payable(owner()).transfer(balance);
     }
 
-    // ==================== INTERNAL: AUTO PROFILE CREATION ====================
-
-    function _ensureProfile() internal {
-        if (!hasProfile[msg.sender]) {
-            hasProfile[msg.sender] = true;
-            profiles[msg.sender] = PlayerProfile(1, 0, 0, 0, 1);
-            emit ProfileCreated(msg.sender);
-        }
-    }
-
     // ==================== ECONOMY ====================
 
     function buyUnit() external payable whenNotPaused nonReentrant {
-        _ensureProfile();
+        playerProfileContract.createProfile(msg.sender);
         require(msg.value >= buyUnitPrice, "Insufficient payment");
 
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao)));
@@ -174,7 +164,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     function rerollShop() external payable whenNotPaused nonReentrant {
-        _ensureProfile();
+        playerProfileContract.createProfile(msg.sender);
         require(msg.value >= rerollPrice, "Insufficient payment");
 
         for (uint256 i = 0; i < 3; i++) {
@@ -183,11 +173,14 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     function buyFromShop(uint256 slot) external payable whenNotPaused nonReentrant {
-        _ensureProfile();
+        playerProfileContract.createProfile(msg.sender);
         require(slot < 3, "Invalid slot");
 
         ShopItem memory item = playerShop[msg.sender][slot];
-        require(item.id != 0 || item.isRelic, "Empty slot");
+        require(
+            (item.isRelic && item.relicValue > 0) || (!item.isRelic && item.attack >= 10),
+            "Empty slot"
+        );
 
         if (item.isRelic) {
             require(msg.value >= buyRelicShopPrice, "Insufficient payment for relic");
@@ -229,7 +222,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     // ==================== EQUIP ====================
 
     function equipRelics(uint256[3] calldata relics) external whenNotPaused {
-        _ensureProfile();
+        playerProfileContract.createProfile(msg.sender);
 
         for (uint256 i = 0; i < 3; i++) {
             if (relics[i] != 0) {
@@ -244,7 +237,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     // ==================== BATTLE ====================
 
     function startMatch(uint256[] calldata team, uint256[] calldata equipped) external whenNotPaused nonReentrant {
-        _ensureProfile();
+        playerProfileContract.createProfile(msg.sender);
         require(team.length >= 4 && team.length <= 8, "Invalid team size");
 
         for (uint256 i = 0; i < team.length; i++) {
@@ -271,7 +264,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, block.number)));
 
         for (uint8 i = 0; i < 8; i++) {
-            uint256 aiSeed = uint256(keccak256(abi.encodePacked(seed, i, profiles[msg.sender].level)));
+            uint256 aiSeed = uint256(keccak256(abi.encodePacked(seed, i, playerProfileContract.getProfile(msg.sender).level)));
             uint8 atk = uint8(8 + (aiSeed % 13));
             uint8 def = uint8(7 + ((aiSeed >> 8) % 12));
             uint8 spd = uint8(8 + ((aiSeed >> 16) % 11));
@@ -315,7 +308,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             unitNFT,
             relicContract,
             activeEquipped,
-            profiles[msg.sender].level
+            playerProfileContract.getProfile(msg.sender).level
         );
 
         bytes32 battleId = keccak256(abi.encodePacked(
@@ -338,7 +331,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             lastAIMaxHp[msg.sender].push(result.aiMaxHp[i]);
         }
 
-        // RESTORED: store full events for replay
         delete lastBattleEvents[msg.sender];
         for (uint256 i = 0; i < result.events.length; i++) {
             lastBattleEvents[msg.sender].push(result.events[i]);
@@ -360,7 +352,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             );
         }
 
-        _updateProfileAfterBattle(result.playerWon);
+        playerProfileContract.updateAfterBattle(msg.sender, result.playerWon);
     }
 
     // ==================== VIEW ====================
@@ -428,16 +420,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             uint8 spd = uint8(9 + ((seed >> 56) % 11));
 
             return ShopItem(false, 0, faction, rarity, unitClass, atk, def, spd, 0, 0);
-        }
-    }
-
-    function _updateProfileAfterBattle(bool won) internal {
-        PlayerProfile storage profile = profiles[msg.sender];
-        profile.xp += won ? 25 : 10;
-        if (won) profile.wins++;
-        else profile.losses++;
-        if (profile.xp >= uint32(profile.level) * 55 + 90) {
-            profile.level++;
         }
     }
 

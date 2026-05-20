@@ -2,6 +2,7 @@
 // frontend/src/scenes/PrepareScene.ts
 import * as Phaser from 'phaser';
 import { getContract } from 'viem';
+import { PLAYER_PROFILE_ADDRESS } from '../lib/contractAddresses';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
 import { GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS, CHAIN_ID, RPC_URL } from '../lib/contractAddresses';
@@ -109,6 +110,8 @@ if (this.account && this.gameContract) {
   private slotPulses: Phaser.Tweens.Tween[] = [];
   private connectModalContainer: Phaser.GameObjects.Container | null = null;
   private isConnectModalOpen = false;
+  private shopTexts: Phaser.GameObjects.Text[] = [];
+  private shopBuyButtons: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -564,7 +567,7 @@ private async loadOwnedUnits() {
 private async loadPlayerShop() {
   if (!this.account || !this.gameContract) return;
 
-  // Full cleanup of previous shop visuals
+  // Очистка
   if (this.shopContainer) {
     this.shopContainer.destroy(true);
     this.shopContainer = null;
@@ -597,7 +600,6 @@ private async loadPlayerShop() {
         .setInteractive()
         .setDisplaySize(128, 128)
         .setDepth(10);
-
       this.shopContainer.add(slotImage);
 
       let displayName = 'EMPTY';
@@ -642,37 +644,6 @@ private async loadPlayerShop() {
       sprite.on('pointerover', () => this.showTooltip(x + 140, y - 40, tooltipText));
       sprite.on('pointerout', () => this.hideTooltip());
     }
-
-    // AI GRID setup (moved here only for reroll safety)
-    this.aiGridSlots = [];
-    const aiCenterX = 1640;
-    const aiCenterY = 610;
-    const aiSlotSize = 95;
-    const aiHSpacing = 15;
-    const aiVSpacing = 15;
-    const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
-    const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
-    const aiStartX = aiCenterX - aiTotalWidth / 2;
-    const aiStartY = aiCenterY - aiTotalHeight / 2;
-
-    for (let i = 0; i < 8; i++) {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      const x = aiStartX + col * (aiSlotSize + aiHSpacing);
-      const y = aiStartY + row * (aiSlotSize + aiVSpacing);
-
-      this.add.rectangle(x, y, aiSlotSize - 6, aiSlotSize - 6, 0x0a1122).setDepth(1);
-
-      const slot = this.add.image(x, y, 'slot_ai')
-        .setInteractive()
-        .setDisplaySize(aiSlotSize, aiSlotSize)
-        .setDepth(10);
-
-      this.aiGridSlots.push(slot);
-      this.addButtonEffects(slot);
-    }
-
-    this.loadCurrentAI();
 
   } catch (e) {
     console.error('loadPlayerShop error', e);
@@ -853,13 +824,18 @@ private async loadCurrentAI() {
     return;
   }
 
-  this.aiSprites.forEach(s => s?.destroy());
+  // Очистка
+  this.aiSprites.forEach(s => {
+    try { s?.destroy(); } catch (e) {}
+  });
   this.aiSprites = [];
 
   this.aiGridSlots.forEach(slot => {
     const old = slot.getData('aiSprite');
-    if (old) old.destroy();
-    slot.setData('aiSprite', null);
+    if (old) {
+      try { old.destroy(); } catch (e) {}
+      slot.setData('aiSprite', null);
+    }
   });
 
   try {
@@ -904,6 +880,7 @@ private async loadCurrentAI() {
       ship.on('pointerover', () => this.showTooltip(slot.x + 55, slot.y - 45, tooltipText));
       ship.on('pointerout', () => this.hideTooltip());
     }
+
   } catch (e) {
     console.error('loadCurrentAI error:', e);
     const errorText = this.add.text(1590, 730, 'FAILED TO LOAD\nENEMY TEAM', {
@@ -912,6 +889,7 @@ private async loadCurrentAI() {
     this.aiSprites.push(errorText as any);
   }
 }
+
 
 
 private async autoSelectTeam() {
@@ -986,45 +964,57 @@ private async autoSelectTeam() {
   }
 
 private async updatePlayerProfile() {
-  if (!this.account || !this.gameContract) {
-    console.warn('updatePlayerProfile: no account or gameContract');
+  if (!this.scene || !this.scene.isActive() || !this.playerLevelText || !this.playerStatsText) {
+    return;
+  }
+
+  if (!this.account || !this.publicClient) {
+    console.warn('updatePlayerProfile: no account or publicClient');
     return;
   }
 
   try {
-    let profile: any;
-    let attempts = 0;
-    const maxAttempts = 8;
+    const profileContract = getContract({
+      address: PLAYER_PROFILE_ADDRESS,
+      abi: [
+        {
+          "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+          "name": "getProfile",
+          "outputs": [{
+            "components": [
+              { "internalType": "uint16", "name": "level", "type": "uint16" },
+              { "internalType": "uint32", "name": "xp", "type": "uint32" },
+              { "internalType": "uint256", "name": "wins", "type": "uint256" },
+              { "internalType": "uint256", "name": "losses", "type": "uint256" },
+              { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }
+            ],
+            "internalType": "struct StarForgePlayerProfile.PlayerProfile",
+            "name": "",
+            "type": "tuple"
+          }],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ],
+      client: { public: this.publicClient }
+    });
 
-    while (attempts < maxAttempts) {
-      attempts++;
-      profile = await this.gameContract.read.profiles([this.account]);
-      console.log(`updatePlayerProfile attempt ${attempts} raw:`, profile);
+    const profile: any = await profileContract.read.getProfile([this.account]);
 
-      const level = Number(profile[0] ?? 0);
-      const xp = Number(profile[1] ?? 0);
-      const wins = Number(profile[2] ?? 0);
-      const losses = Number(profile[3] ?? 0);
-      const currentAITier = Number(profile[4] ?? 1);
+    const level = Number(profile.level ?? 0);
+    const xp = Number(profile.xp ?? 0);
+    const wins = Number(profile.wins ?? 0);
+    const losses = Number(profile.losses ?? 0);
 
-      console.log(`updatePlayerProfile attempt ${attempts} parsed: level=${level}, xp=${xp}, wins=${wins}, losses=${losses}, tier=${currentAITier}`);
-
-      if (xp > 0 || wins > 0 || losses > 0) {
-        console.log('Good profile data received from blockchain — updating UI');
-        (this as any).cachedProfile = { level, xp, wins, losses, currentAITier };
-        break;
-      }
-      await new Promise(resolve => setTimeout(resolve, 700));
+    if (this.playerLevelText && this.playerLevelText.scene) {
+      this.playerLevelText.setText(`LVL ${level}`);
     }
 
-    const cached = (this as any).cachedProfile || { level: 1, xp: 0, wins: 0, losses: 0, currentAITier: 1 };
+    const xpNeeded = level * 55 + 90;
+    if (this.playerStatsText && this.playerStatsText.scene) {
+      this.playerStatsText.setText(`XP ${xp}/${xpNeeded} • W:${wins} L:${losses}`);
+    }
 
-    if (this.playerLevelText) this.playerLevelText.setText(`LVL ${cached.level}`);
-
-    const xpNeeded = cached.level * 55 + 90;
-    if (this.playerStatsText) this.playerStatsText.setText(`XP ${cached.xp}/${xpNeeded} • W:${cached.wins} L:${cached.losses}`);
-
-    console.log('Profile UI updated successfully with real text objects');
   } catch (e) {
     console.error('updatePlayerProfile error:', e);
   }
@@ -1180,6 +1170,7 @@ private async rerollShop() {
 
     await new Promise(resolve => setTimeout(resolve, 2200));
 
+    // ← Вот это важно: перезагружаем магазин и AI
     await this.loadPlayerShop();
     await this.loadCurrentAI();
     await this.updatePlayerProfile();
@@ -1411,17 +1402,19 @@ private async startBattle() {
     console.log('TX startMatch sent:', hash);
 
     const waitingText = this.add.text(960, 450, 'Transaction sent. Waiting for confirmation...', {
-      fontSize: '32px',
-      fill: '#ffff00'
+      fontSize: '32px', fill: '#ffff00'
     }).setOrigin(0.5).setDepth(500);
 
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
     waitingText.destroy();
+
+    if (receipt.status !== 'success') {
+      throw new Error('Transaction failed on-chain');
+    }
 
     await new Promise(resolve => setTimeout(resolve, 1800));
 
     const lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
-    console.log('getLastBattleResult raw data:', lastResult);
 
     if (!lastResult || !Array.isArray(lastResult) || lastResult.length < 5) {
       throw new Error('Invalid battle result from blockchain');
@@ -1463,8 +1456,6 @@ private async startBattle() {
       attempts++;
       try {
         const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
-        console.log(`getCurrentAI attempt ${attempts}:`, aiData);
-
         if (aiData && Array.isArray(aiData) && aiData.length === 8) {
           for (const u of aiData) {
             if (!u.isRelic) {
@@ -1483,7 +1474,7 @@ private async startBattle() {
     }
 
     if (aiUnitsData.length < 4) {
-      throw new Error('AI team data not received from blockchain after 6 attempts');
+      throw new Error('AI team data not received from blockchain');
     }
 
     if (playerUnitsData.length < 4 || aiUnitsData.length < 4) {
@@ -1505,7 +1496,6 @@ private async startBattle() {
       battleId: battleId
     });
 
-    setTimeout(() => this.updatePlayerProfile(), 2000);
 
   } catch (e: any) {
     console.error('startBattle error:', e);
@@ -1516,6 +1506,7 @@ private async startBattle() {
     setTimeout(() => errorText.destroy(), 4500);
   }
 }
+
 
 private openCollectionScene() {
   const equippedIds = this.equippedRelics.filter(id => id > 0);

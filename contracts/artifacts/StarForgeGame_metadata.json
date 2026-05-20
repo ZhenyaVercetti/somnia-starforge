@@ -16,6 +16,11 @@
 						"internalType": "address",
 						"name": "_relic",
 						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "_playerProfile",
+						"type": "address"
 					}
 				],
 				"stateMutability": "nonpayable",
@@ -635,25 +640,6 @@
 						"internalType": "address",
 						"name": "",
 						"type": "address"
-					}
-				],
-				"name": "hasProfile",
-				"outputs": [
-					{
-						"internalType": "bool",
-						"name": "",
-						"type": "bool"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
 					},
 					{
 						"internalType": "uint256",
@@ -915,6 +901,19 @@
 				"type": "function"
 			},
 			{
+				"inputs": [],
+				"name": "playerProfileContract",
+				"outputs": [
+					{
+						"internalType": "contract StarForgePlayerProfile",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -1032,45 +1031,6 @@
 				"type": "function"
 			},
 			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"name": "profiles",
-				"outputs": [
-					{
-						"internalType": "uint16",
-						"name": "level",
-						"type": "uint16"
-					},
-					{
-						"internalType": "uint32",
-						"name": "xp",
-						"type": "uint32"
-					},
-					{
-						"internalType": "uint256",
-						"name": "wins",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "losses",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint16",
-						"name": "currentAITier",
-						"type": "uint16"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
 				"inputs": [],
 				"name": "relicContract",
 				"outputs": [
@@ -1108,6 +1068,19 @@
 				"name": "rerollShop",
 				"outputs": [],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_playerProfile",
+						"type": "address"
+					}
+				],
+				"name": "setPlayerProfileContract",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -1272,6 +1245,22 @@
 		"viaIR": true
 	},
 	"sources": {
+		"@openzeppelin/contracts@4.9.3/access/AccessControl.sol": {
+			"keccak256": "0x0dd6e52cb394d7f5abe5dca2d4908a6be40417914720932de757de34a99ab87f",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://dc117ce50ea746cab6b97ed1a1facee17a715ae0cb95d67b943dacbaf15176fb",
+				"dweb:/ipfs/QmYRZ2UGNYwsHwfNu7Wjr8L2j1LBZ1mKv6NvbwgterYMXc"
+			]
+		},
+		"@openzeppelin/contracts@4.9.3/access/IAccessControl.sol": {
+			"keccak256": "0x59ce320a585d7e1f163cd70390a0ef2ff9cec832e2aa544293a00692465a7a57",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bb2c137c343ef0c4c7ce7b18c1d108afdc9d315a04e48307288d2d05adcbde3a",
+				"dweb:/ipfs/QmUxhrAQM3MM3FF5j7AtcXLXguWCJBHJ14BRdVtuoQc8Fh"
+			]
+		},
 		"@openzeppelin/contracts@4.9.3/access/Ownable.sol": {
 			"keccak256": "0xba43b97fba0d32eb4254f6a5a297b39a19a247082a02d6e69349e071e2946218",
 			"license": "MIT",
@@ -1433,11 +1422,19 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0xeebeb78dffaf01e909c20846a0fb3cb5d393d2dc361cd18c4d2c3b9d5bc7c558",
+			"keccak256": "0xf2dbb07fc22de61fae6aed6b19ffc29bfb6d9bf432d74c117c06710414d97cde",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://2170fefbfd2be95abc068ae69a876a8acd74955ee497f9cac89e0555b8cec8c5",
-				"dweb:/ipfs/QmRU1H9aE933MA7kdaZJ6sMUmKT9J722gDKic3s6f3XS1M"
+				"bzz-raw://31453ba5920e050d06704fa19597abc8746796d9159b5643f85466c1f9c8566b",
+				"dweb:/ipfs/QmbfN6u6vkbCj3eipDt5WPqGB1C7dBraK97Md45Jd2KDs3"
+			]
+		},
+		"StarForgePlayerProfile.sol": {
+			"keccak256": "0xc318d7e852f3be03f1500a1f88c54630cf2b05c3609eee8945c602714e9d3770",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://61b750527dd3eb87fea48a03c9af2b0f17f253761a449ec0f1c523e905041e09",
+				"dweb:/ipfs/QmQttaMpfWWr1SnhTBURG1bLYgvimhUTRCY4kvARE6reYo"
 			]
 		},
 		"StarForgeRelic.sol": {
