@@ -738,13 +738,56 @@
 			}
 		],
 		"devdoc": {
+			"custom:version": "v1.6",
+			"details": "Uses BattleLibrary for deterministic combat resolution. Gas-optimized per TЗ Variant 1:      - No storage of full BattleEvent arrays (only summary + lastBattleId).      - All detailed events emitted via logs (cheap for frontend replay via getLogs).      - AI team generated on-chain deterministically.",
 			"kind": "dev",
-			"methods": {},
+			"methods": {
+				"buyFromShop(uint256)": {
+					"details": "This fixes previous fake relic IDs. Real mint happens here."
+				},
+				"buyUnit()": {
+					"details": "Uses block.prevrandao for better randomness than timestamp only."
+				},
+				"constructor": {
+					"params": {
+						"_relic": "Address of deployed StarForgeRelic",
+						"_unitNFT": "Address of deployed StarForgeUnitNFT"
+					}
+				},
+				"startMatch(uint256[],uint256[])": {
+					"details": "AI team is generated deterministically here (critical fix from previous broken version).      Gas optimization per TЗ: only summary stored + events emitted (no full BattleEvent[] storage).",
+					"params": {
+						"equipped": "Array of relic IDs to apply this match (can be empty)",
+						"team": "Array of player's unit token IDs"
+					}
+				}
+			},
+			"title": "StarForgeGame",
 			"version": 1
 		},
 		"userdoc": {
 			"kind": "user",
-			"methods": {},
+			"methods": {
+				"buyFromShop(uint256)": {
+					"notice": "Buys item from shop slot. If relic — mints real ERC-1155 via Relic contract."
+				},
+				"buyUnit()": {
+					"notice": "Buys a new random unit for 0.01 ETH. Mints ERC-721 via UnitNFT."
+				},
+				"constructor": {
+					"notice": "Initializes the game with existing NFT and Relic contracts."
+				},
+				"createProfile()": {
+					"notice": "Creates a new player profile. Can be called only once per address."
+				},
+				"rerollShop()": {
+					"notice": "Rerolls the 3-item shop for 0.005 ETH."
+				},
+				"startMatch(uint256[],uint256[])": {
+					"notice": "Starts an on-chain auto-battle. Team size 4-8."
+				}
+			},
+			"notice": "Main game contract for Somnia StarForge — fully on-chain Auto-Battler (TFT-like).",
 			"version": 1
 		}
 	},
@@ -982,11 +1025,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0xa008e446081743602d6c2803565ed2b6214a99a4704cab50442a0e39be0b2839",
+			"keccak256": "0xb4a6725ceee07fdc5a22513d7f3d41bd258bf4fcb12882c91b31af9298d3283d",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://a8cb231a42be4243e6b2a0b794d8440d64d57d37e58dc459287c35250d40ceb9",
-				"dweb:/ipfs/QmNXoaeoKTdXHN2kwn4tsajGJVquxn5DTrXaiZ1sPeVUQN"
+				"bzz-raw://3aa5a416c49a4966a8c653a440d8c74e4a1acb102ff06c171abc40f3c1c1d465",
+				"dweb:/ipfs/QmRG67gpKKW9G9SNi8tbR33CNbyAFLR3p1rW9NFQ2Q9d8U"
 			]
 		},
 		"StarForgeRelic.sol": {

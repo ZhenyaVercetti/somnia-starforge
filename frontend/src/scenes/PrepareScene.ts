@@ -4,6 +4,8 @@ import * as Phaser from 'phaser';
 import { getContract } from 'viem';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
+import { GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS, CHAIN_ID, RPC_URL } from '../lib/contractAddresses';
+
 
 export default class PrepareScene extends Phaser.Scene {
   
@@ -110,10 +112,6 @@ private createContracts() {
     return;
   }
 
-  const GAME_ADDRESS = '0xF38D368aF07098a204f41239833b2F7A562433a0';
-  const NFT_ADDRESS = '0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d';
-  const RELIC_ADDRESS = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
-
   const gameAbi = [
     { "inputs": [], "name": "buyUnit", "outputs": [], "stateMutability": "payable", "type": "function" },
     { "inputs": [], "name": "rerollShop", "outputs": [], "stateMutability": "payable", "type": "function" },
@@ -194,8 +192,42 @@ private createContracts() {
     client: { public: this.publicClient, wallet: walletClient }
   });
 
-  console.log('✅ Контракты созданы (исправленный ABI BattleEvent)');
+  console.log('✅ Контракты созданы из централизованного конфига');
 }
+
+private async sendGameTransaction(functionName: string, args: any[] = [], value: bigint = 0n) {
+  if (!this.gameContract || !this.account || !this.publicClient) {
+    throw new Error('Contract or wallet not ready');
+  }
+
+  const { createWalletClient, custom, encodeFunctionData } = await import('viem');
+
+  const walletClient = createWalletClient({
+    chain: {
+      id: CHAIN_ID,
+      name: 'Somnia Testnet',
+      nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
+      rpcUrls: { default: { http: [RPC_URL] } }
+    },
+    transport: custom((window as any).ethereum)
+  });
+
+  const data = encodeFunctionData({
+    abi: this.gameContract.abi,
+    functionName,
+    args
+  });
+
+  const hash = await walletClient.sendTransaction({
+    account: this.account,
+    to: this.gameContract.address,   // ← теперь всегда правильный адрес!
+    data,
+    value
+  });
+
+  return hash;
+}
+
 
 
   preload() {
@@ -777,46 +809,20 @@ private clearTemporaryTexts() {
 
 private async buyUnit() {
   console.log('🟢 BUY pressed');
-
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     return alert('Connect wallet first');
   }
 
   try {
     console.log('📤 Sending buyUnit...');
-
-    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
-    
-    const walletClient = createWalletClient({
-      chain: {
-        id: 50312,
-        name: 'Somnia Testnet',
-        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
-        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
-      },
-      transport: custom((window as any).ethereum)
-    });
-
-    const data = encodeFunctionData({
-      abi: this.gameContract.abi,
-      functionName: 'buyUnit',
-      args: []
-    });
-
-    const hash = await walletClient.sendTransaction({
-      account: this.account,
-      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
-      data: data,
-      value: 0n
-    });
+    const hash = await this.sendGameTransaction('buyUnit', [], 10000000000000000n); // 0.01 ETH
 
     console.log('✅ TX sent:', hash);
-
     const waiting = this.add.text(600, 450, 'TX buyUnit sent... waiting for on-chain (3 sec)', { 
       fontSize: '36px', fill: '#ffff00' 
     }).setDepth(500);
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
     const msg = this.add.text(600, 450, 'Unit purchased on-chain!', { 
@@ -824,9 +830,7 @@ private async buyUnit() {
     }).setDepth(500);
     setTimeout(() => msg.destroy(), 2200);
 
-    setTimeout(() => {
-      this.loadOwnedUnits();
-    }, 3000);
+    setTimeout(() => this.loadOwnedUnits(), 3000);
   } catch (e: any) {
     console.error('❌ buyUnit error:', e);
     const errMsg = e.shortMessage || e.message || 'Unknown error';
@@ -846,31 +850,7 @@ private async buyFromShopSlot(slot: number) {
 
   try {
     console.log('📤 Sending buyFromShop...');
-
-    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
-    
-    const walletClient = createWalletClient({
-      chain: {
-        id: 50312,
-        name: 'Somnia Testnet',
-        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
-        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
-      },
-      transport: custom((window as any).ethereum)
-    });
-
-    const data = encodeFunctionData({
-      abi: this.gameContract.abi,
-      functionName: 'buyFromShop',
-      args: [BigInt(slot)]
-    });
-
-    const hash = await walletClient.sendTransaction({
-      account: this.account,
-      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
-      data: data,
-      value: 0n
-    });
+    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 8000000000000000n); // 0.008 ETH
 
     console.log('✅ TX sent:', hash);
 
@@ -910,31 +890,7 @@ private async rerollShop() {
 
   try {
     console.log('📤 Sending rerollShop...');
-
-    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
-    
-    const walletClient = createWalletClient({
-      chain: {
-        id: 50312,
-        name: 'Somnia Testnet',
-        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
-        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
-      },
-      transport: custom((window as any).ethereum)
-    });
-
-    const data = encodeFunctionData({
-      abi: this.gameContract.abi,
-      functionName: 'rerollShop',
-      args: []
-    });
-
-    const hash = await walletClient.sendTransaction({
-      account: this.account,
-      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
-      data: data,
-      value: 0n
-    });
+    const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n); // 0.005 ETH
 
     console.log('✅ TX sent:', hash);
 
@@ -1163,33 +1119,11 @@ private async startBattle() {
   try {
     console.log('📤 Sending startMatch... team length:', this.team.length);
 
-    const { createWalletClient, custom, encodeFunctionData } = await import('viem');
-
-    const walletClient = createWalletClient({
-      chain: {
-        id: 50312,
-        name: 'Somnia Testnet',
-        nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
-        rpcUrls: { default: { http: ['https://dream-rpc.somnia.network'] } }
-      },
-      transport: custom((window as any).ethereum)
-    });
-
-    const data = encodeFunctionData({
-      abi: this.gameContract.abi,
-      functionName: 'startMatch',
-      args: [
-        this.team.map(id => BigInt(id)),
-        this.equippedRelics.map(id => BigInt(id))
-      ]
-    });
-
-    const hash = await walletClient.sendTransaction({
-      account: this.account,
-      to: '0x663FfeB8c82F97F31a5209D01D30354Deba9381a',
-      data: data,
-      value: 0n
-    });
+    const hash = await this.sendGameTransaction(
+      'startMatch',
+      [this.team.map(id => BigInt(id)), this.equippedRelics.map(id => BigInt(id))],
+      0n
+    );
 
     console.log('✅ TX startMatch sent:', hash);
 
@@ -1200,14 +1134,7 @@ private async startBattle() {
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
-    const GAME_ADDRESS = '0x663FfeB8c82F97F31a5209D01D30354Deba9381a';
-
-    const lastResult = await this.publicClient.readContract({
-      address: GAME_ADDRESS,
-      abi: this.gameContract.abi,
-      functionName: 'getLastBattleResult',
-      args: [this.account]
-    }) as [boolean, any[], number[], number[]];
+    const lastResult = await this.gameContract.read.getLastBattleResult([this.account]) as [boolean, any[], number[], number[]];
 
     const [playerWon, eventsRaw, playerMaxHp, aiMaxHp] = lastResult;
 

@@ -5,8 +5,19 @@ import "./StarForgeBattleLibrary.sol";
 import "./StarForgeUnitNFT.sol";
 import "./StarForgeRelic.sol";
 
+/**
+ * @title StarForgeGame
+ * @notice Main game contract for Somnia StarForge — fully on-chain Auto-Battler (TFT-like).
+ * @dev Uses BattleLibrary for deterministic combat resolution. Gas-optimized per TЗ Variant 1:
+ *      - No storage of full BattleEvent arrays (only summary + lastBattleId).
+ *      - All detailed events emitted via logs (cheap for frontend replay via getLogs).
+ *      - AI team generated on-chain deterministically.
+ * @custom:version v1.6
+ */
 contract StarForgeGame {
     using StarForgeBattleLibrary for *;
+
+    // ==================== STORAGE ====================
 
     mapping(address => bool) public hasProfile;
     mapping(address => PlayerProfile) public profiles;
@@ -14,11 +25,14 @@ contract StarForgeGame {
     mapping(address => uint256[]) public playerRelics;
     mapping(address => uint256[3]) public equippedRelics;
     mapping(address => ShopItem[3]) public playerShop;
+
+    // Last battle summary (gas-optimized — no full event array)
     mapping(address => bool) public lastPlayerWon;
     mapping(address => uint16[]) public lastPlayerMaxHp;
     mapping(address => uint16[]) public lastAIMaxHp;
-
     bytes32 public lastBattleId;
+
+    // ==================== EVENTS ====================
 
     event BattleResolved(
         bytes32 indexed battleId,
@@ -38,6 +52,8 @@ contract StarForgeGame {
         uint16 remainingHp,
         string specialEffect
     );
+
+    // ==================== STRUCTS ====================
 
     struct PlayerProfile {
         uint16 level;
@@ -60,13 +76,24 @@ contract StarForgeGame {
         uint8 relicValue;
     }
 
+    // ==================== STATE VARIABLES ====================
+
     StarForgeUnitNFT public unitNFT;
     StarForgeRelic public relicContract;
 
+    // ==================== CONSTRUCTOR ====================
+
+    /**
+     * @notice Initializes the game with existing NFT and Relic contracts.
+     * @param _unitNFT Address of deployed StarForgeUnitNFT
+     * @param _relic Address of deployed StarForgeRelic
+     */
     constructor(address _unitNFT, address _relic) {
         unitNFT = StarForgeUnitNFT(_unitNFT);
         relicContract = StarForgeRelic(_relic);
     }
+
+    // ==================== ADMIN / SETTERS ====================
 
     function setUnitNFT(address _unitNFT) external {
         unitNFT = StarForgeUnitNFT(_unitNFT);
@@ -76,12 +103,23 @@ contract StarForgeGame {
         relicContract = StarForgeRelic(_relic);
     }
 
+    // ==================== PROFILE ====================
+
+    /**
+     * @notice Creates a new player profile. Can be called only once per address.
+     */
     function createProfile() external {
         require(!hasProfile[msg.sender], "Profile already exists");
         hasProfile[msg.sender] = true;
         profiles[msg.sender] = PlayerProfile(1, 0, 0, 0, 1);
     }
 
+    // ==================== ECONOMY: BUY / SHOP ====================
+
+    /**
+     * @notice Buys a new random unit for 0.01 ETH. Mints ERC-721 via UnitNFT.
+     * @dev Uses block.prevrandao for better randomness than timestamp only.
+     */
     function buyUnit() external payable {
         require(hasProfile[msg.sender], "Create profile first");
         require(msg.value >= 0.01 ether, "Insufficient payment");
@@ -109,6 +147,9 @@ contract StarForgeGame {
         playerUnits[msg.sender].push(tokenId);
     }
 
+    /**
+     * @notice Rerolls the 3-item shop for 0.005 ETH.
+     */
     function rerollShop() external payable {
         require(hasProfile[msg.sender], "Create profile first");
         require(msg.value >= 0.005 ether, "Insufficient payment");
@@ -118,16 +159,26 @@ contract StarForgeGame {
         }
     }
 
+    /**
+     * @notice Buys item from shop slot. If relic — mints real ERC-1155 via Relic contract.
+     * @dev This fixes previous fake relic IDs. Real mint happens here.
+     */
     function buyFromShop(uint256 slot) external payable {
         require(hasProfile[msg.sender], "Create profile first");
         require(slot < 3, "Invalid slot");
 
         ShopItem memory item = playerShop[msg.sender][slot];
-        require(item.id != 0, "Empty slot");
+        require(item.id != 0 || item.isRelic, "Empty slot");
 
         if (item.isRelic) {
             require(msg.value >= 0.008 ether, "Insufficient payment for relic");
-            playerRelics[msg.sender].push(item.id);
+            // Mint real relic and store actual token ID
+            uint256 realId = relicContract.mintRelic(
+                msg.sender,
+                StarForgeRelic.RelicType(item.relicType),
+                item.relicValue
+            );
+            playerRelics[msg.sender].push(realId);
         } else {
             require(msg.value >= 0.01 ether, "Insufficient payment for unit");
 
@@ -157,13 +208,47 @@ contract StarForgeGame {
         playerShop[msg.sender][slot] = _generateShopItem();
     }
 
+    // ==================== BATTLE ====================
+
+    /**
+     * @notice Starts an on-chain auto-battle. Team size 4-8.
+     * @dev AI team is generated deterministically here (critical fix from previous broken version).
+     *      Gas optimization per TЗ: only summary stored + events emitted (no full BattleEvent[] storage).
+     * @param team Array of player's unit token IDs
+     * @param equipped Array of relic IDs to apply this match (can be empty)
+     */
     function startMatch(uint256[] calldata team, uint256[] calldata equipped) external {
         require(hasProfile[msg.sender], "Create profile first");
         require(team.length >= 4 && team.length <= 8, "Invalid team size");
 
+        // Generate 8 AI units deterministically (balanced vs player level)
         StarForgeBattleLibrary.ShopItem[] memory aiTeam = new StarForgeBattleLibrary.ShopItem[](8);
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao)));
+        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, block.number)));
 
+        for (uint8 i = 0; i < 8; i++) {
+            uint256 aiSeed = uint256(keccak256(abi.encodePacked(seed, i, profiles[msg.sender].level)));
+            uint8 atk = uint8(8 + (aiSeed % 13));
+            uint8 def = uint8(7 + ((aiSeed >> 8) % 12));
+            uint8 spd = uint8(8 + ((aiSeed >> 16) % 11));
+            uint8 faction = uint8((aiSeed >> 24) % 3);
+            uint8 unitClass = uint8((aiSeed >> 32) % 4);
+            uint8 rarity = uint8((aiSeed >> 40) % 3);
+
+            aiTeam[i] = StarForgeBattleLibrary.ShopItem({
+                isRelic: false,
+                id: 0,
+                faction: StarForgeUnitNFT.Faction(faction),
+                rarity: StarForgeUnitNFT.Rarity(rarity),
+                unitClass: StarForgeUnitNFT.UnitClass(unitClass),
+                attack: atk,
+                defense: def,
+                speed: spd,
+                relicType: 0,
+                relicValue: 0
+            });
+        }
+
+        // Run fully on-chain deterministic battle
         StarForgeBattleLibrary.BattleResult memory result = StarForgeBattleLibrary._simulateBattle(
             team,
             aiTeam,
@@ -175,6 +260,7 @@ contract StarForgeGame {
             profiles[msg.sender].level
         );
 
+        // Generate battleId and store only lightweight summary (gas optimization)
         bytes32 battleId = keccak256(abi.encodePacked(
             msg.sender,
             block.timestamp,
@@ -195,6 +281,7 @@ contract StarForgeGame {
             lastAIMaxHp[msg.sender].push(result.aiMaxHp[i]);
         }
 
+        // Emit summary + all battle events (cheap logs for frontend replay)
         emit BattleResolved(battleId, msg.sender, result.playerWon, result.playerMaxHp, result.aiMaxHp);
 
         for (uint256 i = 0; i < result.events.length; i++) {
@@ -213,6 +300,8 @@ contract StarForgeGame {
 
         _updateProfileAfterBattle(result.playerWon);
     }
+
+    // ==================== VIEW FUNCTIONS ====================
 
     function getLastBattleResult(address player) external view returns (
         bool playerWon,
@@ -249,16 +338,21 @@ contract StarForgeGame {
         return ai;
     }
 
-function _generateShopItem() internal view returns (ShopItem memory) {
-            uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp)));
+    // ==================== INTERNAL HELPERS ====================
+
+    /**
+     * @dev Generates a shop item (40% relic chance). Used by reroll and buyFromShop.
+     *      Seed includes prevrandao for better unpredictability.
+     */
+    function _generateShopItem() internal view returns (ShopItem memory) {
+        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender)));
 
         bool isRelic = (seed % 100) < 40;
 
         if (isRelic) {
             uint8 relicType = uint8(seed % 6);
             uint8 value = uint8(8 + ((seed >> 8) % 13));
-
-            return ShopItem(true, 1000 + relicType, 0, 0, 0, 0, 0, 0, relicType, value);
+            return ShopItem(true, 0, 0, 0, 0, 0, 0, 0, relicType, value);
         } else {
             uint8 faction = uint8((seed >> 16) % 3);
             uint8 unitClass = uint8((seed >> 24) % 4);
@@ -272,6 +366,9 @@ function _generateShopItem() internal view returns (ShopItem memory) {
         }
     }
 
+    /**
+     * @dev Updates player XP / level / winrate after battle.
+     */
     function _updateProfileAfterBattle(bool won) internal {
         PlayerProfile storage profile = profiles[msg.sender];
         profile.xp += won ? 25 : 10;
@@ -282,6 +379,8 @@ function _generateShopItem() internal view returns (ShopItem memory) {
             profile.level++;
         }
     }
+
+    // ==================== CLEANUP ====================
 
     function clearPlayerData() external {
         delete playerUnits[msg.sender];
