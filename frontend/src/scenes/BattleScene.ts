@@ -214,7 +214,6 @@ create() {
   }
 
 private setupTeams() {
-  // Clear previous team sprites and containers
   this.playerShips.forEach(ship => ship.destroy());
   this.playerShips = [];
   this.playerShadows.forEach(shadow => shadow.destroy());
@@ -232,7 +231,6 @@ private setupTeams() {
   this.aiHPLabels.forEach(label => label.destroy());
   this.aiHPLabels = [];
 
-  // === PLAYER TEAM - LEFT SIDE ===
   const playerBaseX = 340;
   const playerBaseY = 320;
   const playerRowShiftX = 28;
@@ -269,7 +267,6 @@ private setupTeams() {
     this.playerShadows.push(shadow);
     this.playerShips.push(ship);
 
-    // HP bar for player
     const barY = y - 42;
     const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
       .setDepth(y + 20)
@@ -285,7 +282,6 @@ private setupTeams() {
     this.playerHPBgs.push(barBg);
     this.playerHPLabels.push(barFill);
 
-    // Gentle floating animation
     this.tweens.add({
       targets: ship,
       y: y - 3,
@@ -297,7 +293,6 @@ private setupTeams() {
     });
   }
 
-  // === AI TEAM - RIGHT SIDE ===
   const aiBaseX = 1360;
   const aiBaseY = 320;
   const aiRowShiftX = 28;
@@ -340,7 +335,6 @@ private setupTeams() {
     this.aiShadows.push(shadow);
     this.aiShips.push(ship);
 
-    // HP bar for AI
     const barY = y - 42;
     const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
       .setDepth(y + 20)
@@ -356,7 +350,6 @@ private setupTeams() {
     this.aiHPBgs.push(barBg);
     this.aiHPLabels.push(barFill);
 
-    // Gentle floating animation
     this.tweens.add({
       targets: ship,
       y: y - 3,

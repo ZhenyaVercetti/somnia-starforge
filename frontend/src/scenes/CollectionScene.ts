@@ -264,7 +264,7 @@ export default class CollectionScene extends Phaser.Scene {
   }
 
 private async loadCollectionData() {
-  if (!this.account || !this.gameContract || !this.nftContract) {
+  if (!this.account || !this.gameContract || !this.nftContract || !this.relicContract) {
     console.error('CollectionScene: missing contracts');
     return;
   }
@@ -290,10 +290,19 @@ private async loadCollectionData() {
       relicIds.map(async (idBig) => {
         const id = Number(idBig);
         try {
-          const relic = await this.relicContract.read.getRelic([idBig]);
-          if (!relic) return null;
-          return { id, relic };
-        } catch {
+          const relicRaw = await this.relicContract.read.getRelic([idBig]);
+          if (!relicRaw) return null;
+
+          const relicType = Number(Array.isArray(relicRaw) ? relicRaw[0] : relicRaw.relicType);
+          const value = Number(Array.isArray(relicRaw) ? relicRaw[1] : relicRaw.value);
+          const name = Array.isArray(relicRaw) ? '' : relicRaw.name || '';
+
+          return { 
+            id, 
+            relic: { relicType, value, name } 
+          };
+        } catch (e) {
+          console.error(`Failed to load relic ${id}`, e);
           return null;
         }
       })
@@ -301,12 +310,14 @@ private async loadCollectionData() {
     this.relicsData = this.relicsData.filter(Boolean);
     this.relicsData = this.relicsData.filter(r => !this.equippedRelicIds.includes(r.id));
 
+    console.log(`Loaded ${this.unitsData.length} units and ${this.relicsData.length} relics`);
     this.refreshGrid();
 
   } catch (e) {
     console.error('loadCollectionData error:', e);
   }
 }
+
 
   private clearGrid() {
     if (this.contentContainer) {
@@ -476,64 +487,76 @@ private async loadCollectionData() {
     return container;
   }
 
-  private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
-    const relicMap: Record<number, string> = {
-      0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-      3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-    };
-    const relicKey = relicMap[item.relic.relicType] || 'quantum_strike';
+private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
+  const relicMap: Record<number, string> = {
+    0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
+    3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
+  };
+  const relicKey = relicMap[item.relic.relicType] || 'quantum_strike';
 
-    const container = this.add.container(x, y);
+  const container = this.add.container(x, y);
 
-    const bg = this.add.rectangle(0, 0, 52, 52, 0x112233)
-      .setStrokeStyle(2, 0x444444)
-      .setInteractive();
+  const bg = this.add.rectangle(0, 0, 52, 52, 0x112233)
+    .setStrokeStyle(2, 0x444444)
+    .setInteractive();
 
-    const relicSprite = this.add.sprite(0, 0, relicKey)
-      .setScale(0.65);
+  const relicSprite = this.add.sprite(0, 0, relicKey)
+    .setScale(0.65);
 
-    container.add([bg, relicSprite]);
-    this.gridContainer!.add(container);
+  container.add([bg, relicSprite]);
+  this.gridContainer!.add(container);
 
-    (bg as any).relicId = item.id;
-    (container as any).relicId = item.id;
+  (bg as any).relicId = item.id;
+  (container as any).relicId = item.id;
 
-    const selectionBorder = this.add.rectangle(0, 0, 74, 74)
-      .setStrokeStyle(5, 0xffff00)
-      .setFillStyle(0x000000, 0)
-      .setVisible(false)
-      .setDepth(20);
-    container.add(selectionBorder);
-    (container as any).selectionBorder = selectionBorder;
+  const selectionBorder = this.add.rectangle(0, 0, 74, 74)
+    .setStrokeStyle(5, 0xffff00)
+    .setFillStyle(0x000000, 0)
+    .setVisible(false)
+    .setDepth(20);
+  container.add(selectionBorder);
+  (container as any).selectionBorder = selectionBorder;
 
-    let clickCount = 0;
-    bg.on('pointerdown', () => {
-      clickCount++;
-      if (clickCount === 1) {
-        this.toggleRelicSelection(item.id, container);
-      }
-      if (clickCount === 2) {
-        const prepare = this.scene.get('PrepareScene') as any;
-        if (prepare && typeof prepare.equipSingleRelic === 'function') {
-          const success = prepare.equipSingleRelic(item.id);
-          if (success) {
-            const idx = this.selectedRelicIds.indexOf(item.id);
-            if (idx > -1) this.selectedRelicIds.splice(idx, 1);
-            this.clearFloatingPanel();
-            this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
-            this.refreshGrid();
-          }
+  let clickCount = 0;
+  bg.on('pointerdown', () => {
+    clickCount++;
+    if (clickCount === 1) {
+      this.toggleRelicSelection(item.id, container);
+    }
+    if (clickCount === 2) {
+      const prepare = this.scene.get('PrepareScene') as any;
+      if (prepare && typeof prepare.equipSingleRelic === 'function') {
+        const success = prepare.equipSingleRelic(item.id);
+        if (success) {
+          const idx = this.selectedRelicIds.indexOf(item.id);
+          if (idx > -1) this.selectedRelicIds.splice(idx, 1);
+          this.clearFloatingPanel();
+          this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
+          this.refreshGrid();
         }
-        clickCount = 0;
       }
-      setTimeout(() => { clickCount = 0; }, 450);
-    });
+      clickCount = 0;
+    }
+    setTimeout(() => { clickCount = 0; }, 450);
+  });
 
-    bg.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
-    bg.on('pointerout', () => this.hideTooltip());
+  bg.on('pointerover', () => {
+    if (!item || !item.relic) {
+      console.warn('createRelicCard: invalid relic item passed to tooltip');
+      return;
+    }
+    this.showCollectionTooltip(
+      this.gridContainer!.x + x + 4,
+      this.gridContainer!.y + y - 38,
+      item.relic,
+      true
+    );
+  });
+  bg.on('pointerout', () => this.hideTooltip());
 
-    return container;
-  }
+  return container;
+}
+
 
   private toggleUnitSelection(id: number, container: any) {
     const idx = this.selectedUnitIds.indexOf(id);
@@ -762,12 +785,15 @@ private async loadCollectionData() {
 private showCollectionTooltip(x: number, y: number, item: any, isRelic: boolean) {
   if (this.tooltip) this.tooltip.destroy();
 
+  console.log('showCollectionTooltip called with item:', item, 'isRelic:', isRelic);
+
   let tooltipText = 'ERROR: NO DATA';
 
   if (isRelic) {
-    if (!item || item.relicType === undefined) {
+    if (!item) {
       tooltipText = 'Relic data loading...';
     } else {
+      const relicType = Number(item.relicType || 0) % 6;
       const typeNames = [
         'Quantum Strike',
         'Void Shield',
@@ -776,8 +802,18 @@ private showCollectionTooltip(x: number, y: number, item: any, isRelic: boolean)
         'Flux Overload',
         'Last Stand'
       ];
-      const relicName = typeNames[item.relicType] || 'Unknown Relic';
-      const effect = this.getRelicEffectDescription ? this.getRelicEffectDescription(item.relicType) : '';
+      const effectDescriptions = [
+        'ATK +15%',
+        'DEF +20%',
+        'SPD +25%',
+        'Heal 10 HP per round',
+        'Damage reflection 8%',
+        'Revive once with 25% HP'
+      ];
+
+      const relicName = item.name || typeNames[relicType] || 'Unknown Relic';
+      const effect = effectDescriptions[relicType] || 'Unknown effect';
+
       tooltipText = `${relicName}\n+${item.value} ${effect}`;
     }
   } else {

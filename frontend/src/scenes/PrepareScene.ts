@@ -346,12 +346,18 @@ private createContracts() {
 
   const relicAbi = [
     {
-      "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
+      "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
       "name": "getRelic",
-      "outputs": [
-        { "internalType": "uint8", "name": "relicType", "type": "uint8" },
-        { "internalType": "uint8", "name": "value", "type": "uint8" }
-      ],
+      "outputs": [{
+        "components": [
+          { "internalType": "uint8", "name": "relicType", "type": "uint8" },
+          { "internalType": "uint8", "name": "value", "type": "uint8" },
+          { "internalType": "string", "name": "name", "type": "string" }
+        ],
+        "internalType": "struct StarForgeRelic.RelicData",
+        "name": "",
+        "type": "tuple"
+      }],
       "stateMutability": "view",
       "type": "function"
     }
@@ -988,31 +994,43 @@ private async updatePlayerProfile() {
   try {
     let profile: any;
     let attempts = 0;
-    const maxAttempts = 5;
+    const maxAttempts = 8;
 
     while (attempts < maxAttempts) {
       attempts++;
       profile = await this.gameContract.read.profiles([this.account]);
-      console.log(`Profile attempt ${attempts}:`, profile);
+      console.log(`updatePlayerProfile attempt ${attempts} raw:`, profile);
 
-      if (Number(profile.xp) > 0 || Number(profile.wins) > 0 || Number(profile.losses) > 0) {
+      const level = Number(profile[0] ?? 0);
+      const xp = Number(profile[1] ?? 0);
+      const wins = Number(profile[2] ?? 0);
+      const losses = Number(profile[3] ?? 0);
+      const currentAITier = Number(profile[4] ?? 1);
+
+      console.log(`updatePlayerProfile attempt ${attempts} parsed: level=${level}, xp=${xp}, wins=${wins}, losses=${losses}, tier=${currentAITier}`);
+
+      if (xp > 0 || wins > 0 || losses > 0) {
+        console.log('Good profile data received from blockchain — updating UI');
+        (this as any).cachedProfile = { level, xp, wins, losses, currentAITier };
         break;
       }
       await new Promise(resolve => setTimeout(resolve, 700));
     }
 
-    // Обновляем UI (замени на свои объекты текста)
-    if (this.levelText) this.levelText.setText(`LVL ${Number(profile.level) || 1}`);
-    if (this.xpText) this.xpText.setText(`XP ${Number(profile.xp) || 0}`);
-    if (this.winsText) this.winsText.setText(`W ${Number(profile.wins) || 0}`);
-    if (this.lossesText) this.lossesText.setText(`L ${Number(profile.losses) || 0}`);
-    if (this.tierText) this.tierText.setText(`TIER ${Number(profile.currentAITier) || 1}`);
+    const cached = (this as any).cachedProfile || { level: 1, xp: 0, wins: 0, losses: 0, currentAITier: 1 };
 
-    console.log('Profile UI updated successfully');
+    if (this.playerLevelText) this.playerLevelText.setText(`LVL ${cached.level}`);
+
+    const xpNeeded = cached.level * 55 + 90;
+    if (this.playerStatsText) this.playerStatsText.setText(`XP ${cached.xp}/${xpNeeded} • W:${cached.wins} L:${cached.losses}`);
+
+    console.log('Profile UI updated successfully with real text objects');
   } catch (e) {
     console.error('updatePlayerProfile error:', e);
   }
 }
+
+
 
 private showTooltip(x: number, y: number, text: string) {
     if (!this.tooltip || this.tooltip.scene !== this) {
