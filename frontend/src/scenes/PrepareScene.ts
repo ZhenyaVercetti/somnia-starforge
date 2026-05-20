@@ -112,6 +112,8 @@ if (this.account && this.gameContract) {
   private isConnectModalOpen = false;
   private shopTexts: Phaser.GameObjects.Text[] = [];
   private shopBuyButtons: Phaser.GameObjects.Text[] = [];
+  private buysLeftText: Phaser.GameObjects.Text | null = null;
+private rerollsLeftText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -197,6 +199,14 @@ const gameAbi = [
     "type": "function"
   },
   {
+  "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+  "name": "getPackedBattleEvents",
+  "outputs": [{ "internalType": "bytes", "name": "", "type": "bytes" }],
+  "stateMutability": "view",
+  "type": "function"
+},
+
+  {
     "inputs": [],
     "name": "buyRelicShopPrice",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
@@ -213,37 +223,19 @@ const gameAbi = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getLastBattleResult",
-    "outputs": [
-      { "internalType": "bool", "name": "", "type": "bool" },
-      { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
-      { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
-      { "internalType": "bytes32", "name": "", "type": "bytes32" },
-      {
-        "components": [
-          { "internalType": "uint32", "name": "battleId", "type": "uint32" },
-          { "internalType": "uint8", "name": "round", "type": "uint8" },
-          { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
-          { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
-          { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
-          { "internalType": "uint16", "name": "damage", "type": "uint16" },
-          { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
-          { "internalType": "uint8", "name": "specialEffect", "type": "uint8" },
-          { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
-          { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
-          { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
-          { "internalType": "uint8", "name": "targetClass", "type": "uint8" }
-        ],
-        "internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
+{
+  "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+  "name": "getLastBattleResult",
+  "outputs": [
+    { "internalType": "bool", "name": "", "type": "bool" },
+    { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
+    { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
+    { "internalType": "bytes32", "name": "", "type": "bytes32" },
+    { "internalType": "bytes", "name": "", "type": "bytes" }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+},
   {
     "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
     "name": "getCurrentAI",
@@ -299,31 +291,31 @@ const gameAbi = [
     "stateMutability": "view",
     "type": "function"
   },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getLastBattleEvents",
-    "outputs": [{
-      "components": [
-        { "internalType": "uint32", "name": "battleId", "type": "uint32" },
-        { "internalType": "uint8", "name": "round", "type": "uint8" },
-        { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
-        { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
-        { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
-        { "internalType": "uint16", "name": "damage", "type": "uint16" },
-        { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
-        { "internalType": "uint8", "name": "specialEffect", "type": "uint8" },
-        { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
-        { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
-        { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
-        { "internalType": "uint8", "name": "targetClass", "type": "uint8" }
-      ],
-      "internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
-      "name": "",
-      "type": "tuple[]"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
+{
+  "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+  "name": "getLastBattleEvents",
+  "outputs": [{
+    "components": [
+      { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
+      { "internalType": "uint8", "name": "round", "type": "uint8" },
+      { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
+      { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
+      { "internalType": "uint16", "name": "damage", "type": "uint16" },
+      { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
+      { "internalType": "uint8", "name": "specialEffect", "type": "uint8" },
+      { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
+      { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
+      { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
+      { "internalType": "uint8", "name": "targetClass", "type": "uint8" },
+      { "internalType": "uint32", "name": "battleId", "type": "uint32" }
+    ],
+    "internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
+    "name": "",
+    "type": "tuple[]"
+  }],
+  "stateMutability": "view",
+  "type": "function"
+},
   {
     "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
     "name": "getPlayerUnits",
@@ -617,6 +609,7 @@ private async loadPlayerShop() {
 
   try {
     const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
+    console.log('Shop data received:', shopData);
 
     this.shopContainer = this.add.container(0, 0);
 
@@ -646,7 +639,7 @@ private async loadPlayerShop() {
       let relicKey = '';
       let iconScale = 0.88;
 
-      if (item.isRelic) {
+      if (item.isRelic && item.relicValue > 0) {
         const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
         displayName = typeNames[item.relicType] || 'Unknown Relic';
         tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
@@ -1052,6 +1045,22 @@ private async updatePlayerProfile() {
   } catch (e) {
     console.error('updatePlayerProfile error:', e);
   }
+  try {
+  const remainingBuys = await this.gameContract.read.getRemainingBuys([this.account]);
+  const canReroll = await this.gameContract.read.canReroll([this.account]);
+  
+  if (this.buysLeftText) {
+    const maxBuys = 10 + (level - 1);
+    this.buysLeftText.setText(`Buys left: ${remainingBuys}/${maxBuys}`);
+  }
+  
+  if (this.rerollsLeftText) {
+    this.rerollsLeftText.setText(canReroll ? 'Rerolls: 2/2' : 'Rerolls: 0/2');
+  }
+} catch (e) {
+  console.error('Failed to load limits', e);
+}
+
 }
 
 
@@ -1204,7 +1213,15 @@ private async rerollShop() {
 
     await new Promise(resolve => setTimeout(resolve, 2200));
 
-    // ← Вот это важно: перезагружаем магазин и AI
+    // Принудительная пересборка магазина
+    if (this.shopContainer) {
+      this.shopContainer.destroy(true);
+      this.shopContainer = null;
+    }
+    this.shopSprites = [];
+    this.shopTexts = [];
+    this.shopBuyButtons = [];
+
     await this.loadPlayerShop();
     await this.loadCurrentAI();
     await this.updatePlayerProfile();
@@ -1309,6 +1326,14 @@ private addGameUI() {
     fontSize: '38px', fill: '#ffff00'
   }).setOrigin(0.5);
 
+  this.buysLeftText = this.add.text(285, 680, 'Buys left: 10/11', {
+  fontSize: '20px', fill: '#aaffff'
+}).setOrigin(0.5);
+
+this.rerollsLeftText = this.add.text(285, 480, 'Rerolls: 2/2', {
+  fontSize: '20px', fill: '#ff88ff'
+}).setOrigin(0.5);
+
   this.equippedSlotRects = [];
   const equippedY = teamCenterY + totalHeight / 2 + 80;
   const equippedTotalWidth = 3 * 128 + 2 * 40;
@@ -1371,6 +1396,17 @@ private addGameUI() {
   (btnBuy as any).linkedText = textBuy;
   btnBuy.on('pointerdown', () => this.buyUnit());
   this.addButtonEffects(btnBuy);
+
+  const btnGenerate = this.add.image(285, 720, 'button_base')
+  .setInteractive()
+  .setDisplaySize(270, 70);
+const textGenerate = this.add.text(285, 720, 'GENERATE 10 SHIPS', {
+  fontSize: '22px', fill: '#00ffff', fontStyle: 'bold'
+}).setOrigin(0.5);
+(btnGenerate as any).linkedText = textGenerate;
+btnGenerate.on('pointerdown', () => this.generateTenShips());
+this.addButtonEffects(btnGenerate);
+
 
   const btnStart = this.add.image(1600, 900, 'button_start')
     .setInteractive()
@@ -1461,17 +1497,20 @@ private async startBattle() {
       throw new Error('Transaction failed on-chain');
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1800));
+await new Promise(resolve => setTimeout(resolve, 1800));
 
-    const summary: any = await this.gameContract.read.getLastBattleSummary([this.account]);
-    const events: any[] = await this.gameContract.read.getLastBattleEvents([this.account]);
+const packedEvents: string = await this.gameContract.read.getPackedBattleEvents([this.account]);
+const events: any[] = this.decodePackedEvents(packedEvents);
 
-    const playerWon: boolean = summary.playerWon ?? false;
-    const playerMaxHpBig: bigint[] = summary.playerFinalHp ?? [];
-    const aiMaxHpBig: bigint[] = summary.aiFinalHp ?? [];
-    const battleId: string = summary.battleId ?? '0x0';
+// Получаем summary
+const summary: any = await this.gameContract.read.getLastBattleSummary([this.account]);
 
-    if (playerMaxHpBig.length === 0 || aiMaxHpBig.length === 0) {
+const playerWon: boolean = summary.playerWon ?? false;
+const playerMaxHpBig: bigint[] = summary.playerFinalHp ?? [];
+const aiMaxHpBig: bigint[] = summary.aiFinalHp ?? [];
+const battleId: string = summary.battleId ?? '0x0';
+
+if (playerMaxHpBig.length === 0 || aiMaxHpBig.length === 0) {
       throw new Error('Battle HP data not received from blockchain');
     }
 
@@ -1866,6 +1905,41 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
   }
 
+  private async generateTenShips() {
+  console.log('GENERATE 10 SHIPS pressed');
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Connect wallet first');
+  }
+
+  try {
+    const hash = await this.sendGameTransaction('generateTenShips', [], 100000000000000000n); // 0.1 ETH
+
+    console.log('TX sent:', hash);
+    const waiting = this.add.text(600, 450, 'Generating 10 ships...', {
+      fontSize: '36px', fill: '#ffff00'
+    }).setDepth(500);
+
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
+    waiting.destroy();
+
+    await this.loadOwnedUnits();
+    await this.updatePlayerProfile();
+
+    const msg = this.add.text(600, 450, '10 ships generated!', {
+      fontSize: '42px', fill: '#00ff00'
+    }).setDepth(500);
+    setTimeout(() => msg.destroy(), 2000);
+
+  } catch (e: any) {
+    console.error('generateTenShips error:', e);
+    const errMsg = e.shortMessage || e.message || 'Error';
+    const errorText = this.add.text(600, 450, `Error: ${errMsg}`, {
+      fontSize: '36px', fill: '#ff4444'
+    }).setDepth(500);
+    setTimeout(() => errorText.destroy(), 4000);
+  }
+}
+
 private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.08) {
   const img = obj as Phaser.GameObjects.Image;
   const originalWidth = img.displayWidth;
@@ -1985,6 +2059,49 @@ public equipSingleRelic(relicId: number): boolean {
     }
   }
   return false;
+}
+
+private decodePackedEvents(packed: string): any[] {
+  if (!packed || packed.length < 66) return [];
+  
+  // packed = "0x" + battleId(64 hex) + events(26 hex each)
+  const hex = packed.slice(2);
+  const events: any[] = [];
+  
+  // Пропускаем battleId (32 bytes = 64 hex chars)
+  let offset = 64;
+  
+  while (offset + 26 <= hex.length) {
+    const isPlayerSide = parseInt(hex.slice(offset, offset + 2), 16) === 1;
+    const round = parseInt(hex.slice(offset + 2, offset + 4), 16);
+    const attackerIndex = parseInt(hex.slice(offset + 4, offset + 6), 16);
+    const targetIndex = parseInt(hex.slice(offset + 6, offset + 8), 16);
+    const damage = parseInt(hex.slice(offset + 8, offset + 12), 16);
+    const remainingHp = parseInt(hex.slice(offset + 12, offset + 16), 16);
+    const specialEffect = parseInt(hex.slice(offset + 16, offset + 18), 16);
+    const attackerRarity = parseInt(hex.slice(offset + 18, offset + 20), 16);
+    const attackerClass = parseInt(hex.slice(offset + 20, offset + 22), 16);
+    const targetRarity = parseInt(hex.slice(offset + 22, offset + 24), 16);
+    const targetClass = parseInt(hex.slice(offset + 24, offset + 26), 16);
+    
+    events.push({
+      isPlayerSide,
+      round,
+      attackerIndex,
+      targetIndex,
+      damage,
+      remainingHp,
+      specialEffect,
+      attackerRarity,
+      attackerClass,
+      targetRarity,
+      targetClass
+    });
+    
+    offset += 26;
+  }
+  
+  return events;
 }
 
   shutdown() {

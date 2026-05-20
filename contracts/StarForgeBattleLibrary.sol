@@ -34,21 +34,20 @@ library StarForgeBattleLibrary {
         StarForgeUnitNFT.UnitClass unitClass;
     }
 
-    struct BattleEvent {
-        uint8 round;
-        bool isPlayerSide;
-        uint8 attackerIndex;
-        uint8 targetIndex;
-        uint16 damage;
-        uint16 damageDealt;
-        uint16 initialHp;
-        uint16 remainingHp;
-        string specialEffect;
-        uint8 attackerRarity;
-        uint8 attackerClass;
-        uint8 targetRarity;
-        uint8 targetClass;
-    }
+struct BattleEvent {
+    bool isPlayerSide;
+    uint8 round;
+    uint8 attackerIndex;
+    uint8 targetIndex;
+    uint16 damage;
+    uint16 remainingHp;
+    uint8 specialEffect;       
+    uint8 attackerRarity;
+    uint8 attackerClass;
+    uint8 targetRarity;
+    uint8 targetClass;
+    uint32 battleId;
+}
 
     struct BattleResult {
         bool playerWon;
@@ -272,7 +271,7 @@ library StarForgeBattleLibrary {
             }
         }
     }
-    
+
     function _applyRelics(
         CombatUnit[] memory team,
         StarForgeRelic relicContract,
@@ -378,7 +377,6 @@ library StarForgeBattleLibrary {
             }
         }
 
-        uint16 initialHp = defenders[targetIdx].hp;
 
         (uint16 damageDealt, string memory effect) = _calculateDamage(
             attackers[attackerIdx].attack,
@@ -402,21 +400,20 @@ library StarForgeBattleLibrary {
 
         if (lastStandTriggered) effect = "Last Stand";
 
-        events[eventIdx] = BattleEvent({
-            round: round,
-            isPlayerSide: isPlayerSide,
-            attackerIndex: attackerIdx,
-            targetIndex: uint8(targetIdx),
-            damage: damageDealt,
-            damageDealt: damageDealt,
-            initialHp: initialHp,
-            remainingHp: defenders[targetIdx].hp,
-            specialEffect: effect,
-            attackerRarity: uint8(attackers[attackerIdx].rarity),
-            attackerClass: uint8(attackers[attackerIdx].unitClass),
-            targetRarity: uint8(defenders[targetIdx].rarity),
-            targetClass: uint8(defenders[targetIdx].unitClass)
-        });
+events[eventIdx] = BattleEvent({
+    isPlayerSide: isPlayerSide,
+    round: round,
+    attackerIndex: attackerIdx,
+    targetIndex: uint8(targetIdx),
+    damage: damageDealt,
+    remainingHp: defenders[targetIdx].hp,
+    specialEffect: _effectToUint8(effect),
+    attackerRarity: uint8(attackers[attackerIdx].rarity),
+    attackerClass: uint8(attackers[attackerIdx].unitClass),
+    targetRarity: uint8(defenders[targetIdx].rarity),
+    targetClass: uint8(defenders[targetIdx].unitClass),
+    battleId: 0
+});
 
         return true;
     }
@@ -426,5 +423,11 @@ library StarForgeBattleLibrary {
             if (team[i].hp > 0) return true;
         }
         return false;
+    }
+    function _effectToUint8(string memory effect) internal pure returns (uint8) {
+        if (keccak256(bytes(effect)) == keccak256(bytes("CRIT"))) return 1;
+        if (keccak256(bytes(effect)) == keccak256(bytes("DODGE"))) return 2;
+        if (keccak256(bytes(effect)) == keccak256(bytes("Last Stand"))) return 3;
+        return 0;
     }
 }

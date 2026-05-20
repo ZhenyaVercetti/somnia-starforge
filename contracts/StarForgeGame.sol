@@ -12,9 +12,8 @@ import "@openzeppelin/contracts@4.9.3/security/Pausable.sol";
 contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     using StarForgeBattleLibrary for *;
 
-    // Storage
-    mapping(address => uint256[]) public playerUnits;
-    mapping(address => uint256[]) public playerRelics;
+    // ==================== STORAGE ====================
+
     mapping(address => uint256[3]) public equippedRelics;
     mapping(address => ShopItem[3]) public playerShop;
     mapping(address => ShopItem[8]) public lastAI;
@@ -28,38 +27,21 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     mapping(address => BattleSummary) public lastBattleSummary;
+    mapping(address => bytes) public lastBattleEventsPacked;
 
-    // Transient storage for events (1 hour)
-    mapping(address => StarForgeBattleLibrary.BattleEvent[]) public lastBattleEvents;
+    // ==================== PRICES ====================
 
-    // Configurable prices
     uint256 public buyUnitPrice = 0.01 ether;
     uint256 public rerollPrice = 0.005 ether;
     uint256 public buyUnitShopPrice = 0.01 ether;
     uint256 public buyRelicShopPrice = 0.008 ether;
 
     event PricesUpdated(uint256 buyUnit, uint256 reroll, uint256 buyUnitShop, uint256 buyRelicShop);
-
-    event BattleResolved(
-        bytes32 indexed battleId,
-        address indexed player,
-        bool playerWon,
-        uint16[] playerMaxHp,
-        uint16[] aiMaxHp
-    );
-
-    event BattleEventEmitted(
-        bytes32 indexed battleId,
-        uint8 round,
-        bool isPlayerSide,
-        uint8 attackerIndex,
-        uint8 targetIndex,
-        uint16 damage,
-        uint16 remainingHp,
-        string specialEffect
-    );
-
+    event BattleResolved(bytes32 indexed battleId, address indexed player, bool playerWon, uint16[] playerMaxHp, uint16[] aiMaxHp);
+    event BattleEventEmitted(bytes32 indexed battleId, uint8 round, bool isPlayerSide, uint8 attackerIndex, uint8 targetIndex, uint16 damage, uint16 remainingHp, uint8 specialEffect);
     event RelicsEquipped(address indexed player, uint256[3] relics);
+
+    // ==================== STRUCTS ====================
 
     struct ShopItem {
         bool isRelic;
@@ -74,9 +56,13 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         uint8 relicValue;
     }
 
+    // ==================== STATE VARIABLES ====================
+
     StarForgeUnitNFT public unitNFT;
     StarForgeRelic public relicContract;
     StarForgePlayerProfile public playerProfileContract;
+
+    // ==================== CONSTRUCTOR ====================
 
     constructor(
         address _unitNFT,
@@ -87,6 +73,8 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         relicContract = StarForgeRelic(_relic);
         playerProfileContract = StarForgePlayerProfile(_playerProfile);
     }
+
+    // ==================== ADMIN ====================
 
     function setUnitNFT(address _unitNFT) external onlyOwner {
         unitNFT = StarForgeUnitNFT(_unitNFT);
@@ -127,8 +115,15 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         payable(owner()).transfer(balance);
     }
 
+    // ==================== ECONOMY ====================
+
     function buyUnit() external payable whenNotPaused nonReentrant {
         playerProfileContract.createProfile(msg.sender);
+        
+        // Проверка лимита
+        uint256 remaining = playerProfileContract.getRemainingBuys(msg.sender);
+        require(remaining > 0, "Daily buy limit reached");
+
         require(msg.value >= buyUnitPrice, "Insufficient payment");
 
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao)));
@@ -151,40 +146,20 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             spd
         );
 
-        playerUnits[msg.sender].push(tokenId);
+        playerProfileContract.addUnit(msg.sender, tokenId);
+        playerProfileContract.useBuy(msg.sender);
     }
 
-    function rerollShop() external payable whenNotPaused nonReentrant {
+    function generateTenShips() external payable whenNotPaused nonReentrant {
         playerProfileContract.createProfile(msg.sender);
-        require(msg.value >= rerollPrice, "Insufficient payment");
+        
+        uint256 remaining = playerProfileContract.getRemainingBuys(msg.sender);
+        require(remaining >= 10, "Not enough daily buys remaining");
 
-        for (uint256 i = 0; i < 3; i++) {
-            playerShop[msg.sender][i] = _generateShopItem();
-        }
-    }
+        require(msg.value >= buyUnitPrice * 10, "Insufficient payment for 10 ships");
 
-    function buyFromShop(uint256 slot) external payable whenNotPaused nonReentrant {
-        playerProfileContract.createProfile(msg.sender);
-        require(slot < 3, "Invalid slot");
-
-        ShopItem memory item = playerShop[msg.sender][slot];
-        require(
-            (item.isRelic && item.relicValue > 0) || (!item.isRelic && item.attack >= 10),
-            "Empty slot"
-        );
-
-        if (item.isRelic) {
-            require(msg.value >= buyRelicShopPrice, "Insufficient payment for relic");
-            uint256 realId = relicContract.mintRelic(
-                msg.sender,
-                StarForgeRelic.RelicType(item.relicType),
-                item.relicValue
-            );
-            playerRelics[msg.sender].push(realId);
-        } else {
-            require(msg.value >= buyUnitShopPrice, "Insufficient payment for unit");
-
-            uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, slot)));
+        for (uint256 i = 0; i < 10; i++) {
+            uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, i)));
 
             uint8 atk = uint8(10 + (seed % 11));
             uint8 def = uint8(8 + ((seed >> 8) % 11));
@@ -204,11 +179,50 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
                 spd
             );
 
-            playerUnits[msg.sender].push(tokenId);
+            playerProfileContract.addUnit(msg.sender, tokenId);
         }
 
-        playerShop[msg.sender][slot] = _generateShopItem();
+        // Используем 10 покупок
+        for (uint256 i = 0; i < 10; i++) {
+            playerProfileContract.useBuy(msg.sender);
+        }
     }
+
+    function rerollShop() external payable whenNotPaused nonReentrant {
+        playerProfileContract.createProfile(msg.sender);
+        
+        require(playerProfileContract.canReroll(msg.sender), "Daily reroll limit reached (2 per day)");
+        require(msg.value >= rerollPrice, "Insufficient payment");
+
+        for (uint256 i = 0; i < 3; i++) {
+            uint256 slotSeed = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, i)));
+            playerShop[msg.sender][i] = _generateShopItem(slotSeed);
+        }
+
+        playerProfileContract.useReroll(msg.sender);
+    }
+
+    function buyFromShop(uint256 slot) external payable whenNotPaused nonReentrant {
+        playerProfileContract.createProfile(msg.sender);
+        require(slot < 3, "Invalid slot");
+
+        ShopItem memory item = playerShop[msg.sender][slot];
+        require(item.isRelic && item.relicValue > 0, "Empty slot");
+
+        require(msg.value >= buyRelicShopPrice, "Insufficient payment for relic");
+
+        uint256 realId = relicContract.mintRelic(
+            msg.sender,
+            StarForgeRelic.RelicType(item.relicType),
+            item.relicValue
+        );
+        playerProfileContract.addRelic(msg.sender, realId);
+
+        uint256 newSeed = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, slot)));
+        playerShop[msg.sender][slot] = _generateShopItem(newSeed);
+    }
+
+    // ==================== EQUIP ====================
 
     function equipRelics(uint256[3] calldata relics) external whenNotPaused {
         playerProfileContract.createProfile(msg.sender);
@@ -223,12 +237,23 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         emit RelicsEquipped(msg.sender, relics);
     }
 
+    // ==================== BATTLE ====================
+
     function startMatch(uint256[] calldata team, uint256[] calldata equipped) external whenNotPaused nonReentrant {
         playerProfileContract.createProfile(msg.sender);
         require(team.length >= 4 && team.length <= 8, "Invalid team size");
 
+        // Проверка владения юнитами (теперь через профиль)
+        uint256[] memory ownedUnits = playerProfileContract.getPlayerUnits(msg.sender);
         for (uint256 i = 0; i < team.length; i++) {
-            require(unitNFT.ownerOf(team[i]) == msg.sender, "You do not own this unit");
+            bool owns = false;
+            for (uint256 j = 0; j < ownedUnits.length; j++) {
+                if (ownedUnits[j] == team[i]) {
+                    owns = true;
+                    break;
+                }
+            }
+            require(owns, "You do not own this unit");
         }
 
         uint256[] memory activeEquipped = equipped.length > 0 ? equipped : new uint256[](3);
@@ -311,10 +336,8 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             timestamp: uint64(block.timestamp)
         });
 
-        delete lastBattleEvents[msg.sender];
-        for (uint256 i = 0; i < result.events.length; i++) {
-            lastBattleEvents[msg.sender].push(result.events[i]);
-        }
+        bytes memory packedEvents = _packBattleEvents(result.events, battleId);
+        lastBattleEventsPacked[msg.sender] = packedEvents;
 
         emit BattleResolved(battleId, msg.sender, result.playerWon, result.playerMaxHp, result.aiMaxHp);
 
@@ -335,12 +358,22 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         playerProfileContract.updateAfterBattle(msg.sender, result.playerWon);
     }
 
+    // ==================== VIEW FUNCTIONS ====================
+
+    function getLastBattleSummary(address player) external view returns (BattleSummary memory) {
+        return lastBattleSummary[player];
+    }
+
+    function getPackedBattleEvents(address player) external view returns (bytes memory) {
+        return lastBattleEventsPacked[player];
+    }
+
     function getLastBattleResult(address player) external view returns (
         bool,
         uint16[] memory,
         uint16[] memory,
         bytes32,
-        StarForgeBattleLibrary.BattleEvent[] memory
+        bytes memory
     ) {
         BattleSummary memory summary = lastBattleSummary[player];
         return (
@@ -348,7 +381,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             summary.playerFinalHp,
             summary.aiFinalHp,
             summary.battleId,
-            lastBattleEvents[player]
+            lastBattleEventsPacked[player]
         );
     }
 
@@ -357,11 +390,11 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     function getPlayerUnits(address player) external view returns (uint256[] memory) {
-        return playerUnits[player];
+        return playerProfileContract.getPlayerUnits(player);
     }
 
     function getPlayerRelics(address player) external view returns (uint256[] memory) {
-        return playerRelics[player];
+        return playerProfileContract.getPlayerRelics(player);
     }
 
     function getPlayerShop(address player) external view returns (ShopItem[3] memory) {
@@ -371,13 +404,16 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     function getEquippedRelics(address player) external view returns (uint256[3] memory) {
         return equippedRelics[player];
     }
-    function getLastBattleSummary(address player) external view returns (BattleSummary memory) {
-    return lastBattleSummary[player];
-}
 
-function getLastBattleEvents(address player) external view returns (StarForgeBattleLibrary.BattleEvent[] memory) {
-    return lastBattleEvents[player];
-}
+    function getRemainingBuys(address player) external view returns (uint256) {
+        return playerProfileContract.getRemainingBuys(player);
+    }
+
+    function canReroll(address player) external view returns (bool) {
+        return playerProfileContract.canReroll(player);
+    }
+
+    // ==================== INTERNAL ====================
 
     function _getWeightedRarity(uint256 seed) internal pure returns (uint8) {
         uint256 roll = seed % 100;
@@ -386,32 +422,51 @@ function getLastBattleEvents(address player) external view returns (StarForgeBat
         return 2;
     }
 
-    function _generateShopItem() internal view returns (ShopItem memory) {
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender)));
-        bool isRelic = (seed % 100) < 40;
+    function _generateShopItem(uint256 seed) internal pure returns (ShopItem memory) {
+        uint8 relicType = uint8(seed % 6);
+        uint8 value = uint8(8 + ((seed >> 8) % 13));
+        return ShopItem(true, 0, 0, 0, 0, 0, 0, 0, relicType, value);
+    }
 
-        if (isRelic) {
-            uint8 relicType = uint8(seed % 6);
-            uint8 value = uint8(8 + ((seed >> 8) % 13));
-            return ShopItem(true, 0, 0, 0, 0, 0, 0, 0, relicType, value);
-        } else {
-            uint8 faction = uint8((seed >> 16) % 3);
-            uint8 unitClass = uint8((seed >> 24) % 4);
-            uint8 rarity = _getWeightedRarity(seed);
-
-            uint8 atk = uint8(10 + ((seed >> 40) % 11));
-            uint8 def = uint8(8 + ((seed >> 48) % 11));
-            uint8 spd = uint8(9 + ((seed >> 56) % 11));
-
-            return ShopItem(false, 0, faction, rarity, unitClass, atk, def, spd, 0, 0);
+    function _packBattleEvents(
+        StarForgeBattleLibrary.BattleEvent[] memory events,
+        bytes32 battleId
+    ) internal pure returns (bytes memory) {
+        bytes memory packed = new bytes(32 + events.length * 13);
+        
+        assembly {
+            mstore(add(packed, 32), battleId)
         }
+        
+        for (uint256 i = 0; i < events.length; i++) {
+            StarForgeBattleLibrary.BattleEvent memory e = events[i];
+            uint256 offset = 32 + (i * 13);
+            
+            packed[offset]     = bytes1(e.isPlayerSide ? 1 : 0);
+            packed[offset + 1] = bytes1(e.round);
+            packed[offset + 2] = bytes1(e.attackerIndex);
+            packed[offset + 3] = bytes1(e.targetIndex);
+            
+            packed[offset + 4] = bytes1(uint8(e.damage >> 8));
+            packed[offset + 5] = bytes1(uint8(e.damage));
+            
+            packed[offset + 6] = bytes1(uint8(e.remainingHp >> 8));
+            packed[offset + 7] = bytes1(uint8(e.remainingHp));
+            
+            packed[offset + 8]  = bytes1(e.specialEffect);
+            packed[offset + 9]  = bytes1(e.attackerRarity);
+            packed[offset + 10] = bytes1(e.attackerClass);
+            packed[offset + 11] = bytes1(e.targetRarity);
+            packed[offset + 12] = bytes1(e.targetClass);
+        }
+        
+        return packed;
     }
 
     function clearPlayerData() external whenNotPaused {
-        delete playerUnits[msg.sender];
-        delete playerRelics[msg.sender];
         delete equippedRelics[msg.sender];
+        delete playerShop[msg.sender];
         delete lastBattleSummary[msg.sender];
-        delete lastBattleEvents[msg.sender];
+        delete lastBattleEventsPacked[msg.sender];
     }
 }

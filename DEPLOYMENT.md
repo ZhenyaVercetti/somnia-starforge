@@ -5,8 +5,8 @@
 
 - **StarForgeUnitNFT**: `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1`
 - **StarForgeRelic**: `0x619e19df1975A8D289545834aAff3FEEf1b84909`
-- **StarForgePlayerProfile**: `0x48820B6263920fBD843F203E982cCa908Bd12dB3`
-- **StarForgeGame** (новый): `0xFA2f9a1Fb13fDd513eb20bd38Bac90E9C0507E08` ← **актуальный**
+- **StarForgePlayerProfile**: `0x2C8976ECc9e9bDf939745ee61b1aD858607563d9`
+- **StarForgeGame** (новый): `0x05bcfA66B38259ea33B6986C1f04F028f0129a9F` ← **актуальный**
 
 ## Порядок деплоя и связывания контрактов
 
@@ -15,7 +15,7 @@
 1. Деплоим **НОВЫЙ** `StarForgeGame` с параметрами:
    - `_unitNFT` = `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1`
    - `_relic` = `0x619e19df1975A8D289545834aAff3FEEf1b84909`
-   - `_playerProfile` = `0x48820B6263920fBD843F203E982cCa908Bd12dB3`
+   - `_playerProfile` = `0x2C8976ECc9e9bDf939745ee61b1aD858607563d9`
 
 2. После деплоя выполняем:
 

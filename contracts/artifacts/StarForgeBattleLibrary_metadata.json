@@ -170,11 +170,11 @@
 			]
 		},
 		"StarForgeBattleLibrary.sol": {
-			"keccak256": "0x9069d51d1f6bf82d48b333bd050c5cb64e9b0dc27adda7195db7f9d91e97c5f6",
+			"keccak256": "0x478fc42ff0a6b5db5e335e83d27e2a62d54c31429725d763895f8519093a9d00",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://95553cda53b1a299430736e26543912144c976e6618a0c5096111b1bde6325fa",
-				"dweb:/ipfs/QmXyfmiE2HafvaXmSbXxtmAQp2PiVAnk4L7uKLWGsMVhST"
+				"bzz-raw://e4ba819bf3b7c8465f568e576b6670650970f45e2d7d4d70a8c2ae298853e09b",
+				"dweb:/ipfs/QmW5UUjDwKR9XnQKxy69cHDDSsbEj9RU47FRuLkJLwjrJh"
 			]
 		},
 		"StarForgeRelic.sol": {
