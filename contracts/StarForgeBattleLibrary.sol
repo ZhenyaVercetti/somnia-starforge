@@ -256,14 +256,23 @@ library StarForgeBattleLibrary {
         if (level == 0) return;
         uint256 multiplier = 100 + uint256(level) * 3;
         for (uint256 i = 0; i < team.length; i++) {
-            team[i].attack  = uint8(uint256(team[i].attack)  * multiplier / 100);
-            team[i].defense = uint8(uint256(team[i].defense) * multiplier / 100);
-            team[i].speed   = uint8(uint256(team[i].speed)   * multiplier / 100);
-            team[i].hp      = uint16(uint256(team[i].hp)      * multiplier / 100);
-            team[i].maxHp   = team[i].hp;
+            unchecked {
+                uint256 newAtk = uint256(team[i].attack) * multiplier / 100;
+                team[i].attack = newAtk > 255 ? 255 : uint8(newAtk);
+
+                uint256 newDef = uint256(team[i].defense) * multiplier / 100;
+                team[i].defense = newDef > 255 ? 255 : uint8(newDef);
+
+                uint256 newSpd = uint256(team[i].speed) * multiplier / 100;
+                team[i].speed = newSpd > 255 ? 255 : uint8(newSpd);
+
+                uint256 newHp = uint256(team[i].hp) * multiplier / 100;
+                team[i].hp = newHp > type(uint16).max ? type(uint16).max : uint16(newHp);
+                team[i].maxHp = team[i].hp;
+            }
         }
     }
-
+    
     function _applyRelics(
         CombatUnit[] memory team,
         StarForgeRelic relicContract,

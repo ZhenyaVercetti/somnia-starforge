@@ -814,7 +814,6 @@ private async loadCurrentAI() {
     return;
   }
 
-  // Clear previous sprites
   this.aiSprites.forEach(s => s?.destroy());
   this.aiSprites = [];
 
@@ -828,8 +827,7 @@ private async loadCurrentAI() {
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
     if (!aiData || !Array.isArray(aiData) || aiData.length === 0) {
-      // Honest message: no enemy team yet (first match)
-      const placeholder = this.add.text(1640, 610, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
+      const placeholder = this.add.text(1590, 730, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
         fontSize: '18px',
         color: '#888888',
         align: 'center',
@@ -870,7 +868,7 @@ private async loadCurrentAI() {
     }
   } catch (e) {
     console.error('loadCurrentAI error:', e);
-    const errorText = this.add.text(1640, 610, 'FAILED TO LOAD\nENEMY TEAM', {
+    const errorText = this.add.text(1590, 730, 'FAILED TO LOAD\nENEMY TEAM', {
       fontSize: '18px',
       color: '#ff4444',
       align: 'center'
@@ -1135,7 +1133,6 @@ private async buyFromShopSlot(slot: number) {
 
 
 private async rerollShop() {
-
   console.log('🟢 REROLL pressed');
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
@@ -1144,31 +1141,69 @@ private async rerollShop() {
 
   try {
     console.log('📤 Sending rerollShop...');
-    const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n); // 0.005 ETH
+    const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n);
 
     console.log('✅ TX sent:', hash);
 
-    const waiting = this.add.text(600, 510, 'TX reroll sent... waiting for on-chain (3 sec)', { 
-      fontSize: '42px', fill: '#ffff00' 
+    const waiting = this.add.text(600, 510, 'TX reroll sent... waiting for on-chain (2 sec)', {
+      fontSize: '42px', fill: '#ffff00'
     }).setDepth(500);
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
-    const msg = this.add.text(600, 510, 'Shop rerolled — new artifacts', { 
-      fontSize: '42px', fill: '#00ff00' 
+    // Immediate refresh without timeout
+    await this.loadPlayerShop();
+    await this.loadCurrentAI();
+
+    const msg = this.add.text(600, 510, 'Shop rerolled — new artifacts', {
+      fontSize: '42px', fill: '#00ff00'
     }).setDepth(500);
     setTimeout(() => msg.destroy(), 1800);
 
-    setTimeout(() => {
-      this.loadPlayerShop();
-      this.loadCurrentAI();
-    }, 3000);
   } catch (e: any) {
     console.error('❌ rerollShop error:', e);
     const errMsg = e.shortMessage || e.message || 'Reroll error';
-    const errorText = this.add.text(600, 510, `Error: ${errMsg}`, { 
-      fontSize: '36px', fill: '#ff4444' 
+    const errorText = this.add.text(600, 510, `Error: ${errMsg}`, {
+      fontSize: '36px', fill: '#ff4444'
+    }).setDepth(500);
+    setTimeout(() => errorText.destroy(), 4000);
+  }
+}
+
+private async buyFromShopSlot(slot: number) {
+  console.log('🟢 BUY FROM SHOP pressed, slot:', slot);
+
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    return alert('Connect wallet first');
+  }
+
+  try {
+    console.log('📤 Sending buyFromShop...');
+    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 10000000000000000n);
+
+    console.log('✅ TX sent:', hash);
+
+    const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] sent... waiting for on-chain (2 sec)`, {
+      fontSize: '36px', fill: '#ffff00'
+    }).setDepth(500);
+
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    waiting.destroy();
+
+    await this.loadPlayerShop();
+    await this.loadCurrentAI();
+
+    const msg = this.add.text(600, 450, `Artifact purchased!`, {
+      fontSize: '42px', fill: '#00ff00'
+    }).setDepth(500);
+    setTimeout(() => msg.destroy(), 1800);
+
+  } catch (e: any) {
+    console.error('❌ buyFromShopSlot error:', e);
+    const errMsg = e.shortMessage || e.message || 'Error';
+    const errorText = this.add.text(600, 450, `Error: ${errMsg}`, {
+      fontSize: '36px', fill: '#ff4444'
     }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
   }
@@ -1392,14 +1427,20 @@ private async startBattle() {
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waitingText.destroy();
 
-    const lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
+    // Double read with small delay to ensure state is indexed
+    await new Promise(resolve => setTimeout(resolve, 800));
+    let lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
 
-    // NEW 5-value return: [0]=won, [1]=playerMaxHp, [2]=aiMaxHp, [3]=battleId, [4]=events
-    const playerWon: boolean = lastResult[0] ?? lastResult.playerWon ?? false;
-    const eventsRaw: any[] = lastResult[4] ?? lastResult.events ?? [];
+    // Fallback re-read if battleId is still zero
+    if (!lastResult[3] || lastResult[3] === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      lastResult = await this.gameContract.read.getLastBattleResult([this.account]);
+    }
 
-    const playerMaxHpBig: bigint[] = lastResult[1] ?? lastResult.playerMaxHp ?? [];
-    const aiMaxHpBig: bigint[] = lastResult[2] ?? lastResult.aiMaxHp ?? [];
+    const playerWon: boolean = lastResult[0] ?? false;
+    const playerMaxHpBig: bigint[] = lastResult[1] ?? [];
+    const aiMaxHpBig: bigint[] = lastResult[2] ?? [];
+    const battleId: string = lastResult[3] ?? '0x0';
 
     let playerMaxHp: number[] = Array.isArray(playerMaxHpBig) 
       ? playerMaxHpBig.map((n: bigint) => Number(n)) 
@@ -1450,12 +1491,13 @@ private async startBattle() {
     setTimeout(() => successMsg.destroy(), 900);
 
     this.scene.start('BattleScene', {
-      events: eventsRaw,
+      events: lastResult[4] ?? [],
       playerWon: playerWon,
       playerMaxHp: playerMaxHp,
       aiMaxHp: aiMaxHp,
       playerUnitsData,
-      aiUnitsData
+      aiUnitsData,
+      battleId
     });
 
   } catch (e: any) {

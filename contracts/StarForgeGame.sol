@@ -19,15 +19,12 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint256[]) public playerRelics;
     mapping(address => uint256[3]) public equippedRelics;
     mapping(address => ShopItem[3]) public playerShop;
-    mapping(address => ShopItem[8]) public lastAI;           // Stores the last generated AI team
+    mapping(address => ShopItem[8]) public lastAI;
 
     mapping(address => bool) public lastPlayerWon;
     mapping(address => uint16[]) public lastPlayerMaxHp;
     mapping(address => uint16[]) public lastAIMaxHp;
     bytes32 public lastBattleId;
-
-    // NEW: store events of the last battle for frontend replay
-    mapping(address => StarForgeBattleLibrary.BattleEvent[]) public lastBattleEvents;
 
     // ==================== CONFIGURABLE PRICES ====================
 
@@ -243,7 +240,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     // ==================== BATTLE ====================
 
-    function startMatch(uint256[] calldata team, uint256[] calldata equipped) external whenNotPaused {
+    function startMatch(uint256[] calldata team, uint256[] calldata equipped) external whenNotPaused nonReentrant {
         _ensureProfile();
         require(team.length >= 4 && team.length <= 8, "Invalid team size");
 
@@ -266,7 +263,15 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             activeEquipped = equipped;
         }
 
-        // Generate 8 AI units
+        // NEW: explicit relic validation before simulation (prevents revert deep in library)
+        for (uint256 i = 0; i < activeEquipped.length; i++) {
+            if (activeEquipped[i] != 0) {
+                // will revert with "Relic does not exist" if invalid
+                relicContract.getRelic(activeEquipped[i]);
+            }
+        }
+
+        // Generate 8 AI units (on-chain, deterministic)
         StarForgeBattleLibrary.ShopItem[] memory aiTeam = new StarForgeBattleLibrary.ShopItem[](8);
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, block.number)));
 
@@ -293,7 +298,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             });
         }
 
-        // Save last AI team (manual copy)
+        // Save last AI team
         for (uint8 i = 0; i < 8; i++) {
             lastAI[msg.sender][i].isRelic    = aiTeam[i].isRelic;
             lastAI[msg.sender][i].id         = aiTeam[i].id;
@@ -338,12 +343,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             lastAIMaxHp[msg.sender].push(result.aiMaxHp[i]);
         }
 
-        // NEW: store events for frontend replay
-        delete lastBattleEvents[msg.sender];
-        for (uint256 i = 0; i < result.events.length; i++) {
-            lastBattleEvents[msg.sender].push(result.events[i]);
-        }
-
         emit BattleResolved(battleId, msg.sender, result.playerWon, result.playerMaxHp, result.aiMaxHp);
 
         for (uint256 i = 0; i < result.events.length; i++) {
@@ -365,7 +364,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     // ==================== VIEW ====================
 
-    // UPDATED: now returns 5 values including events array
     function getLastBattleResult(address player) external view returns (
         bool,
         uint16[] memory,
@@ -373,12 +371,13 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         bytes32,
         StarForgeBattleLibrary.BattleEvent[] memory
     ) {
+        StarForgeBattleLibrary.BattleEvent[] memory emptyEvents = new StarForgeBattleLibrary.BattleEvent[](0);
         return (
             lastPlayerWon[player],
             lastPlayerMaxHp[player],
             lastAIMaxHp[player],
             lastBattleId,
-            lastBattleEvents[player]
+            emptyEvents
         );
     }
 
@@ -406,9 +405,9 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     function _getWeightedRarity(uint256 seed) internal pure returns (uint8) {
         uint256 roll = seed % 100;
-        if (roll < 60) return 0;      // Common 60%
-        if (roll < 90) return 1;      // Rare 30%
-        return 2;                     // Legendary 10%
+        if (roll < 60) return 0;
+        if (roll < 90) return 1;
+        return 2;
     }
 
     function _generateShopItem() internal view returns (ShopItem memory) {
@@ -448,6 +447,5 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         delete equippedRelics[msg.sender];
         delete lastPlayerMaxHp[msg.sender];
         delete lastAIMaxHp[msg.sender];
-        delete lastBattleEvents[msg.sender];
     }
 }
