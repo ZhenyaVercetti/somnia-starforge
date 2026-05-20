@@ -3,40 +3,86 @@ import * as Phaser from 'phaser';
 import WalletManager from '../lib/WalletManager';
 
 export default class BootScene extends Phaser.Scene {
+  private backgroundLayers: Phaser.GameObjects.Image[] = [];
+
   constructor() {
     super({ key: 'BootScene' });
   }
 
+  preload() {
+    this.load.image('stars', 'assets/background/stars.png');
+    this.load.image('nebula_mid', 'assets/background/nebula_mid.png');
+    this.load.image('nebula_close', 'assets/background/nebula_close.png');
+    this.load.image('logo', 'assets/background/logo.png');
+    this.load.image('outer_frame', 'assets/outer_frame.png');   // ← добавил
+  }
+
   create() {
-    this.add.rectangle(960, 540, 1920, 1080, 0x0a0022);
+    this.createParallaxBackground();
 
-    this.add.text(960, 320, 'SOMNIA STARFORGE', {
-      fontSize: '68px',
-      color: '#00ffff',
-      fontFamily: 'Arial Black',
-    }).setOrigin(0.5);
+    // === ЛОГОТИП в самом верху по центру (отступ 30px) ===
+    this.add.image(955, 30, 'logo')
+      .setOrigin(0.5, 0)
+      .setDepth(10);
 
-    this.add.text(960, 390, 'ON-CHAIN AUTO-BATTLER', {
-      fontSize: '26px',
-      color: '#8888ff',
-    }).setOrigin(0.5);
+    // === OUTER FRAME на весь экран ===
+    this.add.image(960, 540, 'outer_frame')
+      .setDisplaySize(1920, 1080)
+      .setDepth(100);
 
-    // Инициализируем walletManager и сохраняем в window
     const walletManager = WalletManager.getInstance();
     (window as any).walletManager = walletManager;
 
-    // Автоматически открываем RainbowKit
     setTimeout(() => {
       if ((window as any).openWalletModal) {
         (window as any).openWalletModal();
       }
-    }, 400);
+    }, 600);
+  }
 
-    // Автоматический переход в PrepareScene через 4 секунды
-    setTimeout(() => {
-      this.scene.start('PrepareScene', {
-        walletManager: walletManager
-      });
-    }, 4000);
+  private createParallaxBackground() {
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    const stars = this.add.image(w / 2, h / 2, 'stars')
+      .setDisplaySize(w, h)
+      .setDepth(0)
+      .setScrollFactor(0.05)
+      .setAlpha(0.95);
+    this.backgroundLayers.push(stars);
+
+    const nebulaMid = this.add.image(w / 2, h / 2, 'nebula_mid')
+      .setDisplaySize(w * 1.5, h * 1.5)
+      .setAlpha(0.65)
+      .setScrollFactor(0.22)
+      .setDepth(1);
+    this.backgroundLayers.push(nebulaMid);
+
+    const nebulaClose = this.add.image(w / 2, h / 2, 'nebula_close')
+      .setDisplaySize(w, h)
+      .setAlpha(0.45)
+      .setScrollFactor(0.5)
+      .setDepth(2);
+    this.backgroundLayers.push(nebulaClose);
+
+    this.tweens.add({
+      targets: nebulaMid,
+      scaleX: 1.022,
+      scaleY: 1.022,
+      duration: 48000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: stars,
+      x: '+=12',
+      y: '+=7',
+      duration: 52000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Linear'
+    });
   }
 }
