@@ -9,7 +9,7 @@ import { GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS, CHAIN_ID, RPC_URL } from '../
 
 export default class PrepareScene extends Phaser.Scene {
   
-init(data?: any) {
+async init(data?: any) {
   console.log('PrepareScene init — data:', data);
 
   // 1. Try to get from data (passed from main-react)
@@ -52,12 +52,23 @@ init(data?: any) {
   this.isWalletReady = true;
   this.createContracts();
 
+// Always try to create profile (contract ignores if already exists)
+if (this.account && this.gameContract) {
+  try {
+    await this.sendGameTransaction('createProfile', [], 0n).catch(() => {});
+    console.log('Profile creation attempted');
+  } catch (e) {
+    console.error('Profile creation error:', e);
+  }
+}
+
   if (data?.addUnits && Array.isArray(data.addUnits)) {
     setTimeout(() => this.addMultipleUnitsToTeam(data.addUnits), 350);
   }
 
-  console.log('✅ PrepareScene init — data received, account:', this.account);
+  console.log('PrepareScene initialized, account:', this.account);
 }
+
 
 
 
@@ -113,6 +124,9 @@ private createContracts() {
   }
 
   const gameAbi = [
+    { "inputs": [], "name": "createProfile", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+    { "inputs": [{ "internalType": "address", "name": "", "type": "address" }], "name": "hasProfile", "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }], "stateMutability": "view", "type": "function" },
+
     { "inputs": [], "name": "buyUnit", "outputs": [], "stateMutability": "payable", "type": "function" },
     { "inputs": [], "name": "rerollShop", "outputs": [], "stateMutability": "payable", "type": "function" },
     { "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }], "name": "buyFromShop", "outputs": [], "stateMutability": "payable", "type": "function" },
@@ -212,20 +226,45 @@ private async sendGameTransaction(functionName: string, args: any[] = [], value:
     transport: custom((window as any).ethereum)
   });
 
-  const data = encodeFunctionData({
-    abi: this.gameContract.abi,
-    functionName,
-    args
-  });
+  try {
+    // Simulate first to get the exact revert reason from the contract
+    await this.publicClient.simulateContract({
+      address: this.gameContract.address,
+      abi: this.gameContract.abi,
+      functionName,
+      args,
+      account: this.account,
+      value
+    });
 
-  const hash = await walletClient.sendTransaction({
-    account: this.account,
-    to: this.gameContract.address,   // ← теперь всегда правильный адрес!
-    data,
-    value
-  });
+    const data = encodeFunctionData({
+      abi: this.gameContract.abi,
+      functionName,
+      args
+    });
 
-  return hash;
+    const hash = await walletClient.sendTransaction({
+      account: this.account,
+      to: this.gameContract.address,
+      data,
+      value
+    });
+
+    return hash;
+
+  } catch (err: any) {
+    console.error('sendGameTransaction ERROR:', err);
+
+    // Show exact contract revert reason to the user
+    if (err.cause?.reason) {
+      alert(`Contract revert: ${err.cause.reason}`);
+    } else if (err.shortMessage) {
+      alert(err.shortMessage);
+    } else {
+      alert('Transaction failed. Check console for details.');
+    }
+    throw err;
+  }
 }
 
 
@@ -842,6 +881,7 @@ private async buyUnit() {
 }
 
 private async buyFromShopSlot(slot: number) {
+
   console.log('🟢 BUY FROM SHOP pressed, slot:', slot);
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
@@ -850,7 +890,7 @@ private async buyFromShopSlot(slot: number) {
 
   try {
     console.log('📤 Sending buyFromShop...');
-    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 8000000000000000n); // 0.008 ETH
+    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 10000000000000000n); // 0.01 ETH
 
     console.log('✅ TX sent:', hash);
 
@@ -882,6 +922,7 @@ private async buyFromShopSlot(slot: number) {
 
 
 private async rerollShop() {
+
   console.log('🟢 REROLL pressed');
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
