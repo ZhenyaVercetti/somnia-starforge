@@ -119,236 +119,267 @@ if (this.account && this.gameContract) {
 
 private createContracts() {
   if (!this.account || !this.publicClient) {
-    console.error('❌ Невозможно создать контракты — account или publicClient отсутствуют');
+    console.error('❌ Cannot create contracts — account or publicClient missing');
     return;
   }
 
-const gameAbi = [
-  // Profile
-  {
-    "inputs": [],
-    "name": "createProfile",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "hasProfile",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "profiles",
-    "outputs": [
-      { "internalType": "uint16", "name": "level", "type": "uint16" },
-      { "internalType": "uint32", "name": "xp", "type": "uint32" },
-      { "internalType": "uint256", "name": "wins", "type": "uint256" },
-      { "internalType": "uint256", "name": "losses", "type": "uint256" },
-      { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
+  const gameAbi = [
+    // Profile
+    {
+      "inputs": [],
+      "name": "createProfile",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "hasProfile",
+      "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "profiles",
+      "outputs": [
+        { "internalType": "uint16", "name": "level", "type": "uint16" },
+        { "internalType": "uint32", "name": "xp", "type": "uint32" },
+        { "internalType": "uint256", "name": "wins", "type": "uint256" },
+        { "internalType": "uint256", "name": "losses", "type": "uint256" },
+        { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
 
-  // Economy (buy, reroll, shop)
-  {
-    "inputs": [],
-    "name": "buyUnit",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buyUnitPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rerollShop",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rerollPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }],
-    "name": "buyFromShop",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buyUnitShopPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buyRelicShopPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
+    // Economy
+    {
+      "inputs": [],
+      "name": "buyUnit",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "buyUnitPrice",
+      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "rerollShop",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "rerollPrice",
+      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }],
+      "name": "buyFromShop",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "buyUnitShopPrice",
+      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "buyRelicShopPrice",
+      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
 
-  // Battle
-  {
-    "inputs": [
-      { "internalType": "uint256[]", "name": "team", "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "equipped", "type": "uint256[]" }
-    ],
-    "name": "startMatch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getLastBattleResult",
-    "outputs": [
-      { "internalType": "bool", "name": "playerWon", "type": "bool" },
-      { "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" },
-      { "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" },
-      { "internalType": "bytes32", "name": "battleId", "type": "bytes32" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getCurrentAI",
-    "outputs": [
-      {
-        "components": [
-          { "internalType": "bool", "name": "isRelic", "type": "bool" },
-          { "internalType": "uint256", "name": "id", "type": "uint256" },
-          { "internalType": "uint8", "name": "faction", "type": "uint8" },
-          { "internalType": "uint8", "name": "rarity", "type": "uint8" },
-          { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
-          { "internalType": "uint8", "name": "attack", "type": "uint8" },
-          { "internalType": "uint8", "name": "defense", "type": "uint8" },
-          { "internalType": "uint8", "name": "speed", "type": "uint8" },
-          { "internalType": "uint8", "name": "relicType", "type": "uint8" },
-          { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
-        ],
-        "internalType": "struct StarForgeGame.ShopItem[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
+    // Battle
+    {
+      "inputs": [
+        { "internalType": "uint256[]", "name": "team", "type": "uint256[]" },
+        { "internalType": "uint256[]", "name": "equipped", "type": "uint256[]" }
+      ],
+      "name": "startMatch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "getLastBattleResult",
+      "outputs": [
+        { "internalType": "bool", "name": "", "type": "bool" },
+        { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
+        { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
+        { "internalType": "bytes32", "name": "", "type": "bytes32" },
+        {
+          "components": [
+            { "internalType": "uint8", "name": "round", "type": "uint8" },
+            { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
+            { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
+            { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
+            { "internalType": "uint16", "name": "damage", "type": "uint16" },
+            { "internalType": "uint16", "name": "damageDealt", "type": "uint16" },
+            { "internalType": "uint16", "name": "initialHp", "type": "uint16" },
+            { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
+            { "internalType": "string", "name": "specialEffect", "type": "string" },
+            { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
+            { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
+            { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
+            { "internalType": "uint8", "name": "targetClass", "type": "uint8" }
+          ],
+          "internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "getCurrentAI",
+      "outputs": [
+        {
+          "components": [
+            { "internalType": "bool", "name": "isRelic", "type": "bool" },
+            { "internalType": "uint256", "name": "id", "type": "uint256" },
+            { "internalType": "uint8", "name": "faction", "type": "uint8" },
+            { "internalType": "uint8", "name": "rarity", "type": "uint8" },
+            { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
+            { "internalType": "uint8", "name": "attack", "type": "uint8" },
+            { "internalType": "uint8", "name": "defense", "type": "uint8" },
+            { "internalType": "uint8", "name": "speed", "type": "uint8" },
+            { "internalType": "uint8", "name": "relicType", "type": "uint8" },
+            { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
+          ],
+          "internalType": "struct StarForgeGame.ShopItem[]",
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
 
-  // Equip
-  {
-    "inputs": [{ "internalType": "uint256[3]", "name": "relics", "type": "uint256[3]" }],
-    "name": "equipRelics",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getEquippedRelics",
-    "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
+    // Equip
+    {
+      "inputs": [{ "internalType": "uint256[3]", "name": "relics", "type": "uint256[3]" }],
+      "name": "equipRelics",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "getEquippedRelics",
+      "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
 
-  // View functions
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getPlayerUnits",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getPlayerRelics",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getPlayerShop",
-    "outputs": [
-      {
-        "components": [
-          { "internalType": "bool", "name": "isRelic", "type": "bool" },
-          { "internalType": "uint256", "name": "id", "type": "uint256" },
-          { "internalType": "uint8", "name": "faction", "type": "uint8" },
-          { "internalType": "uint8", "name": "rarity", "type": "uint8" },
-          { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
-          { "internalType": "uint8", "name": "attack", "type": "uint8" },
-          { "internalType": "uint8", "name": "defense", "type": "uint8" },
-          { "internalType": "uint8", "name": "speed", "type": "uint8" },
-          { "internalType": "uint8", "name": "relicType", "type": "uint8" },
-          { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
-        ],
-        "internalType": "struct StarForgeGame.ShopItem[3]",
-        "name": "",
-        "type": "tuple[3]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
+    // View functions
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "getPlayerUnits",
+      "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "getPlayerRelics",
+      "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+      "name": "getPlayerShop",
+      "outputs": [
+        {
+          "components": [
+            { "internalType": "bool", "name": "isRelic", "type": "bool" },
+            { "internalType": "uint256", "name": "id", "type": "uint256" },
+            { "internalType": "uint8", "name": "faction", "type": "uint8" },
+            { "internalType": "uint8", "name": "rarity", "type": "uint8" },
+            { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
+            { "internalType": "uint8", "name": "attack", "type": "uint8" },
+            { "internalType": "uint8", "name": "defense", "type": "uint8" },
+            { "internalType": "uint8", "name": "speed", "type": "uint8" },
+            { "internalType": "uint8", "name": "relicType", "type": "uint8" },
+            { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
+          ],
+          "internalType": "struct StarForgeGame.ShopItem[3]",
+          "name": "",
+          "type": "tuple[3]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ];
 
-  const nftAbi = [{
-    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-    "name": "getUnit",
-    "outputs": [{ "components": [{ "internalType": "enum StarForgeUnitNFT.Faction", "name": "faction", "type": "uint8" }, { "internalType": "enum StarForgeUnitNFT.Rarity", "name": "rarity", "type": "uint8" }, { "internalType": "enum StarForgeUnitNFT.UnitClass", "name": "unitClass", "type": "uint8" }, { "internalType": "uint8", "name": "attack", "type": "uint8" }, { "internalType": "uint8", "name": "defense", "type": "uint8" }, { "internalType": "uint8", "name": "speed", "type": "uint8" }], "internalType": "struct StarForgeUnitNFT.Unit", "name": "", "type": "tuple" }],
-    "stateMutability": "view",
-    "type": "function"
-  }];
+  const nftAbi = [
+    {
+      "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
+      "name": "getUnit",
+      "outputs": [
+        { "internalType": "uint8", "name": "faction", "type": "uint8" },
+        { "internalType": "uint8", "name": "rarity", "type": "uint8" },
+        { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
+        { "internalType": "uint8", "name": "attack", "type": "uint8" },
+        { "internalType": "uint8", "name": "defense", "type": "uint8" },
+        { "internalType": "uint8", "name": "speed", "type": "uint8" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ];
 
-  const relicAbi = [{
-    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
-    "name": "getRelic",
-    "outputs": [{ "components": [{ "internalType": "enum StarForgeRelic.RelicType", "name": "relicType", "type": "uint8" }, { "internalType": "uint8", "name": "value", "type": "uint8" }, { "internalType": "string", "name": "name", "type": "string" }], "internalType": "struct StarForgeRelic.RelicData", "name": "", "type": "tuple" }],
-    "stateMutability": "view",
-    "type": "function"
-  }];
-
-  const walletClient = (this.walletManager as any).walletClient;
+  const relicAbi = [
+    {
+      "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
+      "name": "getRelic",
+      "outputs": [
+        { "internalType": "uint8", "name": "relicType", "type": "uint8" },
+        { "internalType": "uint8", "name": "value", "type": "uint8" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ];
 
   this.gameContract = getContract({
     address: GAME_ADDRESS,
     abi: gameAbi,
-    client: { public: this.publicClient, wallet: walletClient }
+    client: { public: this.publicClient }
   });
 
   this.nftContract = getContract({
     address: NFT_ADDRESS,
     abi: nftAbi,
-    client: { public: this.publicClient, wallet: walletClient }
+    client: { public: this.publicClient }
   });
 
   this.relicContract = getContract({
     address: RELIC_ADDRESS,
     abi: relicAbi,
-    client: { public: this.publicClient, wallet: walletClient }
+    client: { public: this.publicClient }
   });
-
-  console.log('✅ Контракты созданы из централизованного конфига');
 }
+
 
 private async sendGameTransaction(functionName: string, args: any[] = [], value: bigint = 0n) {
   if (!this.gameContract || !this.account || !this.publicClient) {
@@ -778,24 +809,39 @@ private getRelicEffectDescription(relicType: number): string {
 }
 
 private async loadCurrentAI() {
-  if (!this.account || !this.gameContract) return;
+  if (!this.account || !this.gameContract) {
+    console.warn('loadCurrentAI: no account or gameContract');
+    return;
+  }
 
-  this.aiSprites.forEach(s => s.destroy());
+  // Clear previous sprites
+  this.aiSprites.forEach(s => s?.destroy());
   this.aiSprites = [];
+
+  this.aiGridSlots.forEach(slot => {
+    const old = slot.getData('aiSprite');
+    if (old) old.destroy();
+    slot.setData('aiSprite', null);
+  });
 
   try {
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
-    this.aiGridSlots.forEach(slot => {
-      const old = slot.getData('aiSprite');
-      if (old) old.destroy();
-      slot.setData('aiSprite', null);
-    });
+    if (!aiData || !Array.isArray(aiData) || aiData.length === 0) {
+      // Honest message: no enemy team yet (first match)
+      const placeholder = this.add.text(1640, 610, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
+        fontSize: '18px',
+        color: '#888888',
+        align: 'center',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(20);
+      this.aiSprites.push(placeholder as any);
+      return;
+    }
 
     for (let i = 0; i < 8; i++) {
       const slot = this.aiGridSlots[i];
-      if (!slot) continue;
-      if (i >= aiData.length) continue;
+      if (!slot || i >= aiData.length) continue;
 
       const unit = aiData[i];
       const style = this.getRarityTintAndScale(unit.rarity);
@@ -823,7 +869,13 @@ private async loadCurrentAI() {
       ship.on('pointerout', () => this.hideTooltip());
     }
   } catch (e) {
-    console.error('loadCurrentAI error', e);
+    console.error('loadCurrentAI error:', e);
+    const errorText = this.add.text(1640, 610, 'FAILED TO LOAD\nENEMY TEAM', {
+      fontSize: '18px',
+      color: '#ff4444',
+      align: 'center'
+    }).setOrigin(0.5).setDepth(20);
+    this.aiSprites.push(errorText as any);
   }
 }
 
@@ -1340,22 +1392,22 @@ private async startBattle() {
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waitingText.destroy();
 
-    // === ROBUST BATTLE RESULT READING ===
-    const lastResult = await this.gameContract.read.getLastBattleResult([this.account]) as any;
+    const lastResult: any = await this.gameContract.read.getLastBattleResult([this.account]);
 
-    const playerWon: boolean = lastResult.playerWon ?? lastResult[0] ?? false;
-    const eventsRaw: any[] = lastResult.eventsRaw ?? lastResult[1] ?? [];
-    const playerMaxHpBig: bigint[] = lastResult.playerMaxHp ?? lastResult[2] ?? [];
-    const aiMaxHpBig: bigint[] = lastResult.aiMaxHp ?? lastResult[3] ?? [];
+    // NEW 5-value return: [0]=won, [1]=playerMaxHp, [2]=aiMaxHp, [3]=battleId, [4]=events
+    const playerWon: boolean = lastResult[0] ?? lastResult.playerWon ?? false;
+    const eventsRaw: any[] = lastResult[4] ?? lastResult.events ?? [];
 
-    const playerMaxHp: number[] = Array.isArray(playerMaxHpBig) 
+    const playerMaxHpBig: bigint[] = lastResult[1] ?? lastResult.playerMaxHp ?? [];
+    const aiMaxHpBig: bigint[] = lastResult[2] ?? lastResult.aiMaxHp ?? [];
+
+    let playerMaxHp: number[] = Array.isArray(playerMaxHpBig) 
       ? playerMaxHpBig.map((n: bigint) => Number(n)) 
       : [];
-    const aiMaxHp: number[] = Array.isArray(aiMaxHpBig) 
+    let aiMaxHp: number[] = Array.isArray(aiMaxHpBig) 
       ? aiMaxHpBig.map((n: bigint) => Number(n)) 
       : [];
 
-    // Load player units data
     const playerUnitsData: any[] = [];
     for (const id of this.team) {
       try {
@@ -1369,40 +1421,36 @@ private async startBattle() {
       }
     }
 
-// === LOAD AI TEAM DATA (always 8 units) ===
-const aiUnitsData: any[] = [];
-
-try {
-  const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
-
-  if (aiData && Array.isArray(aiData) && aiData.length > 0) {
-    for (const u of aiData) {
-      aiUnitsData.push({
-        faction: Number(u.faction) || 1,
-        unitClass: Number(u.unitClass) || 0
-      });
+    const aiUnitsData: any[] = [];
+    try {
+      const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+      if (aiData && Array.isArray(aiData) && aiData.length > 0) {
+        for (const u of aiData) {
+          aiUnitsData.push({
+            faction: Number(u.faction) || 1,
+            unitClass: Number(u.unitClass) || 0
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('getCurrentAI failed, using fallback');
     }
-  }
-} catch (e) {
-  console.warn('getCurrentAI failed, using fallback');
-}
 
-// Fill to exactly 8 units if needed
-while (aiUnitsData.length < 8) {
-  aiUnitsData.push({ faction: 1, unitClass: 0 });
-}
-
+    while (aiUnitsData.length < 8) {
+      aiUnitsData.push({ faction: 1, unitClass: 0 });
+    }
+    if (aiMaxHp.length < 8) aiMaxHp = new Array(8).fill(120);
+    if (playerMaxHp.length === 0 && playerUnitsData.length > 0) {
+      playerMaxHp = new Array(playerUnitsData.length).fill(100);
+    }
 
     const successMsg = this.add.text(960, 380, 'BATTLE STARTED!', {
       fontSize: '48px', fill: '#00ff88', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(500);
     setTimeout(() => successMsg.destroy(), 900);
 
-    // Force at least 8 AI ships
-if (!aiMaxHp || aiMaxHp.length < 8) aiMaxHp = new Array(8).fill(120);
-if (!aiUnitsData || aiUnitsData.length < 8) aiUnitsData = new Array(8).fill({ faction: 1, unitClass: 0 });
     this.scene.start('BattleScene', {
-      events: eventsRaw || [],
+      events: eventsRaw,
       playerWon: playerWon,
       playerMaxHp: playerMaxHp,
       aiMaxHp: aiMaxHp,
@@ -1419,6 +1467,8 @@ if (!aiUnitsData || aiUnitsData.length < 8) aiUnitsData = new Array(8).fill({ fa
     setTimeout(() => errorText.destroy(), 4500);
   }
 }
+
+
 private openCollectionScene() {
   const equippedIds = this.equippedRelics.filter(id => id > 0);
 

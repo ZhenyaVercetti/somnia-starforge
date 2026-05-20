@@ -443,6 +443,78 @@
 						"internalType": "bytes32",
 						"name": "",
 						"type": "bytes32"
+					},
+					{
+						"components": [
+							{
+								"internalType": "uint8",
+								"name": "round",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bool",
+								"name": "isPlayerSide",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetIndex",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint16",
+								"name": "damage",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "damageDealt",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "initialHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "uint16",
+								"name": "remainingHp",
+								"type": "uint16"
+							},
+							{
+								"internalType": "string",
+								"name": "specialEffect",
+								"type": "string"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "attackerClass",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetRarity",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "targetClass",
+								"type": "uint8"
+							}
+						],
+						"internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
+						"name": "",
+						"type": "tuple[]"
 					}
 				],
 				"stateMutability": "view",
@@ -664,6 +736,90 @@
 						"internalType": "uint16",
 						"name": "",
 						"type": "uint16"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "lastBattleEvents",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "round",
+						"type": "uint8"
+					},
+					{
+						"internalType": "bool",
+						"name": "isPlayerSide",
+						"type": "bool"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerIndex",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetIndex",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint16",
+						"name": "damage",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "damageDealt",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "initialHp",
+						"type": "uint16"
+					},
+					{
+						"internalType": "uint16",
+						"name": "remainingHp",
+						"type": "uint16"
+					},
+					{
+						"internalType": "string",
+						"name": "specialEffect",
+						"type": "string"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerRarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "attackerClass",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetRarity",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint8",
+						"name": "targetClass",
+						"type": "uint8"
 					}
 				],
 				"stateMutability": "view",
@@ -1277,11 +1433,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0x72e3e74010f8853c411f7c3fb42ccba22e078750afd304f7e7462c37ab34e527",
+			"keccak256": "0x39fab26f1b447e712b221f8c1ffc03c3af570032c71503749b1dd4d48b746d88",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://84b8caa4bc793e1c9a94cb8c8fb35755f6b28718b2628133ddfe00169bee4b7d",
-				"dweb:/ipfs/QmVR6gWQdgTpZ8fi8ut2sJcPZqLDeG1G1vXayZrvP49hfd"
+				"bzz-raw://25d2cbfa253be6a289fe23a8ef1c07820d479c3857f72937be8a829f81ab3f85",
+				"dweb:/ipfs/QmVsUqdAw55N3T7mDm9CndUWXrM3HBe2mEkuhE5dgnBNXy"
 			]
 		},
 		"StarForgeRelic.sol": {

@@ -102,52 +102,65 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('arena_platform', 'assets/background/arena_platform.png');
   }
 
-  create() {
-    this.shutdownCleanup();
-    this.createParallaxBackground();
-    this.createArenaPlatform();
+create() {
+  this.shutdownCleanup();
+  this.createParallaxBackground();
+  this.createArenaPlatform();
 
-    this.add.rectangle(960, 540, 1920, 1080, 0x050010).setAlpha(0.22);
+  this.add.rectangle(960, 540, 1920, 1080, 0x050010).setAlpha(0.22);
 
-    // === X2 / X1 BUTTON ===
-    const speedBtnBase = this.add.image(1820, 55, 'button_base')
-      .setDisplaySize(78, 48)
-      .setInteractive()
-      .setDepth(200);
+  // Speed button
+  const speedBtnBase = this.add.image(1820, 55, 'button_base')
+    .setDisplaySize(78, 48)
+    .setInteractive()
+    .setDepth(200);
 
-    const speedBtnText = this.add.text(1820, 55, 'x2', {
-      fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(201);
+  const speedBtnText = this.add.text(1820, 55, 'x2', {
+    fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(201);
 
-    (speedBtnBase as any).linkedText = speedBtnText;
+  (speedBtnBase as any).linkedText = speedBtnText;
 
-    speedBtnBase.on('pointerdown', () => {
-      if (this.battleSpeedMultiplier === 1) {
-        this.battleSpeedMultiplier = 0.5;
-        speedBtnText.setText('x1');
-        speedBtnText.setFill('#ffff00');
-      } else {
-        this.battleSpeedMultiplier = 1;
-        speedBtnText.setText('x2');
-        speedBtnText.setFill('#ffffff');
-      }
-    });
-
-    this.setupTeams();
-    this.setupBattleLog();
-
-    if (this.battleEvents.length === 0) {
-      this.showFinalResult();
+  speedBtnBase.on('pointerdown', () => {
+    if (this.battleSpeedMultiplier === 1) {
+      this.battleSpeedMultiplier = 0.5;
+      speedBtnText.setText('x1');
+      speedBtnText.setFill('#ffff00');
     } else {
-      this.currentEventIndex = 0;
-      this.processNextEvent();
+      this.battleSpeedMultiplier = 1;
+      speedBtnText.setText('x2');
+      speedBtnText.setFill('#ffffff');
     }
+  });
 
-    this.add.image(960, 540, 'outer_frame')
-      .setDisplaySize(1920, 1080)
-      .setDepth(300);
+  this.setupTeams();
+  this.setupBattleLog();
+
+  if (this.battleEvents.length === 0) {
+    const noDataText = this.add.text(960, 300, 'NO BATTLE DATA FROM CONTRACT', {
+      fontSize: '32px', color: '#ff4444', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(500);
+
+    const backBtn = this.add.image(960, 400, 'button_base')
+      .setDisplaySize(280, 52)
+      .setInteractive()
+      .setDepth(500);
+
+    const backText = this.add.text(960, 400, 'BACK TO PREPARE', {
+      fontSize: '22px', color: '#ffffff', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(501);
+
+    backBtn.on('pointerdown', () => this.scene.start('PrepareScene'));
+    return;
   }
 
+  this.currentEventIndex = 0;
+  this.processNextEvent();
+
+  this.add.image(960, 540, 'outer_frame')
+    .setDisplaySize(1920, 1080)
+    .setDepth(300);
+}
   private createParallaxBackground() {
     const w = this.scale.width;
     const h = this.scale.height;

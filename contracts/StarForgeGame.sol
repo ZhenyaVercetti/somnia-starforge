@@ -26,6 +26,9 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint16[]) public lastAIMaxHp;
     bytes32 public lastBattleId;
 
+    // NEW: store events of the last battle for frontend replay
+    mapping(address => StarForgeBattleLibrary.BattleEvent[]) public lastBattleEvents;
+
     // ==================== CONFIGURABLE PRICES ====================
 
     uint256 public buyUnitPrice = 0.01 ether;
@@ -335,6 +338,12 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             lastAIMaxHp[msg.sender].push(result.aiMaxHp[i]);
         }
 
+        // NEW: store events for frontend replay
+        delete lastBattleEvents[msg.sender];
+        for (uint256 i = 0; i < result.events.length; i++) {
+            lastBattleEvents[msg.sender].push(result.events[i]);
+        }
+
         emit BattleResolved(battleId, msg.sender, result.playerWon, result.playerMaxHp, result.aiMaxHp);
 
         for (uint256 i = 0; i < result.events.length; i++) {
@@ -356,8 +365,21 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     // ==================== VIEW ====================
 
-    function getLastBattleResult(address player) external view returns (bool, uint16[] memory, uint16[] memory, bytes32) {
-        return (lastPlayerWon[player], lastPlayerMaxHp[player], lastAIMaxHp[player], lastBattleId);
+    // UPDATED: now returns 5 values including events array
+    function getLastBattleResult(address player) external view returns (
+        bool,
+        uint16[] memory,
+        uint16[] memory,
+        bytes32,
+        StarForgeBattleLibrary.BattleEvent[] memory
+    ) {
+        return (
+            lastPlayerWon[player],
+            lastPlayerMaxHp[player],
+            lastAIMaxHp[player],
+            lastBattleId,
+            lastBattleEvents[player]
+        );
     }
 
     function getCurrentAI(address player) external view returns (ShopItem[8] memory) {
@@ -426,5 +448,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         delete equippedRelics[msg.sender];
         delete lastPlayerMaxHp[msg.sender];
         delete lastAIMaxHp[msg.sender];
+        delete lastBattleEvents[msg.sender];
     }
 }
