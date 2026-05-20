@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts@4.9.3/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts@4.9.3/access/Ownable.sol";
+import "@openzeppelin/contracts@4.9.3/utils/Strings.sol";
+import "@openzeppelin/contracts@4.9.3/utils/Base64.sol";
 
 contract StarForgeUnitNFT is ERC721, Ownable {
     using Strings for uint256;
@@ -35,7 +35,7 @@ contract StarForgeUnitNFT is ERC721, Ownable {
         _;
     }
 
-    constructor() ERC721("Somnia StarForge Unit", "SFUNIT") Ownable(msg.sender) {}
+    constructor() ERC721("Somnia StarForge Unit", "SFUNIT") Ownable() {}
 
     function setGameContract(address _gameContract) external onlyOwner {
         gameContract = _gameContract;
@@ -130,5 +130,27 @@ contract StarForgeUnitNFT is ERC721, Ownable {
         uint256 tokenId = _nextTokenId++;
         _safeMint(to, tokenId);
         units[tokenId] = Unit(faction, rarity, unitClass, atk, def, spd);
+    }
+
+    // ==================== SOULBOUND: DISABLE TRANSFERS ====================
+
+    function transferFrom(address, address, uint256) public pure override {
+        revert("Soulbound: transfers are disabled");
+    }
+
+    function safeTransferFrom(address, address, uint256) public pure override {
+        revert("Soulbound: transfers are disabled");
+    }
+
+    function safeTransferFrom(address, address, uint256, bytes memory) public pure override {
+        revert("Soulbound: transfers are disabled");
+    }
+
+    function approve(address, uint256) public pure override {
+        revert("Soulbound: approvals are disabled");
+    }
+
+    function setApprovalForAll(address, bool) public pure override {
+        revert("Soulbound: approvals are disabled");
     }
 }

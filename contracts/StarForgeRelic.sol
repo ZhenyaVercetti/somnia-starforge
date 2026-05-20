@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts@4.9.3/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts@4.9.3/access/Ownable.sol";
+import "@openzeppelin/contracts@4.9.3/utils/Strings.sol";
 
 contract StarForgeRelic is ERC1155, Ownable {
     using Strings for uint256;
@@ -14,7 +14,7 @@ contract StarForgeRelic is ERC1155, Ownable {
 
     struct RelicData {
         RelicType relicType;
-        uint8 value;        // сила эффекта 1-20
+        uint8 value;
         string name;
     }
 
@@ -36,7 +36,7 @@ contract StarForgeRelic is ERC1155, Ownable {
         _;
     }
 
-    constructor() ERC1155("") Ownable(msg.sender) {}
+    constructor() ERC1155("") Ownable() {}
 
     function setGameContract(address _gameContract) external onlyOwner {
         gameContract = _gameContract;
@@ -79,10 +79,20 @@ contract StarForgeRelic is ERC1155, Ownable {
     function uri(uint256 id) public view override returns (string memory) {
         RelicData memory r = relics[id];
         if (r.value == 0) return "";
-        return super.uri(id); // можно расширить позже
+        return super.uri(id);
     }
 
     function totalSupply() external view returns (uint256) {
         return _nextRelicId;
+    }
+
+    // ==================== SOULBOUND: DISABLE TRANSFERS ====================
+
+    function safeTransferFrom(address, address, uint256, uint256, bytes memory) public pure override {
+        revert("Soulbound: transfers are disabled");
+    }
+
+    function safeBatchTransferFrom(address, address, uint256[] memory, uint256[] memory, bytes memory) public pure override {
+        revert("Soulbound: transfers are disabled");
     }
 }

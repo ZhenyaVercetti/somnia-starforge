@@ -3,9 +3,9 @@
 
 ## Актуальные адреса (testnet)
 
-- **StarForgeUnitNFT** (новый): `0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d` ← **актуальный**
-- **StarForgeGame**: `0x4cbD82Fa618A0513B26e2ed6b59b19F3E3c31e7B`   ← **актуальный**
-- **StarForgeRelic**: `0x83930224Ced8cEB6350fC9F41202B8fAA0033173`
+- **StarForgeUnitNFT** (новый): `0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1` ← **актуальный**
+- **StarForgeGame**: `0x3994605d180D2DBF937C0a137dc63914741513C7`   ← **актуальный**
+- **StarForgeRelic**: `0x619e19df1975A8D289545834aAff3FEEf1b84909`
 
 ## Порядок обновления контрактов
 
