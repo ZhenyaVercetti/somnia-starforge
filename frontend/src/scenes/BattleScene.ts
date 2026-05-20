@@ -213,137 +213,161 @@ create() {
       .setAlpha(0.88);
   }
 
-  private setupTeams() {
-    this.playerShips = []; this.aiShips = [];
-    this.playerShadows = []; this.aiShadows = [];
-    this.playerHPLabels = []; this.aiHPLabels = [];
-    this.playerHPBgs = []; this.aiHPBgs = [];
+private setupTeams() {
+  // Clear previous team sprites and containers
+  this.playerShips.forEach(ship => ship.destroy());
+  this.playerShips = [];
+  this.playerShadows.forEach(shadow => shadow.destroy());
+  this.playerShadows = [];
+  this.aiShips.forEach(ship => ship.destroy());
+  this.aiShips = [];
+  this.aiShadows.forEach(shadow => shadow.destroy());
+  this.aiShadows = [];
+  this.playerHPBgs.forEach(bg => bg.destroy());
+  this.playerHPBgs = [];
+  this.playerHPLabels.forEach(label => label.destroy());
+  this.playerHPLabels = [];
+  this.aiHPBgs.forEach(bg => bg.destroy());
+  this.aiHPBgs = [];
+  this.aiHPLabels.forEach(label => label.destroy());
+  this.aiHPLabels = [];
 
-    const barWidth = 52;
-    const barHeight = 5;
+  // === PLAYER TEAM - LEFT SIDE ===
+  const playerBaseX = 340;
+  const playerBaseY = 320;
+  const playerRowShiftX = 28;
+  const playerSpacingY = 148;
+  const playerColSpacing = 122;
 
-    // === PLAYER SIDE ===
-    const playerBaseX = 470;
-    const playerBaseY = 320;
-    const playerRowShiftX = 20;
-    const playerSpacingY = 148;
-    const playerColSpacing = 122;
+  for (let i = 0; i < Math.min(8, this.playerUnitsData.length); i++) {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const depthFactor = row * 0.10;
 
-    for (let i = 0; i < Math.min(8, this.playerMaxHp.length); i++) {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const depthFactor = row * 0.10;
+    let x = playerBaseX + (3 - row) * playerRowShiftX + col * playerColSpacing;
+    if (col === 0) x += 18;
+    if (col === 1) x -= 38;
 
-      let x = playerBaseX + (3 - row) * playerRowShiftX + col * playerColSpacing;
-      if (col === 0) x -= 40;
-      if (col === 1) x += 48;
+    const y = playerBaseY + row * playerSpacingY + depthFactor * 28;
 
-      const y = playerBaseY + row * playerSpacingY + depthFactor * 28;
+    const unit = this.playerUnitsData[i];
+    const key = this.getShipKey(unit.faction, unit.unitClass);
+    const baseScale = 0.654 - depthFactor * 0.05;
 
-      const unit = this.playerUnitsData[i] || { faction: 0, unitClass: 0 };
-      const key = this.getShipKey(unit.faction, unit.unitClass);
-      const baseScale = 0.654 - depthFactor * 0.05;
+    const ship = this.add.sprite(x, y, key)
+      .setScale(baseScale)
+      .setDepth(y)
+      .setFlipX(true);
 
-      const ship = this.add.sprite(x, y, key)
-        .setScale(baseScale)
-        .setDepth(y)
-        .setFlipX(true);
+    const shadow = this.add.sprite(x + 9, y + 22, key)
+      .setScale(baseScale * 0.52)
+      .setAlpha(0.26)
+      .setTint(0x000000)
+      .setDepth(y - 1)
+      .setFlipX(true);
 
-      const shadow = this.add.sprite(x + 9, y + 22, key)
-        .setScale(baseScale * 0.52)
-        .setAlpha(0.26).setTint(0x000000).setDepth(y - 1)
-        .setFlipX(true);
-      this.playerShadows.push(shadow);
+    this.playerShadows.push(shadow);
+    this.playerShips.push(ship);
 
-      this.playerShips.push(ship);
+    // HP bar for player
+    const barY = y - 42;
+    const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
+      .setDepth(y + 20)
+      .setAlpha(0.85);
+    const barFill = this.add.rectangle(x, barY, 52, 5, 0x66ff66)
+      .setDepth(y + 21)
+      .setAlpha(0.85);
 
-      const barY = y - 42;
-      const barBg = this.add.rectangle(x, barY, barWidth, barHeight, 0x222222)
-        .setDepth(y + 20)
-        .setAlpha(0.85);
-      const barFill = this.add.rectangle(x, barY, barWidth, barHeight, 0x00ff88)
-        .setDepth(y + 21)
-        .setAlpha(0.85);
+    (barFill as any).bg = barBg;
+    (barFill as any).maxHp = this.playerMaxHp[i] || 100;
+    (barFill as any).currentHp = this.playerMaxHp[i] || 100;
 
-      (barFill as any).bg = barBg;
-      (barFill as any).maxHp = this.playerMaxHp[i] || 100;
-      (barFill as any).currentHp = this.playerMaxHp[i] || 100;
+    this.playerHPBgs.push(barBg);
+    this.playerHPLabels.push(barFill);
 
-      this.playerHPBgs.push(barBg);
-      this.playerHPLabels.push(barFill);
-
-      this.tweens.add({
-        targets: ship,
-        y: y - 3,
-        scale: ship.scaleX * 1.015,
-        duration: 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-    }
-
-    // === AI SIDE ===
-    const aiBaseX = 1360;
-    const aiBaseY = 320;
-    const aiRowShiftX = 28;
-    const aiSpacingY = 148;
-    const aiColSpacing = 122;
-
-    for (let i = 0; i < Math.min(8, this.aiMaxHp.length); i++) {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const depthFactor = row * 0.10;
-
-      let x = aiBaseX - (3 - row) * aiRowShiftX + col * aiColSpacing;
-      if (col === 0) x -= 18 + 50;
-      if (col === 1) x += 38;
-
-      const y = aiBaseY + row * aiSpacingY + depthFactor * 28;
-
-      const unit = this.aiUnitsData[i] || { faction: 1, unitClass: 0 };
-      const key = this.getShipKey(unit.faction, unit.unitClass);
-      const baseScale = 0.654 - depthFactor * 0.05;
-
-      const ship = this.add.sprite(x, y, key)
-        .setScale(baseScale)
-        .setDepth(y)
-        .setFlipX(false);
-
-      const shadow = this.add.sprite(x + 9, y + 22, key)
-        .setScale(baseScale * 0.52)
-        .setAlpha(0.26).setTint(0x000000).setDepth(y - 1)
-        .setFlipX(false);
-      this.aiShadows.push(shadow);
-
-      this.aiShips.push(ship);
-
-      const barY = y - 42;
-      const barBg = this.add.rectangle(x, barY, barWidth, barHeight, 0x222222)
-        .setDepth(y + 20)
-        .setAlpha(0.85);
-      const barFill = this.add.rectangle(x, barY, barWidth, barHeight, 0xff6666)
-        .setDepth(y + 21)
-        .setAlpha(0.85);
-
-      (barFill as any).bg = barBg;
-      (barFill as any).maxHp = this.aiMaxHp[i] || 100;
-      (barFill as any).currentHp = this.aiMaxHp[i] || 100;
-
-      this.aiHPBgs.push(barBg);
-      this.aiHPLabels.push(barFill);
-
-      this.tweens.add({
-        targets: ship,
-        y: y - 3,
-        scale: ship.scaleX * 1.015,
-        duration: 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-    }
+    // Gentle floating animation
+    this.tweens.add({
+      targets: ship,
+      y: y - 3,
+      scale: ship.scaleX * 1.015,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
   }
+
+  // === AI TEAM - RIGHT SIDE ===
+  const aiBaseX = 1360;
+  const aiBaseY = 320;
+  const aiRowShiftX = 28;
+  const aiSpacingY = 148;
+  const aiColSpacing = 122;
+
+  for (let i = 0; i < 8; i++) {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const depthFactor = row * 0.10;
+
+    let x = aiBaseX - (3 - row) * aiRowShiftX + col * aiColSpacing;
+    if (col === 0) x -= 18 + 50;
+    if (col === 1) x += 38;
+
+    const y = aiBaseY + row * aiSpacingY + depthFactor * 28;
+
+    let unit;
+    if (this.aiUnitsData && this.aiUnitsData.length > i) {
+      unit = this.aiUnitsData[i];
+    } else {
+      unit = { faction: 1, unitClass: 0 };
+    }
+
+    const key = this.getShipKey(unit.faction, unit.unitClass);
+    const baseScale = 0.654 - depthFactor * 0.05;
+
+    const ship = this.add.sprite(x, y, key)
+      .setScale(baseScale)
+      .setDepth(y)
+      .setFlipX(false);
+
+    const shadow = this.add.sprite(x + 9, y + 22, key)
+      .setScale(baseScale * 0.52)
+      .setAlpha(0.26)
+      .setTint(0x000000)
+      .setDepth(y - 1)
+      .setFlipX(false);
+
+    this.aiShadows.push(shadow);
+    this.aiShips.push(ship);
+
+    // HP bar for AI
+    const barY = y - 42;
+    const barBg = this.add.rectangle(x, barY, 52, 5, 0x222222)
+      .setDepth(y + 20)
+      .setAlpha(0.85);
+    const barFill = this.add.rectangle(x, barY, 52, 5, 0xff6666)
+      .setDepth(y + 21)
+      .setAlpha(0.85);
+
+    (barFill as any).bg = barBg;
+    (barFill as any).maxHp = this.aiMaxHp[i] || 100;
+    (barFill as any).currentHp = this.aiMaxHp[i] || 100;
+
+    this.aiHPBgs.push(barBg);
+    this.aiHPLabels.push(barFill);
+
+    // Gentle floating animation
+    this.tweens.add({
+      targets: ship,
+      y: y - 3,
+      scale: ship.scaleX * 1.015,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
+}
 
   private getShipKey(faction: number, unitClass: number): string {
     const map: Record<string, string> = {

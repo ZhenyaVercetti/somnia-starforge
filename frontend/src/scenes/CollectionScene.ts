@@ -759,25 +759,43 @@ private async loadCollectionData() {
     }
   }
 
-  private showCollectionTooltip(x: number, y: number, unit?: any, relic?: any) {
-    if (!this.tooltip) {
-      this.tooltip = this.add.text(0, 0, '', {
-        fontSize: '24px', fill: '#ffffff', backgroundColor: '#112233',
-        padding: { x: 18, y: 12 }, align: 'left'
-      }).setOrigin(0.5, 1).setDepth(100);
-    }
+private showCollectionTooltip(x: number, y: number, item: any, isRelic: boolean) {
+  if (this.tooltip) this.tooltip.destroy();
 
-    let text = '';
-    if (unit) {
-      text = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
-    } else if (relic) {
-      text = `${relic.name.replace(/\s*\+\d+/, '')}\n+${relic.value} ${this.getRelicEffectDescription(relic.relicType)}`;
-    }
+  let tooltipText = 'ERROR: NO DATA';
 
-    this.tooltip.setText(text);
-    this.tooltip.setPosition(x, y - 22);
-    this.tooltip.setVisible(true);
+  if (isRelic) {
+    if (!item || item.relicType === undefined) {
+      tooltipText = 'Relic data loading...';
+    } else {
+      const typeNames = [
+        'Quantum Strike',
+        'Void Shield',
+        'Nebula Dash',
+        'Echo Core',
+        'Flux Overload',
+        'Last Stand'
+      ];
+      const relicName = typeNames[item.relicType] || 'Unknown Relic';
+      const effect = this.getRelicEffectDescription ? this.getRelicEffectDescription(item.relicType) : '';
+      tooltipText = `${relicName}\n+${item.value} ${effect}`;
+    }
+  } else {
+    if (!item) {
+      tooltipText = 'Unit data error';
+    } else {
+      tooltipText = `${this.getFactionName(item.faction)} ${this.getRarityName(item.rarity)} ${this.getClassName(item.unitClass)}\nATK ${item.attack} DEF ${item.defense} SPD ${item.speed}`;
+    }
   }
+
+  this.tooltip = this.add.text(x + 10, y + 10, tooltipText, {
+    fontSize: '22px',
+    fill: '#ffffff',
+    backgroundColor: '#111111',
+    padding: { x: 12, y: 10 },
+    wordWrap: { width: 280 }
+  }).setOrigin(0).setDepth(1000);
+}
 
   private hideTooltip() {
     if (this.tooltip) this.tooltip.setVisible(false);
