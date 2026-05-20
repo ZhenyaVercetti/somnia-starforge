@@ -1398,6 +1398,9 @@ while (aiUnitsData.length < 8) {
     }).setOrigin(0.5).setDepth(500);
     setTimeout(() => successMsg.destroy(), 900);
 
+    // Force at least 8 AI ships
+if (!aiMaxHp || aiMaxHp.length < 8) aiMaxHp = new Array(8).fill(120);
+if (!aiUnitsData || aiUnitsData.length < 8) aiUnitsData = new Array(8).fill({ faction: 1, unitClass: 0 });
     this.scene.start('BattleScene', {
       events: eventsRaw || [],
       playerWon: playerWon,
