@@ -1,5 +1,4 @@
 // @ts-nocheck
-// // frontend/src/scenes/CollectionScene.ts
 import * as Phaser from 'phaser';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
 
@@ -50,7 +49,6 @@ export default class CollectionScene extends Phaser.Scene {
     super({ key: 'CollectionScene' });
   }
 
-  
   init(data: any) {
     if (data.walletManager) {
       this.walletManager = data.walletManager;
@@ -222,18 +220,18 @@ export default class CollectionScene extends Phaser.Scene {
     });
   }
 
-private createGridContainer() {
-  this.gridContainer = this.add.container(48, 325);
+  private createGridContainer() {
+    this.gridContainer = this.add.container(48, 325);
 
-  this.contentContainer = this.add.container(0, 0);
-  this.gridContainer.add(this.contentContainer);
+    this.contentContainer = this.add.container(0, 0);
+    this.gridContainer.add(this.contentContainer);
 
-  // Маска расширена вверх (Y=305 вместо 315), чтобы крупные рамки не обрезались
-  const maskGraphics = this.make.graphics();
-  maskGraphics.fillRect(38, 290, 760, 660);
-  const mask = maskGraphics.createGeometryMask();
-  this.gridContainer.setMask(mask);
-}
+    // Mask expanded upward to prevent clipping of large frames
+    const maskGraphics = this.make.graphics();
+    maskGraphics.fillRect(38, 290, 760, 660);
+    const mask = maskGraphics.createGeometryMask();
+    this.gridContainer.setMask(mask);
+  }
 
   private createPreviewPanel() {
     this.previewRect = this.add.rectangle(775, 510, 260, 390, 0x112233)
@@ -266,7 +264,7 @@ private createGridContainer() {
 
   private async loadCollectionData() {
     if (!this.account || !this.gameContract || !this.nftContract) {
-      console.error('CollectionScene: не хватает контрактов');
+      console.error('CollectionScene: missing contracts');
       return;
     }
 
@@ -297,13 +295,13 @@ private createGridContainer() {
     }
   }
 
-private clearGrid() {
-  if (this.contentContainer) {
-    this.contentContainer.removeAll(true);
+  private clearGrid() {
+    if (this.contentContainer) {
+      this.contentContainer.removeAll(true);
+    }
+    this.unitSprites = [];
+    this.relicSprites = [];
   }
-  this.unitSprites = [];
-  this.relicSprites = [];
-}
 
   private clearFloatingPanel() {
     if (this.floatingPanel) {
@@ -312,221 +310,214 @@ private clearGrid() {
     }
   }
 
-private refreshGrid() {
-  this.clearGrid();
+  private refreshGrid() {
+    this.clearGrid();
 
-  let data = this.currentTab === 'units' ? this.unitsData : this.relicsData;
-
-  if (this.currentTab === 'units') {
-    data = data.filter((item: any) => {
-      const u = item.unit;
-      if (this.filters.rarity !== 'all' && String(u.rarity) !== this.filters.rarity) return false;
-      if (this.filters.faction !== 'all' && String(u.faction) !== this.filters.faction) return false;
-      if (this.filters.unitClass !== 'all' && String(u.unitClass) !== this.filters.unitClass) return false;
-      return true;
-    });
-  }
-
-  const spacingX = this.RELIC_SPACING_X;
-  const spacingY = this.RELIC_SPACING_Y;
-  const startY = 32;                    // чуть поднял, чтобы рамки не вылезали
-
-  data.forEach((item, index) => {
-    const col = index % this.ITEMS_PER_ROW;
-    const row = Math.floor(index / this.ITEMS_PER_ROW);
-    const x = this.GRID_START_X + col * spacingX;
-    const y = startY + row * spacingY;
+    let data = this.currentTab === 'units' ? this.unitsData : this.relicsData;
 
     if (this.currentTab === 'units') {
-      const card = this.createUnitCard(x, y, item);
-      this.contentContainer!.add(card);
-      this.unitSprites.push(card);
-    } else {
-      const card = this.createRelicCard(x, y, item);
-      this.contentContainer!.add(card);
-      this.relicSprites.push(card);
+      data = data.filter((item: any) => {
+        const u = item.unit;
+        if (this.filters.rarity !== 'all' && String(u.rarity) !== this.filters.rarity) return false;
+        if (this.filters.faction !== 'all' && String(u.faction) !== this.filters.faction) return false;
+        if (this.filters.unitClass !== 'all' && String(u.unitClass) !== this.filters.unitClass) return false;
+        return true;
+      });
     }
-  });
 
-  // === МАСКА (обновлённая под большие рамки) ===
-  if ((this.currentTab === 'relics' || this.currentTab === 'units') && data.length > this.ITEMS_PER_ROW * 5) {
-    const totalRows = Math.ceil(data.length / this.ITEMS_PER_ROW);
-    const totalHeight = totalRows * spacingY;
-    const visibleHeight = 5 * spacingY + 60;           // увеличил видимую область
-    const maxScroll = Math.max(0, totalHeight - visibleHeight);
+    const spacingX = this.RELIC_SPACING_X;
+    const spacingY = this.RELIC_SPACING_Y;
+    const startY = 32;
 
-    const maskGraphics = this.make.graphics();
-    maskGraphics.fillRect(38, 290, 760, visibleHeight);   // ← 290 вместо 310
-    const mask = maskGraphics.createGeometryMask();
-    this.gridContainer!.setMask(mask);
+    data.forEach((item, index) => {
+      const col = index % this.ITEMS_PER_ROW;
+      const row = Math.floor(index / this.ITEMS_PER_ROW);
+      const x = this.GRID_START_X + col * spacingX;
+      const y = startY + row * spacingY;
 
-    this.contentContainer!.y = 0;
-    this.contentContainer!.setInteractive();
-
-    let dragStartY = 0;
-    let contentStartY = 0;
-
-    this.contentContainer!.off('pointerdown');
-    this.contentContainer!.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      dragStartY = pointer.y;
-      contentStartY = this.contentContainer!.y;
+      if (this.currentTab === 'units') {
+        const card = this.createUnitCard(x, y, item);
+        this.contentContainer!.add(card);
+        this.unitSprites.push(card);
+      } else {
+        const card = this.createRelicCard(x, y, item);
+        this.contentContainer!.add(card);
+        this.relicSprites.push(card);
+      }
     });
 
-    this.input.off('pointermove');
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) {
-        const delta = pointer.y - dragStartY;
-        let newY = contentStartY + delta;
+    if ((this.currentTab === 'relics' || this.currentTab === 'units') && data.length > this.ITEMS_PER_ROW * 5) {
+      const totalRows = Math.ceil(data.length / this.ITEMS_PER_ROW);
+      const totalHeight = totalRows * spacingY;
+      const visibleHeight = 5 * spacingY + 60;
+      const maxScroll = Math.max(0, totalHeight - visibleHeight);
+
+      const maskGraphics = this.make.graphics();
+      maskGraphics.fillRect(38, 290, 760, visibleHeight);
+      const mask = maskGraphics.createGeometryMask();
+      this.gridContainer!.setMask(mask);
+
+      this.contentContainer!.y = 0;
+      this.contentContainer!.setInteractive();
+
+      let dragStartY = 0;
+      let contentStartY = 0;
+
+      this.contentContainer!.off('pointerdown');
+      this.contentContainer!.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        dragStartY = pointer.y;
+        contentStartY = this.contentContainer!.y;
+      });
+
+      this.input.off('pointermove');
+      this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+        if (pointer.isDown) {
+          const delta = pointer.y - dragStartY;
+          let newY = contentStartY + delta;
+          newY = Phaser.Math.Clamp(newY, -maxScroll, 0);
+          this.contentContainer!.y = newY;
+        }
+      });
+
+      this.input.off('wheel');
+      this.input.on('wheel', (_pointer: any, _gameObjects: any, _deltaX: number, deltaY: number) => {
+        let newY = this.contentContainer!.y - deltaY * 0.7;
         newY = Phaser.Math.Clamp(newY, -maxScroll, 0);
         this.contentContainer!.y = newY;
-      }
-    });
+      });
+    } else {
+      if (this.contentContainer) this.contentContainer.y = 0;
+      if (this.contentContainer) this.contentContainer.disableInteractive();
+      this.input.off('pointermove');
+      this.input.off('wheel');
 
-    this.input.off('wheel');
-    this.input.on('wheel', (_pointer: any, _gameObjects: any, _deltaX: number, deltaY: number) => {
-      let newY = this.contentContainer!.y - deltaY * 0.7;
-      newY = Phaser.Math.Clamp(newY, -maxScroll, 0);
-      this.contentContainer!.y = newY;
-    });
-  } else {
-    if (this.contentContainer) this.contentContainer.y = 0;
-    if (this.contentContainer) this.contentContainer.disableInteractive();
-    this.input.off('pointermove');
-    this.input.off('wheel');
-
-    const maskGraphics = this.make.graphics();
-    maskGraphics.fillRect(38, 290, 760, 660);   // ← 290 вместо 310
-    const mask = maskGraphics.createGeometryMask();
-    this.gridContainer!.setMask(mask);
+      const maskGraphics = this.make.graphics();
+      maskGraphics.fillRect(38, 290, 760, 660);
+      const mask = maskGraphics.createGeometryMask();
+      this.gridContainer!.setMask(mask);
+    }
   }
-}
 
+  private createUnitCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
+    const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
 
-private createUnitCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
-  const shipKey = this.getShipKey(item.unit.faction, item.unit.unitClass);
+    // Increase frame by 20%, keep ship the same size
+    const frameScale = 0.21 * 1.20;
+    const shipScaleMultiplier = 1 / 1.30;
 
-  // === УВЕЛИЧИВАЕМ РАМКУ НА 15%, КОРАБЛЬ ОСТАЁТСЯ ТЕМ ЖЕ РАЗМЕРОМ ===
-  const frameScale = 0.21 * 1.20;           // рамка +15%
-  const shipScaleMultiplier = 1 / 1.30;     // компенсируем, чтобы корабль не вырос
+    const container = UnitVisualFactory.createUnitWithFrame(
+      this,
+      x,
+      y,
+      shipKey,
+      item.unit.rarity,
+      frameScale,
+      shipScaleMultiplier
+    );
 
-  const container = UnitVisualFactory.createUnitWithFrame(
-    this,
-    x,
-    y,
-    shipKey,
-    item.unit.rarity,
-    frameScale,
-    shipScaleMultiplier
-  );
+    const selectionBorder = this.add.rectangle(0, 0, 68, 68)
+      .setStrokeStyle(4, 0xffff00)
+      .setFillStyle(0x000000, 0)
+      .setVisible(false)
+      .setDepth(20);
+    container.add(selectionBorder);
+    (container as any).selectionBorder = selectionBorder;
 
-  // === ЖЁЛТАЯ РАМКА ВЫБОРА (поверх всего) ===
-  const selectionBorder = this.add.rectangle(0, 0, 68, 68)
-    .setStrokeStyle(4, 0xffff00)
-    .setFillStyle(0x000000, 0)
-    .setVisible(false)
-    .setDepth(20);
-  container.add(selectionBorder);
-  (container as any).selectionBorder = selectionBorder;
+    const hitArea = this.add.rectangle(0, 0, 58, 58, 0x000000, 0)
+      .setInteractive();
+    container.add(hitArea);
 
-  // === ИНТЕРАКТИВНАЯ ЗОНА (прозрачная) ===
-  const hitArea = this.add.rectangle(0, 0, 58, 58, 0x000000, 0)
-    .setInteractive();
-  container.add(hitArea);
+    (hitArea as any).unitId = item.id;
+    (container as any).unitId = item.id;
 
-  (hitArea as any).unitId = item.id;
-  (container as any).unitId = item.id;
+    let clickCount = 0;
 
-  let clickCount = 0;
-
-  hitArea.on('pointerdown', () => {
-    clickCount++;
-    if (clickCount === 1) {
-      this.toggleUnitSelection(item.id, container);
-    }
-    if (clickCount === 2) {
-      const prepare = this.scene.get('PrepareScene') as any;
-      if (prepare && typeof prepare.addSingleUnitToTeam === 'function') {
-        const success = prepare.addSingleUnitToTeam(item.id);
-        if (success) {
-          const idx = this.selectedUnitIds.indexOf(item.id);
-          if (idx > -1) this.selectedUnitIds.splice(idx, 1);
-          this.clearFloatingPanel();
-          this.unitsData = this.unitsData.filter((u: any) => u.id !== item.id);
-          this.refreshGrid();
-        }
+    hitArea.on('pointerdown', () => {
+      clickCount++;
+      if (clickCount === 1) {
+        this.toggleUnitSelection(item.id, container);
       }
-      clickCount = 0;
-    }
-    setTimeout(() => { clickCount = 0; }, 450);
-  });
-
-  hitArea.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
-  hitArea.on('pointerout', () => this.hideTooltip());
-
-  return container;
-}
-
-
-private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
-  const relicMap: Record<number, string> = {
-    0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-    3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-  };
-  const relicKey = relicMap[item.relic.relicType] || 'quantum_strike';
-
-  const container = this.add.container(x, y);
-
-  const bg = this.add.rectangle(0, 0, 52, 52, 0x112233)
-    .setStrokeStyle(2, 0x444444)
-    .setInteractive();
-
-  const relicSprite = this.add.sprite(0, 0, relicKey)
-    .setScale(0.65);
-
-  container.add([bg, relicSprite]);
-  this.gridContainer!.add(container);
-
-  (bg as any).relicId = item.id;
-  (container as any).relicId = item.id;
-
-  // Большая жёлтая рамка (полностью покрывает иконку)
-  const selectionBorder = this.add.rectangle(0, 0, 74, 74)
-    .setStrokeStyle(5, 0xffff00)
-    .setFillStyle(0x000000, 0)
-    .setVisible(false)
-    .setDepth(20);
-  container.add(selectionBorder);
-  (container as any).selectionBorder = selectionBorder;
-
-  let clickCount = 0;
-  bg.on('pointerdown', () => {
-    clickCount++;
-    if (clickCount === 1) {
-      this.toggleRelicSelection(item.id, container);
-    }
-    if (clickCount === 2) {
-      const prepare = this.scene.get('PrepareScene') as any;
-      if (prepare && typeof prepare.equipSingleRelic === 'function') {
-        const success = prepare.equipSingleRelic(item.id);
-        if (success) {
-          const idx = this.selectedRelicIds.indexOf(item.id);
-          if (idx > -1) this.selectedRelicIds.splice(idx, 1);
-          this.clearFloatingPanel();
-          this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
-          this.refreshGrid();
+      if (clickCount === 2) {
+        const prepare = this.scene.get('PrepareScene') as any;
+        if (prepare && typeof prepare.addSingleUnitToTeam === 'function') {
+          const success = prepare.addSingleUnitToTeam(item.id);
+          if (success) {
+            const idx = this.selectedUnitIds.indexOf(item.id);
+            if (idx > -1) this.selectedUnitIds.splice(idx, 1);
+            this.clearFloatingPanel();
+            this.unitsData = this.unitsData.filter((u: any) => u.id !== item.id);
+            this.refreshGrid();
+          }
         }
+        clickCount = 0;
       }
-      clickCount = 0;
-    }
-    setTimeout(() => { clickCount = 0; }, 450);
-  });
+      setTimeout(() => { clickCount = 0; }, 450);
+    });
 
-  bg.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
-  bg.on('pointerout', () => this.hideTooltip());
+    hitArea.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, item.unit));
+    hitArea.on('pointerout', () => this.hideTooltip());
 
-  return container;
-}
+    return container;
+  }
 
+  private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Container {
+    const relicMap: Record<number, string> = {
+      0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
+      3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
+    };
+    const relicKey = relicMap[item.relic.relicType] || 'quantum_strike';
+
+    const container = this.add.container(x, y);
+
+    const bg = this.add.rectangle(0, 0, 52, 52, 0x112233)
+      .setStrokeStyle(2, 0x444444)
+      .setInteractive();
+
+    const relicSprite = this.add.sprite(0, 0, relicKey)
+      .setScale(0.65);
+
+    container.add([bg, relicSprite]);
+    this.gridContainer!.add(container);
+
+    (bg as any).relicId = item.id;
+    (container as any).relicId = item.id;
+
+    const selectionBorder = this.add.rectangle(0, 0, 74, 74)
+      .setStrokeStyle(5, 0xffff00)
+      .setFillStyle(0x000000, 0)
+      .setVisible(false)
+      .setDepth(20);
+    container.add(selectionBorder);
+    (container as any).selectionBorder = selectionBorder;
+
+    let clickCount = 0;
+    bg.on('pointerdown', () => {
+      clickCount++;
+      if (clickCount === 1) {
+        this.toggleRelicSelection(item.id, container);
+      }
+      if (clickCount === 2) {
+        const prepare = this.scene.get('PrepareScene') as any;
+        if (prepare && typeof prepare.equipSingleRelic === 'function') {
+          const success = prepare.equipSingleRelic(item.id);
+          if (success) {
+            const idx = this.selectedRelicIds.indexOf(item.id);
+            if (idx > -1) this.selectedRelicIds.splice(idx, 1);
+            this.clearFloatingPanel();
+            this.relicsData = this.relicsData.filter((r: any) => r.id !== item.id);
+            this.refreshGrid();
+          }
+        }
+        clickCount = 0;
+      }
+      setTimeout(() => { clickCount = 0; }, 450);
+    });
+
+    bg.on('pointerover', () => this.showCollectionTooltip(this.gridContainer!.x + x + 4, this.gridContainer!.y + y - 38, undefined, item.relic));
+    bg.on('pointerout', () => this.hideTooltip());
+
+    return container;
+  }
 
   private toggleUnitSelection(id: number, container: any) {
     const idx = this.selectedUnitIds.indexOf(id);
@@ -536,7 +527,6 @@ private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Con
       this.selectedUnitIds.push(id);
     }
 
-    // Обновляем жёлтую рамку
     const border = (container as any).selectionBorder as Phaser.GameObjects.Rectangle;
     if (border) {
       border.setVisible(this.selectedUnitIds.includes(id));
@@ -547,24 +537,23 @@ private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Con
     this.showPreview(id, true);
   }
 
-private toggleRelicSelection(id: number, container: any) {
-  const idx = this.selectedRelicIds.indexOf(id);
-  if (idx > -1) {
-    this.selectedRelicIds.splice(idx, 1);
-  } else if (this.selectedRelicIds.length < 3) {
-    this.selectedRelicIds.push(id);
+  private toggleRelicSelection(id: number, container: any) {
+    const idx = this.selectedRelicIds.indexOf(id);
+    if (idx > -1) {
+      this.selectedRelicIds.splice(idx, 1);
+    } else if (this.selectedRelicIds.length < 3) {
+      this.selectedRelicIds.push(id);
+    }
+
+    const border = (container as any).selectionBorder as Phaser.GameObjects.Rectangle;
+    if (border) {
+      border.setVisible(this.selectedRelicIds.includes(id));
+    }
+
+    this.clearFloatingPanel();
+    this.showFloatingMultiSelectPanel();
+    this.showPreview(id, false);
   }
-
-  const border = (container as any).selectionBorder as Phaser.GameObjects.Rectangle;
-  if (border) {
-    border.setVisible(this.selectedRelicIds.includes(id));
-  }
-
-  this.clearFloatingPanel();
-  this.showFloatingMultiSelectPanel();
-  this.showPreview(id, false);
-}
-
 
   private showFloatingMultiSelectPanel() {
     this.clearFloatingPanel();
@@ -710,49 +699,48 @@ private toggleRelicSelection(id: number, container: any) {
       }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t2);
 
-} else {
-  const relicData = this.relicsData.find(r => r.id === id)?.relic;
-  if (!relicData) return;
+    } else {
+      const relicData = this.relicsData.find(r => r.id === id)?.relic;
+      if (!relicData) return;
 
-  const relicMap: Record<number, string> = {
-    0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-    3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-  };
-  const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
+      const relicMap: Record<number, string> = {
+        0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
+        3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
+      };
+      const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
 
-  // Опускаем на 15 пикселей и уменьшаем/замедляем пульсацию в 2 раза
-  const container = this.add.container(this.PREVIEW_X, this.PREVIEW_Y - 5);
+      const container = this.add.container(this.PREVIEW_X, this.PREVIEW_Y - 5);
 
-  const bg = this.add.rectangle(0, 0, 140, 140, 0x112233)
-    .setStrokeStyle(4, 0xff00ff);
+      const bg = this.add.rectangle(0, 0, 140, 140, 0x112233)
+        .setStrokeStyle(4, 0xff00ff);
 
-  const relicSprite = this.add.sprite(0, 0, relicKey)
-    .setScale(1.35);
+      const relicSprite = this.add.sprite(0, 0, relicKey)
+        .setScale(1.35);
 
-  container.add([bg, relicSprite]);
-  container.setDepth(15);
-  this.children.bringToTop(container);
-  this.previewShip = container as any;
+      container.add([bg, relicSprite]);
+      container.setDepth(15);
+      this.children.bringToTop(container);
+      this.previewShip = container as any;
 
-  this.tweens.add({
-    targets: relicSprite,
-    scale: relicSprite.scale * 1.025,   // уменьшено в 2 раза
-    duration: 3200,                     // замедлено в 2 раза
-    yoyo: true,
-    repeat: -1,
-    ease: 'Sine.easeInOut'
-  });
+      this.tweens.add({
+        targets: relicSprite,
+        scale: relicSprite.scale * 1.025,
+        duration: 3200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
 
-  const t1 = this.add.text(this.PREVIEW_X, 565, relicData.name.replace(/\s*\+\d+/, ''), {
-    fontSize: '29px', fill: '#ff00ff', wordWrap: { width: 230 }, align: 'center'
-  }).setOrigin(0.5).setDepth(20);
-  this.previewTexts.push(t1);
+      const t1 = this.add.text(this.PREVIEW_X, 565, relicData.name.replace(/\s*\+\d+/, ''), {
+        fontSize: '29px', fill: '#ff00ff', wordWrap: { width: 230 }, align: 'center'
+      }).setOrigin(0.5).setDepth(20);
+      this.previewTexts.push(t1);
 
-  const t2 = this.add.text(this.PREVIEW_X, 635, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
-    fontSize: '25px', fill: '#ffff88', wordWrap: { width: 230 }, align: 'center'
-  }).setOrigin(0.5).setDepth(20);
-  this.previewTexts.push(t2);
-}
+      const t2 = this.add.text(this.PREVIEW_X, 635, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
+        fontSize: '25px', fill: '#ffff88', wordWrap: { width: 230 }, align: 'center'
+      }).setOrigin(0.5).setDepth(20);
+      this.previewTexts.push(t2);
+    }
   }
 
   private showCollectionTooltip(x: number, y: number, unit?: any, relic?: any) {

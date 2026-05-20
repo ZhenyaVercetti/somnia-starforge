@@ -110,7 +110,7 @@ private createContracts() {
     return;
   }
 
-  const GAME_ADDRESS = '0x663FfeB8c82F97F31a5209D01D30354Deba9381a';
+  const GAME_ADDRESS = '0xF38D368aF07098a204f41239833b2F7A562433a0';
   const NFT_ADDRESS = '0x917cf23DEE1fC5339F7eDb5e7090b2e36AdEE54d';
   const RELIC_ADDRESS = '0x83930224Ced8cEB6350fC9F41202B8fAA0033173';
 
@@ -814,14 +814,14 @@ private async buyUnit() {
 
     const waiting = this.add.text(600, 450, 'TX buyUnit sent... waiting for on-chain (3 sec)', { 
       fontSize: '36px', fill: '#ffff00' 
-    });
+    }).setDepth(500);
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
     const msg = this.add.text(600, 450, 'Unit purchased on-chain!', { 
       fontSize: '48px', fill: '#00ff00' 
-    });
+    }).setDepth(500);
     setTimeout(() => msg.destroy(), 2200);
 
     setTimeout(() => {
@@ -832,7 +832,7 @@ private async buyUnit() {
     const errMsg = e.shortMessage || e.message || 'Unknown error';
     const errorText = this.add.text(600, 450, `Error: ${errMsg}`, { 
       fontSize: '36px', fill: '#ff4444' 
-    });
+    }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
   }
 }
@@ -876,14 +876,14 @@ private async buyFromShopSlot(slot: number) {
 
     const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] sent... waiting for on-chain (3 sec)`, { 
       fontSize: '36px', fill: '#ffff00' 
-    });
+    }).setDepth(500);
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
     const msg = this.add.text(600, 450, `Artifact purchased!`, { 
       fontSize: '42px', fill: '#00ff00' 
-    });
+    }).setDepth(500);
     setTimeout(() => msg.destroy(), 1800);
 
     setTimeout(() => {
@@ -895,7 +895,7 @@ private async buyFromShopSlot(slot: number) {
     const errMsg = e.shortMessage || e.message || 'Error';
     const errorText = this.add.text(600, 450, `Error: ${errMsg}`, { 
       fontSize: '36px', fill: '#ff4444' 
-    });
+    }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
   }
 }
@@ -940,14 +940,14 @@ private async rerollShop() {
 
     const waiting = this.add.text(600, 510, 'TX reroll sent... waiting for on-chain (3 sec)', { 
       fontSize: '42px', fill: '#ffff00' 
-    });
+    }).setDepth(500);
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
     const msg = this.add.text(600, 510, 'Shop rerolled — new artifacts', { 
       fontSize: '42px', fill: '#00ff00' 
-    });
+    }).setDepth(500);
     setTimeout(() => msg.destroy(), 1800);
 
     setTimeout(() => {
@@ -959,7 +959,7 @@ private async rerollShop() {
     const errMsg = e.shortMessage || e.message || 'Reroll error';
     const errorText = this.add.text(600, 510, `Error: ${errMsg}`, { 
       fontSize: '36px', fill: '#ff4444' 
-    });
+    }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
   }
 }
@@ -1147,7 +1147,7 @@ private async startBattle() {
   if (this.team.length < 4) {
     const msg = this.add.text(960, 450, 'Minimum 4 units in team (per contract rules)', {
       fontSize: '36px', fill: '#ff4444', fontStyle: 'bold'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(500);
     setTimeout(() => msg.destroy(), 2800);
     return;
   }
@@ -1155,7 +1155,7 @@ private async startBattle() {
   if (this.team.length > 8) {
     const msg = this.add.text(960, 450, 'Maximum 8 units', {
       fontSize: '36px', fill: '#ff4444'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(500);
     setTimeout(() => msg.destroy(), 2000);
     return;
   }
@@ -1195,7 +1195,7 @@ private async startBattle() {
 
     const waiting = this.add.text(960, 450, 'TX sent... waiting for confirmation (3-4 sec)', {
       fontSize: '34px', fill: '#ffff00'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(500);
 
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
@@ -1239,7 +1239,7 @@ private async startBattle() {
 
     const successMsg = this.add.text(960, 380, 'BATTLE STARTED!', {
       fontSize: '48px', fill: '#00ff88', fontStyle: 'bold'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(500);
     setTimeout(() => successMsg.destroy(), 900);
 
     this.scene.start('BattleScene', {
@@ -1256,7 +1256,7 @@ private async startBattle() {
     const errMsg = e.shortMessage || e.message || 'Unknown error';
     const errorText = this.add.text(960, 450, `Error: ${errMsg}`, {
       fontSize: '34px', fill: '#ff4444'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(500);
     setTimeout(() => errorText.destroy(), 4500);
   }
 }
