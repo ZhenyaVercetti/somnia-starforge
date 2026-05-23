@@ -316,6 +316,14 @@ const gameAbi = [
   "stateMutability": "view",
   "type": "function"
 },
+{
+  "inputs": [],
+  "name": "generateTenShips",
+  "outputs": [],
+  "stateMutability": "payable",
+  "type": "function"
+},
+
   {
     "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
     "name": "getPlayerUnits",
@@ -1030,6 +1038,11 @@ private async updatePlayerProfile() {
     const xp = Number(profile.xp ?? 0);
     const wins = Number(profile.wins ?? 0);
     const losses = Number(profile.losses ?? 0);
+      if (this.buysLeftText) {
+    const maxBuys = 10 + (level - 1);
+    this.buysLeftText.setText(`Buys left: ${remainingBuys}/${maxBuys}`);
+  }
+
 
     if (this.playerLevelText) {
       this.playerLevelText.setText(`LVL ${level}`);
@@ -1049,10 +1062,6 @@ private async updatePlayerProfile() {
   const remainingBuys = await this.gameContract.read.getRemainingBuys([this.account]);
   const canReroll = await this.gameContract.read.canReroll([this.account]);
   
-  if (this.buysLeftText) {
-    const maxBuys = 10 + (level - 1);
-    this.buysLeftText.setText(`Buys left: ${remainingBuys}/${maxBuys}`);
-  }
   
   if (this.rerollsLeftText) {
     this.rerollsLeftText.setText(canReroll ? 'Rerolls: 2/2' : 'Rerolls: 0/2');
