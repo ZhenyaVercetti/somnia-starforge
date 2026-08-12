@@ -1,6 +1,6 @@
 {
 	"compiler": {
-		"version": "0.8.30+commit.73712a01"
+		"version": "0.8.34+commit.80d5c536"
 	},
 	"language": "Solidity",
 	"output": {
@@ -461,11 +461,6 @@
 						"internalType": "bytes32",
 						"name": "",
 						"type": "bytes32"
-					},
-					{
-						"internalType": "bytes",
-						"name": "",
-						"type": "bytes"
 					}
 				],
 				"stateMutability": "view",
@@ -512,25 +507,6 @@
 						"internalType": "struct StarForgeGame.BattleSummary",
 						"name": "",
 						"type": "tuple"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					}
-				],
-				"name": "getPackedBattleEvents",
-				"outputs": [
-					{
-						"internalType": "bytes",
-						"name": "",
-						"type": "bytes"
 					}
 				],
 				"stateMutability": "view",
@@ -728,25 +704,6 @@
 						"internalType": "uint8",
 						"name": "relicValue",
 						"type": "uint8"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"name": "lastBattleEventsPacked",
-				"outputs": [
-					{
-						"internalType": "bytes",
-						"name": "",
-						"type": "bytes"
 					}
 				],
 				"stateMutability": "view",
@@ -1098,7 +1055,7 @@
 		"compilationTarget": {
 			"StarForgeGame.sol": "StarForgeGame"
 		},
-		"evmVersion": "prague",
+		"evmVersion": "osaka",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
@@ -1288,11 +1245,11 @@
 			]
 		},
 		"StarForgeGame.sol": {
-			"keccak256": "0x27d98f95924e4b80451656065a395a679b82a344b7d8a2215f9ce015d140849c",
+			"keccak256": "0xe0818b0c2b30d21ece963b9abddb872d972040073c54f84d985961201fd1fa1a",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://de1dfeb27bb09438f4a7913ba938152b20e5e021e85a05545abb2cabe5b0c61f",
-				"dweb:/ipfs/QmVMRimzWSaEDEhR8NpUy7FS1Br5bCDATA9e8MpWA24gPc"
+				"bzz-raw://f76285844860e1341321dc5ca25770c946ef72e2965f91731fae745fb93494a6",
+				"dweb:/ipfs/QmYfNBrMiPZVJ3cAkoHQtMQb6F2JE6kBpyUKEBcmG5jjPY"
 			]
 		},
 		"StarForgePlayerProfile.sol": {
