@@ -15,8 +15,12 @@
  *   npx hardhat run scripts/deploy.js --network somniaMainnet
  *   (only after SOMNIA_MAINNET_RPC and mainnet addresses are set)
  *
- * This script does NOT call setGameContract / setRelicContract.
- * Linking stays a separate owner step so a bad deploy cannot rewrite live pointers.
+ * After a successful Game deploy the same deployer (must be owner / DEFAULT_ADMIN)
+ * automatically binds the live contracts:
+ *   1. StarForgeUnitNFT.setGameContract(newGame)
+ *   2. StarForgeRelic.setGameContract(newGame)
+ *   3. StarForgePlayerProfile.setGameContract(newGame)
+ *   4. new StarForgeGame.setRelicContract(currentRelic)
  */
 
 const hre = require("hardhat");
@@ -67,55 +71,100 @@ async function requireOnChainContract(label, address) {
   }
 }
 
-function printBindingInstructions(newGame, unitNFT, relic, playerProfile, currentGame) {
+async function sendOwnerCall(label, contract, method, args) {
+  console.log("");
+  console.log(`Calling ${label}...`);
+  try {
+    const tx = await contract[method](...args);
+    console.log(`  tx: ${tx.hash}`);
+    const receipt = await tx.wait();
+    if (!receipt || receipt.status !== 1) {
+      throw new Error(`${label} mined but reverted`);
+    }
+    console.log(`  OK   ${label}`);
+    return { label, hash: tx.hash, ok: true };
+  } catch (error) {
+    const hash = error.transaction?.hash || error.receipt?.hash || "";
+    console.error(`  FAIL ${label}`);
+    if (hash) {
+      console.error(`  tx: ${hash}`);
+    }
+    console.error(`  ${error.shortMessage || error.reason || error.message || error}`);
+    throw new Error(
+      `${label} failed. Binding stopped. New Game may already be deployed — do not point the frontend at it until all set* calls succeed.`
+    );
+  }
+}
+
+async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, playerProfile) {
+  const completed = [];
+
+  const nftContract = await hre.ethers.getContractAt("StarForgeUnitNFT", unitNFT, deployer);
+  completed.push(
+    await sendOwnerCall(
+      `StarForgeUnitNFT.setGameContract(${newGame})`,
+      nftContract,
+      "setGameContract",
+      [newGame]
+    )
+  );
+
+  const relicContract = await hre.ethers.getContractAt("StarForgeRelic", relic, deployer);
+  completed.push(
+    await sendOwnerCall(
+      `StarForgeRelic.setGameContract(${newGame})`,
+      relicContract,
+      "setGameContract",
+      [newGame]
+    )
+  );
+
+  const profileContract = await hre.ethers.getContractAt(
+    "StarForgePlayerProfile",
+    playerProfile,
+    deployer
+  );
+  completed.push(
+    await sendOwnerCall(
+      `StarForgePlayerProfile.setGameContract(${newGame})`,
+      profileContract,
+      "setGameContract",
+      [newGame]
+    )
+  );
+
+  completed.push(
+    await sendOwnerCall(
+      `StarForgeGame.setRelicContract(${relic})`,
+      game.connect(deployer),
+      "setRelicContract",
+      [relic]
+    )
+  );
+
+  return completed;
+}
+
+function printLinkSummary(newGame, unitNFT, relic, playerProfile, currentGame, completed) {
   console.log("");
   console.log("============================================================");
-  console.log("BINDING ORDER — do this after a successful Game deploy");
+  console.log("LINKING COMPLETE");
   console.log("============================================================");
-  console.log("");
-  console.log("Current addresses (DEPLOYMENT.md testnet, before this deploy):");
+  console.log(`  StarForgeGame (NEW):     ${newGame}`);
+  console.log(`  StarForgeGame (old):     ${currentGame}`);
   console.log(`  StarForgeUnitNFT:        ${unitNFT}`);
   console.log(`  StarForgeRelic:          ${relic}`);
   console.log(`  StarForgePlayerProfile:  ${playerProfile}`);
-  console.log(`  StarForgeGame (old):     ${currentGame}`);
-  console.log(`  StarForgeGame (NEW):     ${newGame}`);
   console.log("");
-  console.log("AGENTS.md order when updating StarForgeGame.sol:");
+  console.log("set* calls:");
+  for (const step of completed) {
+    console.log(`  OK  ${step.label}`);
+    console.log(`      ${step.hash}`);
+  }
   console.log("");
-  console.log("1. Already done by this script:");
-  console.log(`   Deploy NEW StarForgeGame(_unitNFT, _relic, _playerProfile)`);
-  console.log(`   constructor args: ${unitNFT}, ${relic}, ${playerProfile}`);
-  console.log("");
-  console.log("2. StarForgeUnitNFT.setGameContract(new Game)");
-  console.log(`   Contract: ${unitNFT}`);
-  console.log(`   Call:     setGameContract("${newGame}")`);
-  console.log("");
-  console.log("3. NEW StarForgeGame.setRelicContract(current Relic)");
-  console.log("   Constructor already set relic. Optional safety call:");
-  console.log(`   Contract: ${newGame}`);
-  console.log(`   Call:     setRelicContract("${relic}")`);
-  console.log("");
-  console.log("4. StarForgeRelic.setGameContract(new Game)");
-  console.log(`   Contract: ${relic}`);
-  console.log(`   Call:     setGameContract("${newGame}")`);
-  console.log("");
-  console.log("5. StarForgePlayerProfile.setGameContract(new Game)");
-  console.log("   Required for XP / wins. Without this the new Game cannot write the profile.");
-  console.log(`   Contract: ${playerProfile}`);
-  console.log(`   Call:     setGameContract("${newGame}")`);
-  console.log("");
-  console.log("If you later replace StarForgeUnitNFT:");
-  console.log(`   1. Deploy new NFT`);
-  console.log(`   2. Current Game.setUnitNFT(new NFT address)`);
-  console.log("");
-  console.log("If you later replace StarForgeRelic:");
-  console.log(`   1. Deploy NEW StarForgeRelic`);
-  console.log(`   2. New Relic.setGameContract(current StarForgeGame address)`);
-  console.log(`   3. Current Game.setRelicContract(new Relic address)`);
-  console.log("");
-  console.log("Then:");
-  console.log("  - Put the NEW Game address into frontend/src/lib/contractAddresses.ts (GAME_ADDRESS)");
-  console.log("  - Update DEPLOYMENT.md only when you explicitly ask for the new text");
+  console.log("Next:");
+  console.log("  - Update frontend/src/lib/contractAddresses.ts  GAME_ADDRESS = new Game");
+  console.log("  - DEPLOYMENT.md is updated only when you explicitly ask for the new text");
   console.log("============================================================");
 }
 
@@ -201,12 +250,24 @@ async function main() {
   console.log(`StarForgePlayerProfile:  ${playerProfile}`);
   console.log(`StarForgeGame (old):     ${TESTNET_DEFAULTS.currentGame}`);
 
-  printBindingInstructions(
+  console.log("");
+  console.log("Binding live contracts (deployer must be owner / DEFAULT_ADMIN)...");
+  const completed = await bindLiveContracts(
+    deployer,
+    newGame,
+    game,
+    unitNFT,
+    relic,
+    playerProfile
+  );
+
+  printLinkSummary(
     newGame,
     unitNFT,
     relic,
     playerProfile,
-    TESTNET_DEFAULTS.currentGame
+    TESTNET_DEFAULTS.currentGame,
+    completed
   );
 }
 
