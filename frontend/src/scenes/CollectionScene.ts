@@ -128,7 +128,7 @@ export default class CollectionScene extends Phaser.Scene {
   
   private createTabs() {
     const unitsBtn = this.add.image(360, 100, 'button_base')
-      .setDisplaySize(180, 48)
+      .setDisplaySize(180, 70)
       .setInteractive()
       .setOrigin(0.5);
 
@@ -145,7 +145,7 @@ export default class CollectionScene extends Phaser.Scene {
     unitsBtn.on('pointerdown', () => this.switchTab('units'));
 
     const relicsBtn = this.add.image(600, 100, 'button_base')
-      .setDisplaySize(180, 48)
+      .setDisplaySize(180, 70)
       .setInteractive()
       .setOrigin(0.5);
 
@@ -161,7 +161,7 @@ export default class CollectionScene extends Phaser.Scene {
     this.addButtonEffects(relicsBtn);
     relicsBtn.on('pointerdown', () => this.switchTab('relics'));
 
-    this.unitsUnderline = this.add.rectangle(360, 132, 140, 3, 0x5ee7ff)
+    this.unitsUnderline = this.add.rectangle(360, 142, 140, 3, 0x5ee7ff)
       .setOrigin(0.5)
       .setDepth(10);
   }
@@ -172,7 +172,7 @@ export default class CollectionScene extends Phaser.Scene {
     this.selectedRelicIds = [];
 
     if (this.unitsUnderline) {
-      this.unitsUnderline.setPosition(tab === 'units' ? 360 : 600, 132);
+      this.unitsUnderline.setPosition(tab === 'units' ? 360 : 600, 142);
       this.unitsUnderline.setFillStyle(tab === 'units' ? 0x5ee7ff : 0xe080ff);
     }
 
@@ -246,7 +246,7 @@ export default class CollectionScene extends Phaser.Scene {
 
   private createBottomPanel() {
     const backBtn = this.add.image(480, 990, 'button_base')
-      .setDisplaySize(300, 52)
+      .setDisplaySize(256, 100)
       .setInteractive()
       .setOrigin(0.5);
 
@@ -608,25 +608,25 @@ private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Con
 
     this.floatingPanel = this.add.container(0, 0);
 
-    const selectedBtn = this.add.image(centerX, 784, 'button_base')
-      .setDisplaySize(300, 44)
+    const selectedBtn = this.add.image(centerX, 720, 'button_base')
+      .setDisplaySize(256, 100)
       .setOrigin(0.5);
     this.floatingPanel.add(selectedBtn);
 
-    const selectedText = this.add.text(centerX, 784, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
+    const selectedText = this.add.text(centerX, 720, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
       fontSize: '20px',
       fill: '#5dffb0',
       fontStyle: 'bold'
     }).setOrigin(0.5);
     this.floatingPanel.add(selectedText);
 
-    const actionBtn = this.add.image(centerX, 848, 'button_base')
-      .setDisplaySize(300, 52)
+    const actionBtn = this.add.image(centerX, 832, 'button_base')
+      .setDisplaySize(256, 100)
       .setInteractive()
       .setOrigin(0.5);
     this.floatingPanel.add(actionBtn);
 
-    const actionText = this.add.text(centerX, 848, isUnits ? 'ADD TO TEAM' : 'ACTIVATE', {
+    const actionText = this.add.text(centerX, 832, isUnits ? 'ADD TO TEAM' : 'ACTIVATE', {
       fontSize: '22px',
       fill: isUnits ? '#ffe566' : '#5ee7ff',
       fontStyle: 'bold'

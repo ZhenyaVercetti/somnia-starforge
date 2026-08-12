@@ -426,13 +426,13 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private createSpeedButton() {
-    this.speedBtnBase = this.add.image(1848, 48, 'button_base')
-      .setDisplaySize(88, 44)
+    this.speedBtnBase = this.add.image(1840, 52, 'button_base')
+      .setDisplaySize(128, 50)
       .setInteractive({ useHandCursor: true })
       .setDepth(910)
       .setScrollFactor(0);
 
-    this.speedBtnText = this.add.text(1848, 48, 'x2', {
+    this.speedBtnText = this.add.text(1840, 52, 'x2', {
       fontSize: '26px',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -1119,7 +1119,7 @@ export default class BattleScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(920);
 
     const backBtn = this.add.image(960, 520, 'button_base')
-      .setDisplaySize(300, 52)
+      .setDisplaySize(256, 100)
       .setInteractive({ useHandCursor: true })
       .setDepth(920);
     this.add.text(960, 520, 'BACK TO PREPARE', {
@@ -1193,7 +1193,7 @@ export default class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: glow, alpha: 0.45, duration: 500, yoyo: true, repeat: 2 });
 
     const btn = this.add.image(960, 980, 'button_base')
-      .setDisplaySize(300, 52)
+      .setDisplaySize(256, 100)
       .setInteractive({ useHandCursor: true })
       .setDepth(941)
       .setScrollFactor(0)

@@ -6,26 +6,7 @@ import { PLAYER_PROFILE_ADDRESS } from '../lib/contractAddresses';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
 import { GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS, CHAIN_ID, RPC_URL } from '../lib/contractAddresses';
-
-// Single layout table for 1920x1080. Shop / team / relics / enemy / actions
-// must all read from here so slots and chrome cannot drift apart.
-const PREPARE_LAYOUT = {
-  leftX: 244,
-  shopY: 250,
-  shopSlot: 96,
-  shopGap: 18,
-  teamCenterX: 930,
-  teamStartY: 318,
-  teamSlot: 118,
-  teamGap: 14,
-  relicY: 636,
-  relicSlot: 100,
-  relicGap: 20,
-  aiCenterX: 1640,
-  aiStartY: 248,
-  aiSlot: 78,
-  aiGap: 10
-};
+import { HUD, PREPARE_LAYOUT } from '../utils/HudChrome';
 
 
 export default class PrepareScene extends Phaser.Scene {
@@ -654,8 +635,8 @@ private async loadPlayerShop() {
 
     const shopCenterX = PREPARE_LAYOUT.leftX;
     const shopY = PREPARE_LAYOUT.shopY;
-    const shopSlotSize = PREPARE_LAYOUT.shopSlot;
-    const shopSpacing = PREPARE_LAYOUT.shopGap;
+    const shopSlotSize = HUD.SHOP;
+    const shopSpacing = HUD.GAP;
     const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
     const shopStartX = shopCenterX - shopTotalWidth / 2;
 
@@ -698,14 +679,14 @@ private async loadPlayerShop() {
       this.shopContainer.add(sprite);
       this.shopSprites.push(sprite);
 
-      const nameText = this.add.text(x, y + 62, displayName, {
-        fontSize: '13px', fill: '#ffe566', align: 'center', wordWrap: { width: 92 }
+      const nameText = this.add.text(x, y + 68, displayName, {
+        fontSize: HUD.SMALL, fill: HUD.color.warn, align: 'center', wordWrap: { width: 100 }
       }).setOrigin(0.5).setDepth(12);
       this.shopContainer.add(nameText);
       this.shopTexts.push(nameText);
 
-      const buyBtn = this.add.text(x, y + 92, 'BUY', {
-        fontSize: '15px', fill: '#5dffb0', fontStyle: 'bold'
+      const buyBtn = this.add.text(x, y + 98, 'BUY', {
+        fontSize: HUD.BODY, fill: HUD.color.good, fontStyle: 'bold'
       })
         .setOrigin(0.5)
         .setDepth(12)
@@ -915,7 +896,7 @@ private async loadCurrentAI() {
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
     if (!aiData || !Array.isArray(aiData) || aiData.length === 0) {
-      const placeholder = this.add.text(PREPARE_LAYOUT.aiCenterX, 430, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
+      const placeholder = this.add.text(PREPARE_LAYOUT.aiCenterX, 520, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
         fontSize: '18px', color: '#888888', align: 'center', fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(20);
       this.aiSprites.push(placeholder as any);
@@ -953,7 +934,7 @@ private async loadCurrentAI() {
 
   } catch (e) {
     console.error('loadCurrentAI error:', e);
-    const errorText = this.add.text(PREPARE_LAYOUT.aiCenterX, 430, 'FAILED TO LOAD\nENEMY TEAM', {
+    const errorText = this.add.text(PREPARE_LAYOUT.aiCenterX, 520, 'FAILED TO LOAD\nENEMY TEAM', {
       fontSize: '18px', color: '#ff4444', align: 'center'
     }).setOrigin(0.5).setDepth(20);
     this.aiSprites.push(errorText as any);
@@ -1284,7 +1265,18 @@ private async rerollShop() {
 }
 
 
-private addHudButton(x: number, y: number, label: string, color: string, width: number, height: number, fontSize: string, onClick: () => void, texture = 'button_base') {
+private addHudButton(
+  x: number,
+  y: number,
+  label: string,
+  color: string,
+  onClick: () => void,
+  kind: 'base' | 'start' = 'base'
+) {
+  const width = kind === 'start' ? HUD.START_W : HUD.BTN_W;
+  const height = kind === 'start' ? HUD.START_H : HUD.BTN_H;
+  const fontSize = kind === 'start' ? HUD.START_FONT : HUD.BTN_FONT;
+  const texture = kind === 'start' ? 'button_start' : 'button_base';
   const base = this.add.image(x, y, texture)
     .setInteractive({ useHandCursor: true })
     .setDisplaySize(width, height)
@@ -1303,57 +1295,55 @@ private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
   bg.setDisplaySize(1920, 1080);
 
-  const profileX = 56;
-  const profileY = 24;
-  this.add.image(profileX, profileY, 'profile_frame')
+  this.add.image(L.profileX, L.profileY, 'profile_frame')
     .setOrigin(0, 0)
-    .setDisplaySize(420, 128)
+    .setDisplaySize(HUD.PROFILE_W, HUD.PROFILE_H)
     .setDepth(5);
 
-  this.playerLevelText = this.add.text(profileX + 24, profileY + 18, 'LVL 1', {
-    fontSize: '32px', fill: '#5ee7ff', fontStyle: 'bold'
+  this.playerLevelText = this.add.text(L.profileX + 28, L.profileY + 36, 'LVL 1', {
+    fontSize: '34px', fill: HUD.color.accent, fontStyle: 'bold'
   }).setDepth(12);
 
-  this.playerStatsText = this.add.text(profileX + 24, profileY + 62, 'XP 0/90  •  W:0 L:0', {
-    fontSize: '18px', fill: '#a8d8e8'
+  this.playerStatsText = this.add.text(L.profileX + 28, L.profileY + 92, 'XP 0/90  •  W:0 L:0', {
+    fontSize: HUD.BODY, fill: HUD.color.text
   }).setDepth(12);
 
-  const progressBg = this.add.rectangle(profileX + 24, profileY + 96, 368, 12, 0x112233)
+  const progressBg = this.add.rectangle(L.profileX + 28, L.profileY + 148, 380, 12, 0x112233)
     .setStrokeStyle(2, 0x2ec7d6).setOrigin(0, 0).setDepth(8);
-  const progressBar = this.add.rectangle(profileX + 24, profileY + 96, 0, 12, 0x5dffb0)
+  const progressBar = this.add.rectangle(L.profileX + 28, L.profileY + 148, 0, 12, 0x5dffb0)
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-  const logo = this.add.image(960, 22, 'logo').setOrigin(0.5, 0).setDepth(15);
-  logo.setScale(Math.min(72 / logo.height, 260 / logo.width));
+  const logo = this.add.image(1640, 36, 'logo').setOrigin(0.5, 0).setDepth(15);
+  logo.setScale(Math.min(56 / logo.height, 220 / logo.width));
 
-  this.add.text(L.leftX, 176, 'SHOP', {
-    fontSize: '16px', fill: '#8aa0b8', fontStyle: 'bold'
+  this.add.text(L.leftX, 276, 'SHOP', {
+    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
 
-  const teamWidth = 4 * L.teamSlot + 3 * L.teamGap;
+  const teamWidth = 4 * HUD.TEAM + 3 * HUD.GAP;
   const teamStartX = L.teamCenterX - teamWidth / 2;
 
-  this.addHudButton(L.teamCenterX - 130, 184, 'AUTO SELECT', '#5dffb0', 220, 44, '18px', () => this.autoSelectTeam());
-  this.addHudButton(L.teamCenterX + 130, 184, 'CLEAR TEAM', '#ff6b7d', 220, 44, '18px', () => this.clearTeam());
+  this.addHudButton(648, 139, 'AUTO SELECT', HUD.color.good, () => this.autoSelectTeam());
+  this.addHudButton(924, 139, 'CLEAR TEAM', HUD.color.bad, () => this.clearTeam());
 
-  this.add.text(L.teamCenterX, 228, 'YOUR FLEET', {
-    fontSize: '16px', fill: '#8aa0b8', fontStyle: 'bold'
+  this.add.text(L.teamCenterX, 276, 'YOUR FLEET', {
+    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const x = teamStartX + col * (L.teamSlot + L.teamGap);
-    const y = L.teamStartY + row * (L.teamSlot + L.teamGap);
+    const x = teamStartX + col * (HUD.TEAM + HUD.GAP);
+    const y = L.teamStartY + row * (HUD.TEAM + HUD.GAP);
 
-    this.add.rectangle(x, y, L.teamSlot - 8, L.teamSlot - 8, 0x0a1122).setDepth(1);
+    this.add.rectangle(x, y, HUD.TEAM - 8, HUD.TEAM - 8, 0x0a1122).setDepth(1);
     const slot = this.add.image(x, y, 'slot_team')
       .setInteractive()
-      .setDisplaySize(L.teamSlot, L.teamSlot)
+      .setDisplaySize(HUD.TEAM, HUD.TEAM)
       .setDepth(10);
     this.gridSlots.push(slot);
     this.addButtonEffects(slot);
@@ -1368,57 +1358,57 @@ private addGameUI() {
     .setDisplaySize(1920, 1080)
     .setDepth(200);
 
-  this.teamCounterText = this.add.text(L.teamCenterX, 524, 'TEAM: 0/8', {
-    fontSize: '22px', fill: '#ffe566', fontStyle: 'bold'
+  this.teamCounterText = this.add.text(L.teamCenterX, 572, 'TEAM: 0/8', {
+    fontSize: '22px', fill: HUD.color.warn, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
-  this.add.text(L.teamCenterX, 556, 'RELICS', {
-    fontSize: '16px', fill: '#8aa0b8', fontStyle: 'bold'
+  this.add.text(L.teamCenterX, 604, 'RELICS', {
+    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
-  this.rerollsLeftText = this.add.text(L.leftX, 444, 'Rerolls available', {
-    fontSize: '16px', fill: '#d08cff'
+  this.rerollsLeftText = this.add.text(L.leftX, 578, 'Rerolls available', {
+    fontSize: HUD.SMALL, fill: '#d08cff'
   }).setOrigin(0.5).setDepth(12);
 
-  this.buysLeftText = this.add.text(L.leftX, 584, 'Buys left: 10/10', {
-    fontSize: '16px', fill: '#a8d8e8'
+  this.buysLeftText = this.add.text(L.leftX, 816, 'Buys left: 10/10', {
+    fontSize: HUD.SMALL, fill: HUD.color.text
   }).setOrigin(0.5).setDepth(12);
 
   this.equippedSlotRects = [];
-  const relicWidth = 3 * L.relicSlot + 2 * L.relicGap;
+  const relicWidth = 3 * HUD.RELIC + 2 * HUD.GAP;
   const relicStartX = L.teamCenterX - relicWidth / 2;
   for (let i = 0; i < 3; i++) {
-    const x = relicStartX + i * (L.relicSlot + L.relicGap);
+    const x = relicStartX + i * (HUD.RELIC + HUD.GAP);
     const slot = this.add.image(x, L.relicY, 'slot_equipped')
-      .setDisplaySize(L.relicSlot, L.relicSlot)
+      .setDisplaySize(HUD.RELIC, HUD.RELIC)
       .setDepth(10);
     this.equippedSlotRects.push(slot);
   }
 
-  this.addHudButton(L.leftX, 410, 'REROLL SHOP', '#e080ff', 300, 48, '20px', () => this.rerollShop());
-  this.addHudButton(L.leftX, 488, 'BUY SHIP', '#5ee7ff', 300, 48, '20px', () => this.buyUnit());
-  this.addHudButton(L.leftX, 548, 'GENERATE 10 SHIPS', '#5ee7ff', 300, 48, '18px', () => this.generateTenShips());
-  this.addHudButton(L.leftX, 640, 'COLLECTION', '#ffe566', 300, 48, '20px', () => this.openCollectionScene());
+  this.addHudButton(L.leftX, 516, 'REROLL SHOP', '#e080ff', () => this.rerollShop());
+  this.addHudButton(L.leftX, 636, 'BUY SHIP', HUD.color.accent, () => this.buyUnit());
+  this.addHudButton(L.leftX, 752, 'GENERATE 10', HUD.color.accent, () => this.generateTenShips());
+  this.addHudButton(L.leftX, 876, 'COLLECTION', HUD.color.warn, () => this.openCollectionScene());
 
-  this.addHudButton(960, 980, 'START BATTLE', '#ffe8e8', 420, 76, '30px', () => this.startBattle(), 'button_start');
+  this.addHudButton(L.startX, L.startY, 'START BATTLE', HUD.color.text, () => this.startBattle(), 'start');
 
   this.aiGridSlots = [];
-  const aiWidth = 4 * L.aiSlot + 3 * L.aiGap;
+  const aiWidth = 4 * HUD.AI + 3 * HUD.GAP;
   const aiStartX = L.aiCenterX - aiWidth / 2;
 
-  this.add.text(L.aiCenterX, 184, 'ENEMY FLEET', {
-    fontSize: '16px', fill: '#8aa0b8', fontStyle: 'bold'
+  this.add.text(L.aiCenterX, 276, 'ENEMY FLEET', {
+    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const x = aiStartX + col * (L.aiSlot + L.aiGap);
-    const y = L.aiStartY + row * (L.aiSlot + L.aiGap);
-    this.add.rectangle(x, y, L.aiSlot - 6, L.aiSlot - 6, 0x0a1122).setDepth(1);
+    const x = aiStartX + col * (HUD.AI + HUD.GAP);
+    const y = L.aiStartY + row * (HUD.AI + HUD.GAP);
+    this.add.rectangle(x, y, HUD.AI - 6, HUD.AI - 6, 0x0a1122).setDepth(1);
     const slot = this.add.image(x, y, 'slot_ai')
       .setInteractive()
-      .setDisplaySize(L.aiSlot, L.aiSlot)
+      .setDisplaySize(HUD.AI, HUD.AI)
       .setDepth(10);
     this.aiGridSlots.push(slot);
     this.addButtonEffects(slot);
