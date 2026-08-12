@@ -5,9 +5,9 @@ import "./StarForgeBattleLibrary.sol";
 import "./StarForgeUnitNFT.sol";
 import "./StarForgeRelic.sol";
 import "./StarForgePlayerProfile.sol";
-import "@openzeppelin/contracts@4.9.3/access/Ownable.sol";
-import "@openzeppelin/contracts@4.9.3/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts@4.9.3/security/Pausable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     using StarForgeBattleLibrary for *;

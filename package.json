@@ -1,0 +1,17 @@
+{
+  "name": "somnia-starforge",
+  "private": true,
+  "version": "1.6.3",
+  "description": "Somnia StarForge — on-chain auto-battler contracts and Hardhat deploy tools",
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network somniaTestnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network somniaMainnet"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^4.9.3",
+    "dotenv": "^16.4.7",
+    "hardhat": "^2.22.18"
+  }
+}
