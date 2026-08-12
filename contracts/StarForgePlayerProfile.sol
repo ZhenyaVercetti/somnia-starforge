@@ -35,8 +35,14 @@ contract StarForgePlayerProfile is Ownable, AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
+    uint256 public constant DAILY_BUY_LIMIT = 10;
+
     function setGameContract(address gameContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _grantRole(GAME_ROLE, gameContract);
+    }
+
+    function revokeGameRole(address gameContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(GAME_ROLE, gameContract);
     }
 
     // ==================== PROFILE ====================
@@ -70,7 +76,6 @@ contract StarForgePlayerProfile is Ownable, AccessControl {
             profile.xp += 10;
         }
 
-        // Level up
         uint32 xpNeeded = uint32(profile.level) * 55 + 90;
         while (profile.xp >= xpNeeded) {
             profile.level += 1;
@@ -119,17 +124,12 @@ contract StarForgePlayerProfile is Ownable, AccessControl {
         uint256 lastDay = lastResetTimestamp[player] / 86400;
 
         if (currentDay > lastDay) {
-            // Лимит сброшен
-            uint16 level = profiles[player].level;
-            if (level == 0) level = 1;
-            return 10 + uint256(level - 1); // базовые 10 + 1 за каждый уровень
-        } else {
-            uint16 level = profiles[player].level;
-            if (level == 0) level = 1;
-            uint256 maxBuys = 10 + uint256(level - 1);
-            if (dailyBuysUsed[player] >= maxBuys) return 0;
-            return maxBuys - dailyBuysUsed[player];
+            return DAILY_BUY_LIMIT;
         }
+        if (dailyBuysUsed[player] >= DAILY_BUY_LIMIT) {
+            return 0;
+        }
+        return DAILY_BUY_LIMIT - dailyBuysUsed[player];
     }
 
     function canReroll(address player) external view returns (bool) {

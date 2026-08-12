@@ -27,6 +27,9 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     mapping(address => BattleSummary) public lastBattleSummary;
+    mapping(address => uint16) public freeShipsGranted;
+
+    uint256 public constant DAILY_PAID_BUY_LIMIT = 10;
 
     // ==================== PRICES ====================
 
@@ -39,6 +42,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     event BattleResolved(bytes32 indexed battleId, address indexed player, bool playerWon, uint16[] playerMaxHp, uint16[] aiMaxHp);
     event BattleEventEmitted(bytes32 indexed battleId, uint8 round, bool isPlayerSide, uint8 attackerIndex, uint8 targetIndex, uint16 damage, uint16 remainingHp, uint8 specialEffect);
     event RelicsEquipped(address indexed player, uint256[3] relics);
+    event LevelUpShipsGranted(address indexed player, uint16 count, uint256[] tokenIds);
 
     // ==================== STRUCTS ====================
 
@@ -118,71 +122,20 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     function buyUnit() external payable whenNotPaused nonReentrant {
         playerProfileContract.createProfile(msg.sender);
-        
-        // Проверка лимита
-        uint256 remaining = playerProfileContract.getRemainingBuys(msg.sender);
-        require(remaining > 0, "Daily buy limit reached");
-
+        require(_remainingPaidBuys(msg.sender) > 0, "Daily buy limit reached");
         require(msg.value >= buyUnitPrice, "Insufficient payment");
 
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao)));
-
-        uint8 atk = uint8(10 + (seed % 11));
-        uint8 def = uint8(8 + ((seed >> 8) % 11));
-        uint8 spd = uint8(9 + ((seed >> 16) % 11));
-
-        uint8 faction = uint8((seed >> 24) % 3);
-        uint8 unitClass = uint8((seed >> 32) % 4);
-        uint8 rarity = _getWeightedRarity(seed);
-
-        uint256 tokenId = unitNFT.mintUnit(
-            msg.sender,
-            StarForgeUnitNFT.Faction(faction),
-            StarForgeUnitNFT.Rarity(rarity),
-            StarForgeUnitNFT.UnitClass(unitClass),
-            atk,
-            def,
-            spd
-        );
-
-        playerProfileContract.addUnit(msg.sender, tokenId);
+        _mintRandomUnit(msg.sender, 0);
         playerProfileContract.useBuy(msg.sender);
     }
 
     function generateTenShips() external payable whenNotPaused nonReentrant {
         playerProfileContract.createProfile(msg.sender);
-        
-        uint256 remaining = playerProfileContract.getRemainingBuys(msg.sender);
-        require(remaining >= 10, "Not enough daily buys remaining");
+        require(_remainingPaidBuys(msg.sender) >= DAILY_PAID_BUY_LIMIT, "Not enough daily buys remaining");
+        require(msg.value >= buyUnitPrice * DAILY_PAID_BUY_LIMIT, "Insufficient payment for 10 ships");
 
-        require(msg.value >= buyUnitPrice * 10, "Insufficient payment for 10 ships");
-
-        for (uint256 i = 0; i < 10; i++) {
-            uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, i)));
-
-            uint8 atk = uint8(10 + (seed % 11));
-            uint8 def = uint8(8 + ((seed >> 8) % 11));
-            uint8 spd = uint8(9 + ((seed >> 16) % 11));
-
-            uint8 faction = uint8((seed >> 24) % 3);
-            uint8 unitClass = uint8((seed >> 32) % 4);
-            uint8 rarity = _getWeightedRarity(seed);
-
-            uint256 tokenId = unitNFT.mintUnit(
-                msg.sender,
-                StarForgeUnitNFT.Faction(faction),
-                StarForgeUnitNFT.Rarity(rarity),
-                StarForgeUnitNFT.UnitClass(unitClass),
-                atk,
-                def,
-                spd
-            );
-
-            playerProfileContract.addUnit(msg.sender, tokenId);
-        }
-
-        // Используем 10 покупок
-        for (uint256 i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < DAILY_PAID_BUY_LIMIT; i++) {
+            _mintRandomUnit(msg.sender, i);
             playerProfileContract.useBuy(msg.sender);
         }
     }
@@ -352,6 +305,14 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         }
 
         playerProfileContract.updateAfterBattle(msg.sender, result.playerWon);
+        _grantPendingLevelUpShips(msg.sender);
+    }
+
+    function claimLevelUpShips() external whenNotPaused nonReentrant {
+        playerProfileContract.createProfile(msg.sender);
+        uint16 pending = pendingLevelUpShips(msg.sender);
+        require(pending > 0, "No level-up ships to claim");
+        _grantPendingLevelUpShips(msg.sender);
     }
 
     // ==================== VIEW FUNCTIONS ====================
@@ -396,7 +357,20 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     function getRemainingBuys(address player) external view returns (uint256) {
-        return playerProfileContract.getRemainingBuys(player);
+        return _remainingPaidBuys(player);
+    }
+
+    function pendingLevelUpShips(address player) public view returns (uint16) {
+        uint16 level = playerProfileContract.getProfile(player).level;
+        if (level <= 1) {
+            return 0;
+        }
+        uint16 entitled = level - 1;
+        uint16 granted = freeShipsGranted[player];
+        if (entitled <= granted) {
+            return 0;
+        }
+        return entitled - granted;
     }
 
     function canReroll(address player) external view returns (bool) {
@@ -416,6 +390,55 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         uint8 relicType = uint8(seed % 6);
         uint8 value = uint8(8 + ((seed >> 8) % 13));
         return ShopItem(true, 0, 0, 0, 0, 0, 0, 0, relicType, value);
+    }
+
+    function _remainingPaidBuys(address player) internal view returns (uint256) {
+        uint256 currentDay = block.timestamp / 86400;
+        uint256 lastDay = playerProfileContract.lastResetTimestamp(player) / 86400;
+        uint256 used = currentDay > lastDay ? 0 : playerProfileContract.dailyBuysUsed(player);
+        if (used >= DAILY_PAID_BUY_LIMIT) {
+            return 0;
+        }
+        return DAILY_PAID_BUY_LIMIT - used;
+    }
+
+    function _mintRandomUnit(address to, uint256 salt) internal returns (uint256) {
+        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, to, block.prevrandao, salt)));
+
+        uint8 atk = uint8(10 + (seed % 11));
+        uint8 def = uint8(8 + ((seed >> 8) % 11));
+        uint8 spd = uint8(9 + ((seed >> 16) % 11));
+        uint8 faction = uint8((seed >> 24) % 3);
+        uint8 unitClass = uint8((seed >> 32) % 4);
+        uint8 rarity = _getWeightedRarity(seed);
+
+        uint256 tokenId = unitNFT.mintUnit(
+            to,
+            StarForgeUnitNFT.Faction(faction),
+            StarForgeUnitNFT.Rarity(rarity),
+            StarForgeUnitNFT.UnitClass(unitClass),
+            atk,
+            def,
+            spd
+        );
+
+        playerProfileContract.addUnit(to, tokenId);
+        return tokenId;
+    }
+
+    function _grantPendingLevelUpShips(address player) internal {
+        uint16 pending = pendingLevelUpShips(player);
+        if (pending == 0) {
+            return;
+        }
+
+        uint256[] memory tokenIds = new uint256[](pending);
+        for (uint16 i = 0; i < pending; i++) {
+            tokenIds[i] = _mintRandomUnit(player, 1000 + uint256(freeShipsGranted[player]) + uint256(i));
+        }
+
+        freeShipsGranted[player] += pending;
+        emit LevelUpShipsGranted(player, pending, tokenIds);
     }
 
     function clearPlayerData() external whenNotPaused {

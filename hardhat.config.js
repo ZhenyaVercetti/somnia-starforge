@@ -43,7 +43,10 @@ module.exports = {
       viaIR: true
     }
   },
-  defaultNetwork: "somniaTestnet",
+  defaultNetwork: "hardhat",
+  mocha: {
+    timeout: 180000
+  },
   networks: {
     hardhat: {
       chainId: 31337

@@ -23,15 +23,25 @@
  *   4. new StarForgeGame.setRelicContract(currentRelic)
  */
 
+const fs = require("fs");
+const path = require("path");
 const hre = require("hardhat");
 
-// DEPLOYMENT.md — single source of truth for current testnet addresses (20 May 2026).
+// DEPLOYMENT.md — single source of truth for current testnet addresses.
 const TESTNET_DEFAULTS = {
   unitNFT: "0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1",
   relic: "0x619e19df1975A8D289545834aAff3FEEf1b84909",
   playerProfile: "0x2C8976ECc9e9bDf939745ee61b1aD858607563d9",
-  currentGame: "0x05bcfA66B38259ea33B6986C1f04F028f0129a9F"
+  currentGame: "0xcc51dbf77d96b477485122BA2F6Ee6beBBA21B88"
 };
+
+const PREVIOUS_GAMES = [
+  "0x05bcfA66B38259ea33B6986C1f04F028f0129a9F",
+  "0x4628FC45cb2f28A198A4ebF1491791b2E12D92DA",
+  "0x6107dCb032ef91350e139563fDE7776E4ccd0fab",
+  "0xcc51dbf77d96b477485122BA2F6Ee6beBBA21B88",
+  "0xB0768AE07a84F8172424ED331c80525D1B4564de"
+];
 
 function requirePrivateKey() {
   const raw = process.env.PRIVATE_KEY;
@@ -59,7 +69,7 @@ function resolveAddress(label, envValue, testnetDefault) {
     throw new Error(`${label} is not a valid non-zero address: ${value}`);
   }
 
-  return hre.ethers.getAddress(value);
+  return hre.ethers.getAddress(value.toLowerCase());
 }
 
 async function requireOnChainContract(label, address) {
@@ -142,6 +152,26 @@ async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, player
     )
   );
 
+  const GAME_ROLE = hre.ethers.id("GAME_ROLE");
+  for (const oldGame of PREVIOUS_GAMES) {
+    const checksummed = hre.ethers.getAddress(oldGame.toLowerCase());
+    if (checksummed.toLowerCase() === newGame.toLowerCase()) {
+      continue;
+    }
+    const hasRole = await profileContract.hasRole(GAME_ROLE, checksummed);
+    if (!hasRole) {
+      continue;
+    }
+    completed.push(
+      await sendOwnerCall(
+        `StarForgePlayerProfile.revokeRole(GAME_ROLE, ${checksummed})`,
+        profileContract,
+        "revokeRole",
+        [GAME_ROLE, checksummed]
+      )
+    );
+  }
+
   return completed;
 }
 
@@ -162,10 +192,72 @@ function printLinkSummary(newGame, unitNFT, relic, playerProfile, currentGame, c
     console.log(`      ${step.hash}`);
   }
   console.log("");
-  console.log("Next:");
-  console.log("  - Update frontend/src/lib/contractAddresses.ts  GAME_ADDRESS = new Game");
-  console.log("  - DEPLOYMENT.md is updated only when you explicitly ask for the new text");
+  console.log("Address files updated:");
+  console.log("  - DEPLOYMENT.md");
+  console.log("  - frontend/src/lib/contractAddresses.ts");
   console.log("============================================================");
+}
+
+function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile) {
+  const today = new Date();
+  const months = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря"
+  ];
+  const dateLabel = `${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`;
+
+  const deployment = `# DEPLOYMENT.md
+**Актуально на ${dateLabel} — единственный источник правды по адресам**
+
+## Актуальные адреса (testnet)
+
+- **StarForgeUnitNFT**: \`${unitNFT}\`
+- **StarForgeRelic**: \`${relic}\`
+- **StarForgePlayerProfile**: \`${playerProfile}\`
+- **StarForgeGame** (новый): \`${newGame}\` ← **актуальный**
+
+## Порядок деплоя и связывания контрактов
+
+**При деплое нового StarForgeGame:**
+
+1. Деплоим **НОВЫЙ** \`StarForgeGame\` с параметрами:
+   - \`_unitNFT\` = \`${unitNFT}\`
+   - \`_relic\` = \`${relic}\`
+   - \`_playerProfile\` = \`${playerProfile}\`
+
+2. После деплоя выполняем:
+
+\`\`\`solidity
+// 1. NFT → новый Game
+StarForgeUnitNFT.setGameContract(${newGame})
+
+// 2. Relic → новый Game
+StarForgeRelic.setGameContract(${newGame})
+
+// 3. PlayerProfile → новый Game
+StarForgePlayerProfile.setGameContract(${newGame})
+\`\`\`
+`;
+
+  fs.writeFileSync(path.join(__dirname, "..", "DEPLOYMENT.md"), deployment, "utf8");
+
+  const addresses = `// frontend/src/lib/contractAddresses.ts
+// ЕДИНСТВЕННОЕ МЕСТО ДЛЯ АДРЕСОВ КОНТРАКТОВ (testnet)
+
+export const GAME_ADDRESS = '${newGame}' as const;
+export const NFT_ADDRESS = '${unitNFT}' as const;
+export const RELIC_ADDRESS = '${relic}' as const;
+export const PLAYER_PROFILE_ADDRESS = '${playerProfile}' as const;
+
+export const CHAIN_ID = 50312;
+export const RPC_URL = 'https://dream-rpc.somnia.network';
+`;
+
+  fs.writeFileSync(
+    path.join(__dirname, "..", "frontend", "src", "lib", "contractAddresses.ts"),
+    addresses,
+    "utf8"
+  );
 }
 
 async function main() {
@@ -260,6 +352,8 @@ async function main() {
     relic,
     playerProfile
   );
+
+  writeDeploymentFiles(newGame, unitNFT, relic, playerProfile);
 
   printLinkSummary(
     newGame,

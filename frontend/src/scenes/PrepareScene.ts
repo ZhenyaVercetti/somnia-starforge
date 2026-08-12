@@ -53,15 +53,7 @@ async init(data?: any) {
   this.isWalletReady = true;
   this.createContracts();
 
-// Always try to create profile (contract ignores if already exists)
-if (this.account && this.gameContract) {
-  try {
-    await this.sendGameTransaction('createProfile', [], 0n).catch(() => {});
-    console.log('Profile creation attempted');
-  } catch (e) {
-    console.error('Profile creation error:', e);
-  }
-}
+
 
   if (data?.addUnits && Array.isArray(data.addUnits)) {
     setTimeout(() => this.addMultipleUnitsToTeam(data.addUnits), 350);
@@ -350,6 +342,34 @@ const gameAbi = [
       "type": "tuple[3]"
     }],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+    "name": "getRemainingBuys",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+    "name": "canReroll",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
+    "name": "pendingLevelUpShips",
+    "outputs": [{ "internalType": "uint16", "name": "", "type": "uint16" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "claimLevelUpShips",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ];
@@ -1029,11 +1049,6 @@ private async updatePlayerProfile() {
     const xp = Number(profile.xp ?? 0);
     const wins = Number(profile.wins ?? 0);
     const losses = Number(profile.losses ?? 0);
-      if (this.buysLeftText) {
-    const maxBuys = 10 + (level - 1);
-    this.buysLeftText.setText(`Buys left: ${remainingBuys}/${maxBuys}`);
-  }
-
 
     if (this.playerLevelText) {
       this.playerLevelText.setText(`LVL ${level}`);
@@ -1049,17 +1064,22 @@ private async updatePlayerProfile() {
   } catch (e) {
     console.error('updatePlayerProfile error:', e);
   }
+
   try {
-  const remainingBuys = await this.gameContract.read.getRemainingBuys([this.account]);
-  const canReroll = await this.gameContract.read.canReroll([this.account]);
-  
-  
-  if (this.rerollsLeftText) {
-    this.rerollsLeftText.setText(canReroll ? 'Rerolls: 2/2' : 'Rerolls: 0/2');
+    const remainingBuys = await this.gameContract.read.getRemainingBuys([this.account]);
+    const canReroll = await this.gameContract.read.canReroll([this.account]);
+    const remainingNumber = this.safeBigIntToNumber(remainingBuys);
+
+    if (this.buysLeftText) {
+      this.buysLeftText.setText(`Buys left: ${remainingNumber}/10`);
+    }
+
+    if (this.rerollsLeftText) {
+      this.rerollsLeftText.setText(canReroll ? 'Rerolls available' : 'Rerolls: 0/2');
+    }
+  } catch (e) {
+    console.error('Failed to load limits', e);
   }
-} catch (e) {
-  console.error('Failed to load limits', e);
-}
 
 }
 
