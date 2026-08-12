@@ -426,13 +426,13 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private createSpeedButton() {
-    this.speedBtnBase = this.add.image(1820, 55, 'button_base')
-      .setDisplaySize(78, 48)
+    this.speedBtnBase = this.add.image(1848, 48, 'button_base')
+      .setDisplaySize(88, 44)
       .setInteractive({ useHandCursor: true })
       .setDepth(910)
       .setScrollFactor(0);
 
-    this.speedBtnText = this.add.text(1820, 55, 'x2', {
+    this.speedBtnText = this.add.text(1848, 48, 'x2', {
       fontSize: '26px',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -1055,9 +1055,9 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private setupBattleLog() {
-    this.logContainer = this.add.container(960, 918).setDepth(880).setScrollFactor(0);
-    this.logTitle = this.add.text(960, 888, 'BATTLE LOG', {
-      fontSize: '20px',
+    this.logContainer = this.add.container(960, 948).setDepth(880).setScrollFactor(0);
+    this.logTitle = this.add.text(960, 922, 'BATTLE LOG', {
+      fontSize: '16px',
       color: '#f6e27a',
       fontStyle: 'bold',
       stroke: '#1a1020',
@@ -1089,40 +1089,40 @@ export default class BattleScene extends Phaser.Scene {
   private addToLog(text: string, color = '#d0d0ff') {
     this.fullBattleLog.push(text);
     const logText = this.add.text(0, 0, text, {
-      fontSize: '16px',
+      fontSize: '15px',
       color,
       fontStyle: 'bold',
       stroke: '#0a0612',
       strokeThickness: 3,
-      wordWrap: { width: 1480 },
+      wordWrap: { width: 1400 },
       align: 'center'
     }).setOrigin(0.5, 0).setDepth(882);
 
     this.battleLogTexts.unshift(logText);
     this.logContainer?.add(logText);
     this.battleLogTexts.forEach((entry, index) => {
-      entry.y = index * 24;
-      entry.setAlpha(1 - index * 0.12);
+      entry.y = index * 22;
+      entry.setAlpha(1 - index * 0.16);
     });
 
-    if (this.battleLogTexts.length > 6) {
+    if (this.battleLogTexts.length > 4) {
       const old = this.battleLogTexts.pop();
       old?.destroy();
     }
   }
 
   private showEmptyState() {
-    this.add.text(960, 300, 'NO BATTLE DATA FROM CONTRACT', {
+    this.add.text(960, 420, 'NO BATTLE DATA FROM CONTRACT', {
       fontSize: '32px',
       color: '#ff4444',
       fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(920);
 
-    const backBtn = this.add.image(960, 400, 'button_base')
-      .setDisplaySize(280, 52)
+    const backBtn = this.add.image(960, 520, 'button_base')
+      .setDisplaySize(300, 52)
       .setInteractive({ useHandCursor: true })
       .setDepth(920);
-    this.add.text(960, 400, 'BACK TO PREPARE', {
+    this.add.text(960, 520, 'BACK TO PREPARE', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold'
@@ -1167,12 +1167,12 @@ export default class BattleScene extends Phaser.Scene {
       .setScrollFactor(0);
     this.tweens.add({ targets: veil, alpha: 0.35, duration: 500 });
 
-    const result = this.add.text(960, 120, title, {
-      fontSize: '92px',
+    const result = this.add.text(960, 86, title, {
+      fontSize: '72px',
       color,
       fontStyle: 'bold',
       stroke: '#120818',
-      strokeThickness: 10
+      strokeThickness: 8
     }).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0).setScale(0.6);
 
     this.tweens.add({
@@ -1183,8 +1183,8 @@ export default class BattleScene extends Phaser.Scene {
       ease: 'Back.easeOut'
     });
 
-    const glow = this.add.image(960, 120, 'energy_ring')
-      .setScale(1.6)
+    const glow = this.add.image(960, 86, 'energy_ring')
+      .setScale(1.25)
       .setTint(this.playerWon ? 0x3dff9a : 0xff3355)
       .setAlpha(0)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -1192,13 +1192,13 @@ export default class BattleScene extends Phaser.Scene {
       .setScrollFactor(0);
     this.tweens.add({ targets: glow, alpha: 0.45, duration: 500, yoyo: true, repeat: 2 });
 
-    const btn = this.add.image(960, 230, 'button_base')
-      .setDisplaySize(320, 58)
+    const btn = this.add.image(960, 980, 'button_base')
+      .setDisplaySize(300, 52)
       .setInteractive({ useHandCursor: true })
       .setDepth(941)
       .setScrollFactor(0)
       .setAlpha(0);
-    const btnText = this.add.text(960, 230, 'GO BACK', {
+    const btnText = this.add.text(960, 980, 'GO BACK', {
       fontSize: '26px',
       color: '#ffffff',
       fontStyle: 'bold'

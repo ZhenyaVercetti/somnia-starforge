@@ -21,7 +21,7 @@ export default class BootScene extends Phaser.Scene {
     this.createParallaxBackground();
 
     // === ЛОГОТИП в самом верху по центру (отступ 30px) ===
-    this.add.image(955, 30, 'logo')
+    this.add.image(960, 32, 'logo')
       .setOrigin(0.5, 0)
       .setDepth(10);
 

@@ -9,17 +9,18 @@ export default class WalletSelectScene extends Phaser.Scene {
   create() {
     this.add.rectangle(960, 540, 1920, 1080, 0x0a0022);
 
-    this.add.text(960, 400, 'ПОДКЛЮЧИТЬ КОШЕЛЁК', {
-      fontSize: '48px',
-      color: '#00ffff',
-    }).setOrigin(0.5).setInteractive().on('pointerdown', () => {
+    this.add.text(960, 360, 'CONNECT WALLET', {
+      fontSize: '40px',
+      color: '#5ee7ff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       (window as any).openWalletModal();
     });
 
-    this.add.text(960, 700, '← НАЗАД', {
-      fontSize: '28px',
-      color: '#888888',
-    }).setOrigin(0.5).setInteractive().on('pointerdown', () => {
+    this.add.text(960, 720, 'BACK', {
+      fontSize: '22px',
+      color: '#8aa0b8'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       this.scene.start('BootScene');
     });
   }

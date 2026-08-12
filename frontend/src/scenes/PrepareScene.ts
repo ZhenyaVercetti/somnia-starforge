@@ -632,10 +632,10 @@ private async loadPlayerShop() {
 
     this.shopContainer = this.add.container(0, 0);
 
-    const shopCenterX = 340;
-    const shopY = 560;
-    const shopSlotSize = 128;
-    const shopSpacing = 48;
+    const shopCenterX = 248;
+    const shopY = 230;
+    const shopSlotSize = 104;
+    const shopSpacing = 20;
     const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
     const shopStartX = shopCenterX - shopTotalWidth / 2;
 
@@ -644,12 +644,12 @@ private async loadPlayerShop() {
       const x = shopStartX + i * (shopSlotSize + shopSpacing);
       const y = shopY;
 
-      const bg = this.add.rectangle(x, y, 120, 120, 0x0a1122).setDepth(1);
+      const bg = this.add.rectangle(x, y, 96, 96, 0x0a1122).setDepth(1);
       this.shopContainer.add(bg);
 
       const slotImage = this.add.image(x, y, 'slot_shop')
         .setInteractive()
-        .setDisplaySize(128, 128)
+        .setDisplaySize(104, 104)
         .setDepth(10);
       this.shopContainer.add(slotImage);
 
@@ -678,15 +678,16 @@ private async loadPlayerShop() {
       this.shopContainer.add(sprite);
       this.shopSprites.push(sprite);
 
-      const nameText = this.add.text(x, y + 85, displayName, {
-        fontSize: '18px', fill: '#ffff00', align: 'center', wordWrap: { width: 120 }
+      const nameText = this.add.text(x, y + 66, displayName, {
+        fontSize: '14px', fill: '#ffe566', align: 'center', wordWrap: { width: 100 }
       }).setOrigin(0.5);
       this.shopContainer.add(nameText);
       this.shopTexts.push(nameText);
 
-      const buyBtn = this.add.text(x - 28, y + 115, 'BUY', {
-        fontSize: '26px', fill: '#00ff00'
+      const buyBtn = this.add.text(x, y + 88, 'BUY', {
+        fontSize: '16px', fill: '#5dffb0', fontStyle: 'bold'
       })
+        .setOrigin(0.5)
         .setInteractive()
         .on('pointerdown', () => this.buyFromShopSlot(i));
       this.shopContainer.add(buyBtn);
@@ -893,7 +894,7 @@ private async loadCurrentAI() {
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
     if (!aiData || !Array.isArray(aiData) || aiData.length === 0) {
-      const placeholder = this.add.text(1590, 730, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
+      const placeholder = this.add.text(1648, 500, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
         fontSize: '18px', color: '#888888', align: 'center', fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(20);
       this.aiSprites.push(placeholder as any);
@@ -931,7 +932,7 @@ private async loadCurrentAI() {
 
   } catch (e) {
     console.error('loadCurrentAI error:', e);
-    const errorText = this.add.text(1590, 730, 'FAILED TO LOAD\nENEMY TEAM', {
+    const errorText = this.add.text(1648, 500, 'FAILED TO LOAD\nENEMY TEAM', {
       fontSize: '18px', color: '#ff4444', align: 'center'
     }).setOrigin(0.5).setDepth(20);
     this.aiSprites.push(errorText as any);
@@ -1142,14 +1143,14 @@ private async buyUnit() {
     const hash = await this.sendGameTransaction('buyUnit', [], 10000000000000000n); // 0.01 ETH
 
     console.log('✅ TX sent:', hash);
-    const waiting = this.add.text(600, 450, 'TX buyUnit sent... waiting for on-chain (3 sec)', { 
+    const waiting = this.add.text(960, 200, 'TX buyUnit sent... waiting for on-chain (3 sec)', { 
       fontSize: '36px', fill: '#ffff00' 
     }).setDepth(500);
 
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     waiting.destroy();
 
-    const msg = this.add.text(600, 450, 'Unit purchased on-chain!', { 
+    const msg = this.add.text(960, 200, 'Unit purchased on-chain!', { 
       fontSize: '48px', fill: '#00ff00' 
     }).setDepth(500);
     setTimeout(() => msg.destroy(), 2200);
@@ -1158,7 +1159,7 @@ private async buyUnit() {
   } catch (e: any) {
     console.error('❌ buyUnit error:', e);
     const errMsg = e.shortMessage || e.message || 'Unknown error';
-    const errorText = this.add.text(600, 450, `Error: ${errMsg}`, { 
+    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, { 
       fontSize: '36px', fill: '#ff4444' 
     }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
@@ -1178,7 +1179,7 @@ private async buyFromShopSlot(slot: number) {
 
     console.log('TX sent:', hash);
 
-    const waiting = this.add.text(600, 450, `TX buyFromShop [${slot}] sent... waiting for on-chain (3 sec)`, {
+    const waiting = this.add.text(960, 200, `TX buyFromShop [${slot}] sent... waiting for on-chain (3 sec)`, {
       fontSize: '36px', fill: '#ffff00'
     }).setDepth(500);
 
@@ -1197,7 +1198,7 @@ private async buyFromShopSlot(slot: number) {
       await collectionScene.loadCollectionData();
     }
 
-    const msg = this.add.text(600, 450, `Artifact purchased!`, {
+    const msg = this.add.text(960, 200, `Artifact purchased!`, {
       fontSize: '42px', fill: '#00ff00'
     }).setDepth(500);
     setTimeout(() => msg.destroy(), 1800);
@@ -1205,7 +1206,7 @@ private async buyFromShopSlot(slot: number) {
   } catch (e: any) {
     console.error('buyFromShopSlot error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
-    const errorText = this.add.text(600, 450, `Error: ${errMsg}`, {
+    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, {
       fontSize: '36px', fill: '#ff4444'
     }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
@@ -1224,7 +1225,7 @@ private async rerollShop() {
     const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n);
 
     console.log('TX sent:', hash);
-    const waiting = this.add.text(600, 510, 'TX reroll sent... waiting for on-chain (3 sec)', {
+    const waiting = this.add.text(960, 200, 'TX reroll sent... waiting for on-chain (3 sec)', {
       fontSize: '42px', fill: '#ffff00'
     }).setDepth(500);
 
@@ -1246,7 +1247,7 @@ private async rerollShop() {
     await this.loadCurrentAI();
     await this.updatePlayerProfile();
 
-    const msg = this.add.text(600, 510, 'Shop rerolled — new artifacts', {
+    const msg = this.add.text(960, 200, 'Shop rerolled — new artifacts', {
       fontSize: '42px', fill: '#00ff00'
     }).setDepth(500);
     setTimeout(() => msg.destroy(), 1800);
@@ -1254,7 +1255,7 @@ private async rerollShop() {
   } catch (e: any) {
     console.error('rerollShop error:', e);
     const errMsg = e.shortMessage || e.message || 'Reroll error';
-    const errorText = this.add.text(600, 510, `Error: ${errMsg}`, {
+    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, {
       fontSize: '36px', fill: '#ff4444'
     }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);
@@ -1266,48 +1267,47 @@ private addGameUI() {
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
   bg.setDisplaySize(1920, 1080);
 
-  const profileX = 45;
-  const profileY = 28;
+  const profileX = 48;
+  const profileY = 32;
 
   const profileFrame = this.add.image(profileX, profileY, 'profile_frame')
     .setOrigin(0, 0)
-    .setDisplaySize(520, 180)
+    .setDisplaySize(460, 140)
     .setDepth(5);
 
-  this.playerLevelText = this.add.text(profileX + 32, profileY + 26, 'Level 1', {
-    fontSize: '46px', fill: '#00ffff', fontStyle: 'bold'
+  this.playerLevelText = this.add.text(profileX + 28, profileY + 22, 'LVL 1', {
+    fontSize: '36px', fill: '#5ee7ff', fontStyle: 'bold'
   }).setDepth(10);
 
-  this.playerStatsText = this.add.text(profileX + 32, profileY + 84, 'XP 0/90  •  W:0 L:0', {
-    fontSize: '23px', fill: '#aaffff'
+  this.playerStatsText = this.add.text(profileX + 28, profileY + 70, 'XP 0/90  •  W:0 L:0', {
+    fontSize: '20px', fill: '#a8d8e8'
   }).setDepth(10);
 
-  const progressBg = this.add.rectangle(profileX + 32, profileY + 122, 454, 16, 0x112233)
-    .setStrokeStyle(2, 0x00ffff).setOrigin(0, 0).setDepth(8);
+  const progressBg = this.add.rectangle(profileX + 28, profileY + 106, 400, 12, 0x112233)
+    .setStrokeStyle(2, 0x2ec7d6).setOrigin(0, 0).setDepth(8);
 
-  const progressBar = this.add.rectangle(profileX + 32, profileY + 122, 0, 16, 0x00ff88)
+  const progressBar = this.add.rectangle(profileX + 28, profileY + 106, 0, 12, 0x5dffb0)
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-  const logo = this.add.image(950, 45, 'logo')
+  const logo = this.add.image(960, 28, 'logo')
     .setOrigin(0.5, 0)
     .setDepth(15);
-
-  const logoScale = 240 / logo.height;
+  const logoScale = Math.min(88 / logo.height, 280 / logo.width);
   logo.setScale(logoScale);
 
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
 
-  const teamCenterX = 1020;
-  const teamCenterY = 620;
-  const slotSize = 142;
-  const hSpacing = 23;
-  const vSpacing = 23;
+  const teamCenterX = 960;
+  const teamCenterY = 400;
+  const slotSize = 128;
+  const hSpacing = 16;
+  const vSpacing = 16;
   const totalWidth = 4 * slotSize + 3 * hSpacing;
   const totalHeight = 2 * slotSize + vSpacing;
   const teamStartX = teamCenterX - totalWidth / 2;
-  const teamStartY = teamCenterY - totalHeight / 2;
+  const teamStartY = 258;
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
@@ -1326,7 +1326,7 @@ private addGameUI() {
     this.addButtonEffects(slot);
 
     slot.on('pointerover', () => {
-      this.showTooltip(slot.x + 80, slot.y - 65, "Select a ship in your collection");
+      this.showTooltip(slot.x + 80, slot.y - 65, 'Select a ship in your collection');
     });
 
     slot.on('pointerout', () => {
@@ -1342,113 +1342,121 @@ private addGameUI() {
     .setDisplaySize(1920, 1080)
     .setDepth(200);
 
-  this.teamCounterText = this.add.text(940, 730, 'TEAM: 0/8', {
-    fontSize: '38px', fill: '#ffff00'
-  }).setOrigin(0.5);
+  this.teamCounterText = this.add.text(teamCenterX, 556, 'TEAM: 0/8', {
+    fontSize: '26px', fill: '#ffe566', fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(12);
 
-  this.buysLeftText = this.add.text(285, 680, 'Buys left: 10/11', {
-  fontSize: '20px', fill: '#aaffff'
-}).setOrigin(0.5);
+  this.add.text(teamCenterX, 588, 'RELICS', {
+    fontSize: '16px', fill: '#8aa0b8', fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(12);
 
-this.rerollsLeftText = this.add.text(285, 480, 'Rerolls: 2/2', {
-  fontSize: '20px', fill: '#ff88ff'
-}).setOrigin(0.5);
+  const leftX = 248;
+
+  this.rerollsLeftText = this.add.text(leftX, 418, 'Rerolls available', {
+    fontSize: '18px', fill: '#d08cff'
+  }).setOrigin(0.5).setDepth(12);
+
+  this.buysLeftText = this.add.text(leftX, 576, 'Buys left: 10/10', {
+    fontSize: '18px', fill: '#a8d8e8'
+  }).setOrigin(0.5).setDepth(12);
 
   this.equippedSlotRects = [];
-  const equippedY = teamCenterY + totalHeight / 2 + 80;
-  const equippedTotalWidth = 3 * 128 + 2 * 40;
+  const equippedY = 668;
+  const equippedSize = 108;
+  const equippedGap = 24;
+  const equippedTotalWidth = 3 * equippedSize + 2 * equippedGap;
   const equippedStartX = teamCenterX - equippedTotalWidth / 2;
 
   for (let i = 0; i < 3; i++) {
-    const x = equippedStartX + i * (128 + 40);
+    const x = equippedStartX + i * (equippedSize + equippedGap);
     const slot = this.add.image(x, equippedY, 'slot_equipped')
-      .setDisplaySize(128, 128)
+      .setDisplaySize(equippedSize, equippedSize)
       .setDepth(10);
     this.equippedSlotRects.push(slot);
   }
 
-  const btnAuto = this.add.image(790, 345, 'button_base')
+  const btnAuto = this.add.image(820, 210, 'button_base')
     .setInteractive()
-    .setDisplaySize(270, 70);
-  const textAuto = this.add.text(790, 345, 'AUTO SELECT', {
-    fontSize: '26px', fill: '#00ff88', fontStyle: 'bold'
+    .setDisplaySize(240, 48);
+  const textAuto = this.add.text(820, 210, 'AUTO SELECT', {
+    fontSize: '20px', fill: '#5dffb0', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnAuto as any).linkedText = textAuto;
   btnAuto.on('pointerdown', () => this.autoSelectTeam());
   this.addButtonEffects(btnAuto);
 
-  const btnClear = this.add.image(1100, 345, 'button_base')
+  const btnClear = this.add.image(1100, 210, 'button_base')
     .setInteractive()
-    .setDisplaySize(270, 70);
-  const textClear = this.add.text(1100, 345, 'CLEAR TEAM', {
-    fontSize: '26px', fill: '#ff6666', fontStyle: 'bold'
+    .setDisplaySize(240, 48);
+  const textClear = this.add.text(1100, 210, 'CLEAR TEAM', {
+    fontSize: '20px', fill: '#ff6b7d', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnClear as any).linkedText = textClear;
   btnClear.on('pointerdown', () => this.clearTeam());
   this.addButtonEffects(btnClear);
 
-  const btnReroll = this.add.image(285, 445, 'button_base')
+  const btnReroll = this.add.image(leftX, 380, 'button_base')
     .setInteractive()
-    .setDisplaySize(270, 70);
-  const textReroll = this.add.text(285, 445, 'REROLL SHOP', {
-    fontSize: '26px', fill: '#ff00ff', fontStyle: 'bold'
+    .setDisplaySize(320, 52);
+  const textReroll = this.add.text(leftX, 380, 'REROLL SHOP', {
+    fontSize: '22px', fill: '#e080ff', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnReroll as any).linkedText = textReroll;
   btnReroll.on('pointerdown', () => this.rerollShop());
   this.addButtonEffects(btnReroll);
 
-  const btnCollection = this.add.image(285, 900, 'button_base')
+  const btnBuy = this.add.image(leftX, 468, 'button_base')
     .setInteractive()
-    .setDisplaySize(270, 70);
-  const textCollection = this.add.text(285, 900, 'Collection', {
-    fontSize: '26px', fill: '#ffff00', fontStyle: 'bold'
-  }).setOrigin(0.5);
-  (btnCollection as any).linkedText = textCollection;
-  btnCollection.on('pointerdown', () => this.openCollectionScene());
-  this.addButtonEffects(btnCollection);
-
-  const btnBuy = this.add.image(285, 805, 'button_base')
-    .setInteractive()
-    .setDisplaySize(270, 70);
-  const textBuy = this.add.text(285, 805, 'BUY (FREE)', {
-    fontSize: '26px', fill: '#00ffff', fontStyle: 'bold'
+    .setDisplaySize(320, 52);
+  const textBuy = this.add.text(leftX, 468, 'BUY SHIP', {
+    fontSize: '22px', fill: '#5ee7ff', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnBuy as any).linkedText = textBuy;
   btnBuy.on('pointerdown', () => this.buyUnit());
   this.addButtonEffects(btnBuy);
 
-  const btnGenerate = this.add.image(285, 720, 'button_base')
-  .setInteractive()
-  .setDisplaySize(270, 70);
-const textGenerate = this.add.text(285, 720, 'GENERATE 10 SHIPS', {
-  fontSize: '22px', fill: '#00ffff', fontStyle: 'bold'
-}).setOrigin(0.5);
-(btnGenerate as any).linkedText = textGenerate;
-btnGenerate.on('pointerdown', () => this.generateTenShips());
-this.addButtonEffects(btnGenerate);
-
-
-  const btnStart = this.add.image(1600, 900, 'button_start')
+  const btnGenerate = this.add.image(leftX, 532, 'button_base')
     .setInteractive()
-    .setDisplaySize(400, 90);
-  const textStart = this.add.text(1600, 900, '▶ START BATTLE', {
-    fontSize: '36px', fill: '#ff3333', fontStyle: 'bold'
+    .setDisplaySize(320, 52);
+  const textGenerate = this.add.text(leftX, 532, 'GENERATE 10 SHIPS', {
+    fontSize: '20px', fill: '#5ee7ff', fontStyle: 'bold'
+  }).setOrigin(0.5);
+  (btnGenerate as any).linkedText = textGenerate;
+  btnGenerate.on('pointerdown', () => this.generateTenShips());
+  this.addButtonEffects(btnGenerate);
+
+  const btnCollection = this.add.image(leftX, 640, 'button_base')
+    .setInteractive()
+    .setDisplaySize(320, 52);
+  const textCollection = this.add.text(leftX, 640, 'COLLECTION', {
+    fontSize: '22px', fill: '#ffe566', fontStyle: 'bold'
+  }).setOrigin(0.5);
+  (btnCollection as any).linkedText = textCollection;
+  btnCollection.on('pointerdown', () => this.openCollectionScene());
+  this.addButtonEffects(btnCollection);
+
+  const btnStart = this.add.image(1648, 920, 'button_start')
+    .setInteractive()
+    .setDisplaySize(360, 72);
+  const textStart = this.add.text(1648, 920, 'START BATTLE', {
+    fontSize: '28px', fill: '#ffe8e8', fontStyle: 'bold'
   }).setOrigin(0.5);
   (btnStart as any).linkedText = textStart;
   btnStart.on('pointerdown', () => this.startBattle());
   this.addButtonEffects(btnStart);
 
-  // === AI GRID ===
   this.aiGridSlots = [];
-  const aiCenterX = 1640;
-  const aiCenterY = 610;
-  const aiSlotSize = 95;
-  const aiHSpacing = 15;
-  const aiVSpacing = 15;
+  const aiCenterX = 1648;
+  const aiSlotSize = 88;
+  const aiHSpacing = 12;
+  const aiVSpacing = 12;
   const aiTotalWidth = 4 * aiSlotSize + 3 * aiHSpacing;
-  const aiTotalHeight = 2 * aiSlotSize + aiVSpacing;
   const aiStartX = aiCenterX - aiTotalWidth / 2;
-  const aiStartY = aiCenterY - aiTotalHeight / 2;
+  const aiStartY = 258;
+
+  this.add.text(aiCenterX, 222, 'ENEMY FLEET', {
+    fontSize: '18px', fill: '#8aa0b8', fontStyle: 'bold'
+  }).setOrigin(0.5).setDepth(12);
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
@@ -1703,7 +1711,7 @@ public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
   this.equippedRelics = equippedCopy;
   await this.refreshRelics();
 
-  const msg = this.add.text(600, 450, `RELICS ACTIVATED (${newRelicIds.length})`, {
+  const msg = this.add.text(960, 200, `RELICS ACTIVATED (${newRelicIds.length})`, {
     fontSize: '42px', fill: '#00ff88'
   }).setOrigin(0.5);
   setTimeout(() => msg.destroy(), 2200);
@@ -1948,7 +1956,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const hash = await this.sendGameTransaction('generateTenShips', [], 100000000000000000n); // 0.1 ETH
 
     console.log('TX sent:', hash);
-    const waiting = this.add.text(600, 450, 'Generating 10 ships...', {
+    const waiting = this.add.text(960, 200, 'Generating 10 ships...', {
       fontSize: '36px', fill: '#ffff00'
     }).setDepth(500);
 
@@ -1958,7 +1966,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     await this.loadOwnedUnits();
     await this.updatePlayerProfile();
 
-    const msg = this.add.text(600, 450, '10 ships generated!', {
+    const msg = this.add.text(960, 200, '10 ships generated!', {
       fontSize: '42px', fill: '#00ff00'
     }).setDepth(500);
     setTimeout(() => msg.destroy(), 2000);
@@ -1966,7 +1974,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   } catch (e: any) {
     console.error('generateTenShips error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
-    const errorText = this.add.text(600, 450, `Error: ${errMsg}`, {
+    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, {
       fontSize: '36px', fill: '#ff4444'
     }).setDepth(500);
     setTimeout(() => errorText.destroy(), 4000);

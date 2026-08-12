@@ -29,12 +29,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({ onClose }) => {
       left: 0,
       width: '100vw',
       height: '100vh',
-      backgroundColor: 'rgba(0, 0, 0, 0.08)',   // ← почти прозрачно
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingTop: '140px',
-      paddingLeft: '5px',
+      padding: '0',
       zIndex: 99999
     }} onClick={onClose}>
       <div style={{

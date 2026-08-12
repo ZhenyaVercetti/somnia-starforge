@@ -35,15 +35,15 @@ export default class CollectionScene extends Phaser.Scene {
   private unitsUnderline: Phaser.GameObjects.Rectangle | null = null;
   private darkOverlay: Phaser.GameObjects.Rectangle | null = null;
 
-  private readonly GRID_START_X = 32;
-  private readonly GRID_START_Y = 76;
-  private readonly ITEMS_PER_ROW = 7;
-  private readonly UNIT_SPACING_X = 68;
-  private readonly UNIT_SPACING_Y = 78;
-  private readonly RELIC_SPACING_X = 85;
-  private readonly RELIC_SPACING_Y = 95;
-  private readonly PREVIEW_X = 775;
-  private readonly PREVIEW_Y = 440;
+  private readonly GRID_START_X = 24;
+  private readonly GRID_START_Y = 16;
+  private readonly ITEMS_PER_ROW = 6;
+  private readonly UNIT_SPACING_X = 72;
+  private readonly UNIT_SPACING_Y = 82;
+  private readonly RELIC_SPACING_X = 82;
+  private readonly RELIC_SPACING_Y = 92;
+  private readonly PREVIEW_X = 800;
+  private readonly PREVIEW_Y = 400;
 
   constructor() {
     super({ key: 'CollectionScene' });
@@ -97,11 +97,11 @@ export default class CollectionScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(5);
 
-    this.add.text(480, 45, 'COLLECTION', {
-      fontSize: '52px',
-      fill: '#ffff00',
+    this.add.text(480, 36, 'COLLECTION', {
+      fontSize: '36px',
+      fill: '#ffe566',
       fontStyle: 'bold'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(12);
 
     this.createTabs();
     this.createFilters();
@@ -127,41 +127,41 @@ export default class CollectionScene extends Phaser.Scene {
 
   
   private createTabs() {
-    const unitsBtn = this.add.image(380, 135, 'button_base')
-      .setDisplaySize(160, 55)
+    const unitsBtn = this.add.image(360, 100, 'button_base')
+      .setDisplaySize(180, 48)
       .setInteractive()
       .setOrigin(0.5);
 
-    const unitsText = this.add.text(380, 135, 'UNITS', {
-      fontSize: '28px',
-      fill: '#00ffff',
+    const unitsText = this.add.text(360, 100, 'UNITS', {
+      fontSize: '22px',
+      fill: '#5ee7ff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     (unitsBtn as any).linkedText = unitsText;
-    (unitsText as any).originalFill = '#00ffff';
+    (unitsText as any).originalFill = '#5ee7ff';
 
     this.addButtonEffects(unitsBtn);
     unitsBtn.on('pointerdown', () => this.switchTab('units'));
 
-    const relicsBtn = this.add.image(580, 135, 'button_base')
-      .setDisplaySize(160, 55)
+    const relicsBtn = this.add.image(600, 100, 'button_base')
+      .setDisplaySize(180, 48)
       .setInteractive()
       .setOrigin(0.5);
 
-    const relicsText = this.add.text(580, 135, 'RELICS', {
-      fontSize: '28px',
-      fill: '#ff00ff',
+    const relicsText = this.add.text(600, 100, 'RELICS', {
+      fontSize: '22px',
+      fill: '#e080ff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     (relicsBtn as any).linkedText = relicsText;
-    (relicsText as any).originalFill = '#ff00ff';
+    (relicsText as any).originalFill = '#e080ff';
 
     this.addButtonEffects(relicsBtn);
     relicsBtn.on('pointerdown', () => this.switchTab('relics'));
 
-    this.unitsUnderline = this.add.rectangle(380, 172, 140, 4, 0x00ffff)
+    this.unitsUnderline = this.add.rectangle(360, 132, 140, 3, 0x5ee7ff)
       .setOrigin(0.5)
       .setDepth(10);
   }
@@ -172,8 +172,8 @@ export default class CollectionScene extends Phaser.Scene {
     this.selectedRelicIds = [];
 
     if (this.unitsUnderline) {
-      this.unitsUnderline.setPosition(tab === 'units' ? 380 : 580, 172);
-      this.unitsUnderline.setFillStyle(tab === 'units' ? 0x00ffff : 0xff00ff);
+      this.unitsUnderline.setPosition(tab === 'units' ? 360 : 600, 132);
+      this.unitsUnderline.setFillStyle(tab === 'units' ? 0x5ee7ff : 0xe080ff);
     }
 
     this.clearFloatingPanel();
@@ -182,14 +182,15 @@ export default class CollectionScene extends Phaser.Scene {
   }
 
   private createFilters() {
-    this.add.text(50, 190, 'FILTERS:', {
-      fontSize: '24px',
-      fill: '#aaaaaa'
+    this.add.text(48, 156, 'FILTERS', {
+      fontSize: '16px',
+      fill: '#8aa0b8',
+      fontStyle: 'bold'
     });
 
-    const rarityBtn = this.add.text(50, 220, `Rarity: ${this.getRarityName(Number(this.filters.rarity))}`, {
-      fontSize: '22px',
-      fill: '#00ffff'
+    const rarityBtn = this.add.text(48, 180, `Rarity: ${this.getRarityName(Number(this.filters.rarity))}`, {
+      fontSize: '18px',
+      fill: '#5ee7ff'
     }).setInteractive().on('pointerdown', () => {
       const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
       const idx = options.indexOf(this.filters.rarity);
@@ -198,9 +199,9 @@ export default class CollectionScene extends Phaser.Scene {
       this.refreshGrid();
     });
 
-    const factionBtn = this.add.text(50, 252, `Faction: ${this.getFactionName(Number(this.filters.faction))}`, {
-      fontSize: '22px',
-      fill: '#00ffff'
+    const factionBtn = this.add.text(260, 180, `Faction: ${this.getFactionName(Number(this.filters.faction))}`, {
+      fontSize: '18px',
+      fill: '#5ee7ff'
     }).setInteractive().on('pointerdown', () => {
       const options: ('all' | '0' | '1' | '2')[] = ['all', '0', '1', '2'];
       const idx = options.indexOf(this.filters.faction);
@@ -209,9 +210,9 @@ export default class CollectionScene extends Phaser.Scene {
       this.refreshGrid();
     });
 
-    const classBtn = this.add.text(50, 284, `Class: ${this.getClassName(Number(this.filters.unitClass))}`, {
-      fontSize: '22px',
-      fill: '#00ffff'
+    const classBtn = this.add.text(500, 180, `Class: ${this.getClassName(Number(this.filters.unitClass))}`, {
+      fontSize: '18px',
+      fill: '#5ee7ff'
     }).setInteractive().on('pointerdown', () => {
       const options: ('all' | '0' | '1' | '2' | '3')[] = ['all', '0', '1', '2', '3'];
       const idx = options.indexOf(this.filters.unitClass);
@@ -222,36 +223,35 @@ export default class CollectionScene extends Phaser.Scene {
   }
 
   private createGridContainer() {
-    this.gridContainer = this.add.container(48, 325);
+    this.gridContainer = this.add.container(40, 214);
 
     this.contentContainer = this.add.container(0, 0);
     this.gridContainer.add(this.contentContainer);
 
-    // Mask expanded upward to prevent clipping of large frames
     const maskGraphics = this.make.graphics();
-    maskGraphics.fillRect(38, 290, 760, 660);
+    maskGraphics.fillRect(36, 206, 620, 540);
     const mask = maskGraphics.createGeometryMask();
     this.gridContainer.setMask(mask);
   }
 
   private createPreviewPanel() {
-    this.previewRect = this.add.rectangle(775, 510, 260, 390, 0x112233)
+    this.previewRect = this.add.rectangle(800, 430, 220, 340, 0x112233)
       .setDepth(4);
 
-    this.add.image(775, 510, 'preview_frame')
-      .setDisplaySize(260, 390)
+    this.add.image(800, 430, 'preview_frame')
+      .setDisplaySize(220, 340)
       .setOrigin(0.5)
       .setDepth(100);
   }
 
   private createBottomPanel() {
-    const backBtn = this.add.image(480, 1020, 'button_base')
-      .setDisplaySize(360, 70)
+    const backBtn = this.add.image(480, 990, 'button_base')
+      .setDisplaySize(300, 52)
       .setInteractive()
       .setOrigin(0.5);
 
-    const backText = this.add.text(480, 1020, '← GO BACK', {
-      fontSize: '36px',
+    const backText = this.add.text(480, 990, 'GO BACK', {
+      fontSize: '22px',
       fill: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
@@ -608,27 +608,27 @@ private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Con
 
     this.floatingPanel = this.add.container(0, 0);
 
-    const selectedBtn = this.add.image(centerX, 820, 'button_base')
-      .setDisplaySize(320, 50)
+    const selectedBtn = this.add.image(centerX, 784, 'button_base')
+      .setDisplaySize(300, 44)
       .setOrigin(0.5);
     this.floatingPanel.add(selectedBtn);
 
-    const selectedText = this.add.text(centerX, 820, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
-      fontSize: '28px',
-      fill: '#00ff88',
+    const selectedText = this.add.text(centerX, 784, `Selected: ${count} ${isUnits ? 'units' : 'relics'}`, {
+      fontSize: '20px',
+      fill: '#5dffb0',
       fontStyle: 'bold'
     }).setOrigin(0.5);
     this.floatingPanel.add(selectedText);
 
-    const actionBtn = this.add.image(centerX, 900, 'button_base')
-      .setDisplaySize(320, 60)
+    const actionBtn = this.add.image(centerX, 848, 'button_base')
+      .setDisplaySize(300, 52)
       .setInteractive()
       .setOrigin(0.5);
     this.floatingPanel.add(actionBtn);
 
-    const actionText = this.add.text(centerX, 900, isUnits ? 'ADD TO TEAM' : 'ACTIVATE', {
-      fontSize: '32px',
-      fill: isUnits ? '#ffff00' : '#00ffff',
+    const actionText = this.add.text(centerX, 848, isUnits ? 'ADD TO TEAM' : 'ACTIVATE', {
+      fontSize: '22px',
+      fill: isUnits ? '#ffe566' : '#5ee7ff',
       fontStyle: 'bold'
     }).setOrigin(0.5);
     this.floatingPanel.add(actionText);
@@ -728,13 +728,13 @@ private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Con
         ease: 'Sine.easeInOut'
       });
 
-      const t1 = this.add.text(this.PREVIEW_X, 585, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
-        fontSize: '29px', fill: '#00ffff', wordWrap: { width: wrapWidth }, align: 'center'
+      const t1 = this.add.text(this.PREVIEW_X, 528, `${this.getFactionName(unit.faction)} ${this.getClassName(unit.unitClass)}`, {
+        fontSize: '18px', fill: '#5ee7ff', wordWrap: { width: wrapWidth }, align: 'center'
       }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t1);
 
-      const t2 = this.add.text(this.PREVIEW_X, 635, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
-        fontSize: '26px', fill: '#ffaa00', wordWrap: { width: wrapWidth }
+      const t2 = this.add.text(this.PREVIEW_X, 562, `ATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`, {
+        fontSize: '16px', fill: '#ffcc66', wordWrap: { width: wrapWidth }
       }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t2);
 
@@ -770,13 +770,13 @@ private createRelicCard(x: number, y: number, item: any): Phaser.GameObjects.Con
         ease: 'Sine.easeInOut'
       });
 
-      const t1 = this.add.text(this.PREVIEW_X, 565, relicData.name.replace(/\s*\+\d+/, ''), {
-        fontSize: '29px', fill: '#ff00ff', wordWrap: { width: 230 }, align: 'center'
+      const t1 = this.add.text(this.PREVIEW_X, 528, relicData.name.replace(/\s*\+\d+/, ''), {
+        fontSize: '18px', fill: '#e080ff', wordWrap: { width: 200 }, align: 'center'
       }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t1);
 
-      const t2 = this.add.text(this.PREVIEW_X, 635, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
-        fontSize: '25px', fill: '#ffff88', wordWrap: { width: 230 }, align: 'center'
+      const t2 = this.add.text(this.PREVIEW_X, 562, `+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`, {
+        fontSize: '16px', fill: '#ffe566', wordWrap: { width: 200 }, align: 'center'
       }).setOrigin(0.5).setDepth(20);
       this.previewTexts.push(t2);
     }
