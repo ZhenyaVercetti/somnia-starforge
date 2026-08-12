@@ -1,7 +1,7 @@
 // @ts-nocheck
 // frontend/src/scenes/PrepareScene.ts
 import * as Phaser from 'phaser';
-import { getContract } from 'viem';
+import { getContract, parseEventLogs } from 'viem';
 import { PLAYER_PROFILE_ADDRESS } from '../lib/contractAddresses';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
@@ -199,13 +199,30 @@ const gameAbi = [
     "type": "function"
   },
   {
-  "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-  "name": "getPackedBattleEvents",
-  "outputs": [{ "internalType": "bytes", "name": "", "type": "bytes" }],
-  "stateMutability": "view",
-  "type": "function"
-},
-
+    "type": "event",
+    "name": "BattleResolved",
+    "inputs": [
+      { "indexed": true, "internalType": "bytes32", "name": "battleId", "type": "bytes32" },
+      { "indexed": true, "internalType": "address", "name": "player", "type": "address" },
+      { "indexed": false, "internalType": "bool", "name": "playerWon", "type": "bool" },
+      { "indexed": false, "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" },
+      { "indexed": false, "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "BattleEventEmitted",
+    "inputs": [
+      { "indexed": true, "internalType": "bytes32", "name": "battleId", "type": "bytes32" },
+      { "indexed": false, "internalType": "uint8", "name": "round", "type": "uint8" },
+      { "indexed": false, "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
+      { "indexed": false, "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
+      { "indexed": false, "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
+      { "indexed": false, "internalType": "uint16", "name": "damage", "type": "uint16" },
+      { "indexed": false, "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
+      { "indexed": false, "internalType": "uint8", "name": "specialEffect", "type": "uint8" }
+    ]
+  },
   {
     "inputs": [],
     "name": "buyRelicShopPrice",
@@ -230,8 +247,7 @@ const gameAbi = [
     { "internalType": "bool", "name": "", "type": "bool" },
     { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
     { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
-    { "internalType": "bytes32", "name": "", "type": "bytes32" },
-    { "internalType": "bytes", "name": "", "type": "bytes" }
+    { "internalType": "bytes32", "name": "", "type": "bytes32" }
   ],
   "stateMutability": "view",
   "type": "function"
@@ -291,31 +307,6 @@ const gameAbi = [
     "stateMutability": "view",
     "type": "function"
   },
-{
-  "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-  "name": "getLastBattleEvents",
-  "outputs": [{
-    "components": [
-      { "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
-      { "internalType": "uint8", "name": "round", "type": "uint8" },
-      { "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
-      { "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
-      { "internalType": "uint16", "name": "damage", "type": "uint16" },
-      { "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
-      { "internalType": "uint8", "name": "specialEffect", "type": "uint8" },
-      { "internalType": "uint8", "name": "attackerRarity", "type": "uint8" },
-      { "internalType": "uint8", "name": "attackerClass", "type": "uint8" },
-      { "internalType": "uint8", "name": "targetRarity", "type": "uint8" },
-      { "internalType": "uint8", "name": "targetClass", "type": "uint8" },
-      { "internalType": "uint32", "name": "battleId", "type": "uint32" }
-    ],
-    "internalType": "struct StarForgeBattleLibrary.BattleEvent[]",
-    "name": "",
-    "type": "tuple[]"
-  }],
-  "stateMutability": "view",
-  "type": "function"
-},
 {
   "inputs": [],
   "name": "generateTenShips",
@@ -1506,25 +1497,38 @@ private async startBattle() {
       throw new Error('Transaction failed on-chain');
     }
 
-await new Promise(resolve => setTimeout(resolve, 1800));
+    let parsed = this.parseBattleFromReceipt(receipt);
 
-const packedEvents: string = await this.gameContract.read.getPackedBattleEvents([this.account]);
-const events: any[] = this.decodePackedEvents(packedEvents);
+    if (!parsed.battleId || parsed.events.length === 0 || parsed.playerMaxHp.length === 0 || parsed.aiMaxHp.length === 0) {
+      const summary: any = await this.gameContract.read.getLastBattleSummary([this.account]);
+      const battleId: string = summary.battleId ?? parsed.battleId ?? '0x0';
+      const playerWon: boolean = summary.playerWon ?? parsed.playerWon ?? false;
+      const summaryPlayerHp: number[] = (summary.playerFinalHp ?? []).map((n: bigint) => this.safeBigIntToNumber(n));
+      const summaryAiHp: number[] = (summary.aiFinalHp ?? []).map((n: bigint) => this.safeBigIntToNumber(n));
+      const logEvents = await this.fetchBattleEventsFromLogs(battleId, receipt.blockNumber);
 
-// Получаем summary
-const summary: any = await this.gameContract.read.getLastBattleSummary([this.account]);
+      parsed = {
+        battleId,
+        playerWon,
+        playerMaxHp: summaryPlayerHp.length > 0 ? summaryPlayerHp : parsed.playerMaxHp,
+        aiMaxHp: summaryAiHp.length > 0 ? summaryAiHp : parsed.aiMaxHp,
+        events: logEvents.length > 0 ? logEvents : parsed.events
+      };
+    }
 
-const playerWon: boolean = summary.playerWon ?? false;
-const playerMaxHpBig: bigint[] = summary.playerFinalHp ?? [];
-const aiMaxHpBig: bigint[] = summary.aiFinalHp ?? [];
-const battleId: string = summary.battleId ?? '0x0';
-
-if (playerMaxHpBig.length === 0 || aiMaxHpBig.length === 0) {
+    if (parsed.playerMaxHp.length === 0 || parsed.aiMaxHp.length === 0) {
       throw new Error('Battle HP data not received from blockchain');
     }
 
-    let playerMaxHp: number[] = playerMaxHpBig.map((n: bigint) => this.safeBigIntToNumber(n));
-    let aiMaxHp: number[] = aiMaxHpBig.map((n: bigint) => this.safeBigIntToNumber(n));
+    if (!parsed.events || parsed.events.length === 0) {
+      throw new Error('Battle events not found in transaction logs');
+    }
+
+    const playerWon: boolean = parsed.playerWon;
+    const playerMaxHp: number[] = parsed.playerMaxHp;
+    const aiMaxHp: number[] = parsed.aiMaxHp;
+    const battleId: string = parsed.battleId;
+    const events: any[] = parsed.events;
 
     const playerUnitsData: any[] = [];
     for (const id of this.team) {
@@ -2070,47 +2074,95 @@ public equipSingleRelic(relicId: number): boolean {
   return false;
 }
 
-private decodePackedEvents(packed: string): any[] {
-  if (!packed || packed.length < 66) return [];
-  
-  // packed = "0x" + battleId(64 hex) + events(26 hex each)
-  const hex = packed.slice(2);
-  const events: any[] = [];
-  
-  // Пропускаем battleId (32 bytes = 64 hex chars)
-  let offset = 64;
-  
-  while (offset + 26 <= hex.length) {
-    const isPlayerSide = parseInt(hex.slice(offset, offset + 2), 16) === 1;
-    const round = parseInt(hex.slice(offset + 2, offset + 4), 16);
-    const attackerIndex = parseInt(hex.slice(offset + 4, offset + 6), 16);
-    const targetIndex = parseInt(hex.slice(offset + 6, offset + 8), 16);
-    const damage = parseInt(hex.slice(offset + 8, offset + 12), 16);
-    const remainingHp = parseInt(hex.slice(offset + 12, offset + 16), 16);
-    const specialEffect = parseInt(hex.slice(offset + 16, offset + 18), 16);
-    const attackerRarity = parseInt(hex.slice(offset + 18, offset + 20), 16);
-    const attackerClass = parseInt(hex.slice(offset + 20, offset + 22), 16);
-    const targetRarity = parseInt(hex.slice(offset + 22, offset + 24), 16);
-    const targetClass = parseInt(hex.slice(offset + 24, offset + 26), 16);
-    
-    events.push({
-      isPlayerSide,
-      round,
-      attackerIndex,
-      targetIndex,
-      damage,
-      remainingHp,
-      specialEffect,
-      attackerRarity,
-      attackerClass,
-      targetRarity,
-      targetClass
-    });
-    
-    offset += 26;
+private mapSpecialEffect(code: number): string | undefined {
+  if (code === 1) return 'CRIT';
+  if (code === 2) return 'DODGE';
+  if (code === 3) return 'Last Stand';
+  return undefined;
+}
+
+private mapEmittedBattleEvent(args: any): any {
+  return {
+    round: Number(args.round),
+    isPlayerSide: Boolean(args.isPlayerSide),
+    attackerIndex: Number(args.attackerIndex),
+    targetIndex: Number(args.targetIndex),
+    damageDealt: this.safeBigIntToNumber(args.damage),
+    remainingHp: this.safeBigIntToNumber(args.remainingHp),
+    specialEffect: this.mapSpecialEffect(Number(args.specialEffect))
+  };
+}
+
+private parseBattleFromReceipt(receipt: any): {
+  battleId: string;
+  playerWon: boolean;
+  playerMaxHp: number[];
+  aiMaxHp: number[];
+  events: any[];
+} {
+  const resolvedLogs: any[] = parseEventLogs({
+    abi: this.gameContract.abi,
+    logs: receipt.logs,
+    eventName: 'BattleResolved'
+  });
+
+  const eventLogs: any[] = parseEventLogs({
+    abi: this.gameContract.abi,
+    logs: receipt.logs,
+    eventName: 'BattleEventEmitted'
+  });
+
+  let battleId = '';
+  let playerWon = false;
+  let playerMaxHp: number[] = [];
+  let aiMaxHp: number[] = [];
+
+  if (resolvedLogs.length > 0) {
+    const args = resolvedLogs[0].args;
+    battleId = args.battleId;
+    playerWon = Boolean(args.playerWon);
+    playerMaxHp = (args.playerMaxHp ?? []).map((n: bigint) => this.safeBigIntToNumber(n));
+    aiMaxHp = (args.aiMaxHp ?? []).map((n: bigint) => this.safeBigIntToNumber(n));
   }
-  
-  return events;
+
+  const events = eventLogs
+    .filter((log: any) => !battleId || log.args.battleId === battleId)
+    .map((log: any) => this.mapEmittedBattleEvent(log.args));
+
+  if (!battleId && eventLogs.length > 0) {
+    battleId = eventLogs[0].args.battleId;
+  }
+
+  return { battleId, playerWon, playerMaxHp, aiMaxHp, events };
+}
+
+private async fetchBattleEventsFromLogs(battleId: string, blockNumber: bigint): Promise<any[]> {
+  if (!battleId || battleId === '0x0' || !this.publicClient) {
+    return [];
+  }
+
+  const logs: any[] = await this.publicClient.getLogs({
+    address: GAME_ADDRESS,
+    event: {
+      type: 'event',
+      name: 'BattleEventEmitted',
+      inputs: [
+        { indexed: true, name: 'battleId', type: 'bytes32' },
+        { indexed: false, name: 'round', type: 'uint8' },
+        { indexed: false, name: 'isPlayerSide', type: 'bool' },
+        { indexed: false, name: 'attackerIndex', type: 'uint8' },
+        { indexed: false, name: 'targetIndex', type: 'uint8' },
+        { indexed: false, name: 'damage', type: 'uint16' },
+        { indexed: false, name: 'remainingHp', type: 'uint16' },
+        { indexed: false, name: 'specialEffect', type: 'uint8' }
+      ]
+    },
+    args: { battleId },
+    fromBlock: blockNumber,
+    toBlock: blockNumber
+  });
+
+  return logs.map((log: any) => this.mapEmittedBattleEvent(log.args));
 }
 
   shutdown() {

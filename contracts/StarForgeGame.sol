@@ -27,7 +27,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     mapping(address => BattleSummary) public lastBattleSummary;
-    mapping(address => bytes) public lastBattleEventsPacked;
 
     // ==================== PRICES ====================
 
@@ -336,9 +335,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             timestamp: uint64(block.timestamp)
         });
 
-        bytes memory packedEvents = _packBattleEvents(result.events, battleId);
-        lastBattleEventsPacked[msg.sender] = packedEvents;
-
         emit BattleResolved(battleId, msg.sender, result.playerWon, result.playerMaxHp, result.aiMaxHp);
 
         for (uint256 i = 0; i < result.events.length; i++) {
@@ -364,24 +360,18 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         return lastBattleSummary[player];
     }
 
-    function getPackedBattleEvents(address player) external view returns (bytes memory) {
-        return lastBattleEventsPacked[player];
-    }
-
     function getLastBattleResult(address player) external view returns (
         bool,
         uint16[] memory,
         uint16[] memory,
-        bytes32,
-        bytes memory
+        bytes32
     ) {
         BattleSummary memory summary = lastBattleSummary[player];
         return (
             summary.playerWon,
             summary.playerFinalHp,
             summary.aiFinalHp,
-            summary.battleId,
-            lastBattleEventsPacked[player]
+            summary.battleId
         );
     }
 
@@ -428,45 +418,9 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         return ShopItem(true, 0, 0, 0, 0, 0, 0, 0, relicType, value);
     }
 
-    function _packBattleEvents(
-        StarForgeBattleLibrary.BattleEvent[] memory events,
-        bytes32 battleId
-    ) internal pure returns (bytes memory) {
-        bytes memory packed = new bytes(32 + events.length * 13);
-        
-        assembly {
-            mstore(add(packed, 32), battleId)
-        }
-        
-        for (uint256 i = 0; i < events.length; i++) {
-            StarForgeBattleLibrary.BattleEvent memory e = events[i];
-            uint256 offset = 32 + (i * 13);
-            
-            packed[offset]     = bytes1(e.isPlayerSide ? 1 : 0);
-            packed[offset + 1] = bytes1(e.round);
-            packed[offset + 2] = bytes1(e.attackerIndex);
-            packed[offset + 3] = bytes1(e.targetIndex);
-            
-            packed[offset + 4] = bytes1(uint8(e.damage >> 8));
-            packed[offset + 5] = bytes1(uint8(e.damage));
-            
-            packed[offset + 6] = bytes1(uint8(e.remainingHp >> 8));
-            packed[offset + 7] = bytes1(uint8(e.remainingHp));
-            
-            packed[offset + 8]  = bytes1(e.specialEffect);
-            packed[offset + 9]  = bytes1(e.attackerRarity);
-            packed[offset + 10] = bytes1(e.attackerClass);
-            packed[offset + 11] = bytes1(e.targetRarity);
-            packed[offset + 12] = bytes1(e.targetClass);
-        }
-        
-        return packed;
-    }
-
     function clearPlayerData() external whenNotPaused {
         delete equippedRelics[msg.sender];
         delete playerShop[msg.sender];
         delete lastBattleSummary[msg.sender];
-        delete lastBattleEventsPacked[msg.sender];
     }
 }
