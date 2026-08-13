@@ -633,12 +633,10 @@ private async loadPlayerShop() {
 
     this.shopContainer = this.add.container(0, 0);
 
-    const shopCenterX = PREPARE_LAYOUT.leftX;
-    const shopY = PREPARE_LAYOUT.shopY;
-    const shopSlotSize = HUD.SHOP;
-    const shopSpacing = HUD.GAP;
-    const shopTotalWidth = 3 * shopSlotSize + 2 * shopSpacing;
-    const shopStartX = shopCenterX - shopTotalWidth / 2;
+    const shopSlotSize = 96;
+    const shopSpacing = 14;
+    const shopStartX = 110;
+    const shopY = 280;
 
     for (let i = 0; i < 3; i++) {
       const item = shopData[i] || { isRelic: false, relicType: 0, relicValue: 0 };
@@ -679,21 +677,17 @@ private async loadPlayerShop() {
       this.shopContainer.add(sprite);
       this.shopSprites.push(sprite);
 
-      const nameText = this.add.text(x, y + 68, displayName, {
-        fontSize: HUD.SMALL, fill: HUD.color.warn, align: 'center', wordWrap: { width: 100 }
+      const slotLabel = (item.isRelic && item.relicValue > 0) ? 'BUY' : 'EMPTY';
+      const slotText = this.add.text(x, y + 62, slotLabel, {
+        fontSize: '15px', fill: '#aaaaaa', align: 'center'
       }).setOrigin(0.5).setDepth(12);
-      this.shopContainer.add(nameText);
-      this.shopTexts.push(nameText);
+      this.shopContainer.add(slotText);
+      this.shopTexts.push(slotText);
 
-      const buyBtn = this.add.text(x, y + 98, 'BUY', {
-        fontSize: HUD.BODY, fill: HUD.color.good, fontStyle: 'bold'
-      })
-        .setOrigin(0.5)
-        .setDepth(12)
-        .setInteractive()
-        .on('pointerdown', () => this.buyFromShopSlot(i));
-      this.shopContainer.add(buyBtn);
-      this.shopBuyButtons.push(buyBtn);
+      if (slotLabel === 'BUY') {
+        slotText.setInteractive().on('pointerdown', () => this.buyFromShopSlot(i));
+      }
+      this.shopBuyButtons.push(slotText);
 
       sprite.on('pointerover', () => this.showTooltip(x + 140, y - 40, tooltipText));
       sprite.on('pointerout', () => this.hideTooltip());
@@ -1300,45 +1294,45 @@ private addGameUI() {
     .setDisplaySize(HUD.PROFILE_W, HUD.PROFILE_H)
     .setDepth(5);
 
-  this.playerLevelText = this.add.text(L.profileX + 28, L.profileY + 36, 'LVL 1', {
-    fontSize: '34px', fill: HUD.color.accent, fontStyle: 'bold'
+  this.playerLevelText = this.add.text(L.profileX + 18, L.profileY + 18, 'LVL 1', {
+    fontSize: '28px', fill: HUD.color.accent, fontStyle: 'bold'
   }).setDepth(12);
 
-  this.playerStatsText = this.add.text(L.profileX + 28, L.profileY + 92, 'XP 0/90  •  W:0 L:0', {
+  this.playerStatsText = this.add.text(L.profileX + 18, L.profileY + 62, 'XP 0/90  •  W:0 L:0', {
     fontSize: HUD.BODY, fill: HUD.color.text
   }).setDepth(12);
 
-  const progressBg = this.add.rectangle(L.profileX + 28, L.profileY + 148, 380, 12, 0x112233)
+  const progressBg = this.add.rectangle(L.profileX + 18, L.profileY + 112, 300, 10, 0x112233)
     .setStrokeStyle(2, 0x2ec7d6).setOrigin(0, 0).setDepth(8);
-  const progressBar = this.add.rectangle(L.profileX + 28, L.profileY + 148, 0, 12, 0x5dffb0)
+  const progressBar = this.add.rectangle(L.profileX + 18, L.profileY + 112, 0, 10, 0x5dffb0)
     .setOrigin(0, 0).setDepth(9);
   (this as any).levelProgressBar = progressBar;
 
-  const logo = this.add.image(1640, 36, 'logo').setOrigin(0.5, 0).setDepth(15);
-  logo.setScale(Math.min(56 / logo.height, 220 / logo.width));
+  const logo = this.add.image(L.logoX, L.logoY, 'logo').setOrigin(0.5, 0).setDepth(15);
+  logo.setScale(Math.min(64 / logo.height, 240 / logo.width));
 
-  this.add.text(L.leftX, 276, 'SHOP', {
+  this.add.text(L.shopTitleX, L.shopTitleY, 'SHOP', {
     fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
 
-  const teamWidth = 4 * HUD.TEAM + 3 * HUD.GAP;
+  const teamWidth = 4 * HUD.TEAM + 3 * L.teamGap;
   const teamStartX = L.teamCenterX - teamWidth / 2;
 
-  this.addHudButton(648, 139, 'AUTO SELECT', HUD.color.good, () => this.autoSelectTeam());
-  this.addHudButton(924, 139, 'CLEAR TEAM', HUD.color.bad, () => this.clearTeam());
+  this.addHudButton(800, L.autoY, 'AUTO SELECT', HUD.color.good, () => this.autoSelectTeam());
+  this.addHudButton(1120, L.autoY, 'CLEAR TEAM', HUD.color.bad, () => this.clearTeam());
 
-  this.add.text(L.teamCenterX, 276, 'YOUR FLEET', {
+  this.add.text(L.fleetTitleX, L.fleetTitleY, 'YOUR FLEET', {
     fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const x = teamStartX + col * (HUD.TEAM + HUD.GAP);
-    const y = L.teamStartY + row * (HUD.TEAM + HUD.GAP);
+    const x = teamStartX + col * (HUD.TEAM + L.teamGap);
+    const y = L.teamTopY + row * (HUD.TEAM + L.teamGap);
 
     this.add.rectangle(x, y, HUD.TEAM - 8, HUD.TEAM - 8, 0x0a1122).setDepth(1);
     const slot = this.add.image(x, y, 'slot_team')
@@ -1358,53 +1352,60 @@ private addGameUI() {
     .setDisplaySize(1920, 1080)
     .setDepth(200);
 
-  this.teamCounterText = this.add.text(L.teamCenterX, 572, 'TEAM: 0/8', {
-    fontSize: '22px', fill: HUD.color.warn, fontStyle: 'bold'
+  const teamBottom = L.teamTopY + HUD.TEAM + L.teamGap + HUD.TEAM / 2;
+  this.teamCounterText = this.add.text(L.teamCenterX, teamBottom + 28, 'TEAM: 0/8', {
+    fontSize: '20px', fill: HUD.color.warn, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
-  this.add.text(L.teamCenterX, 604, 'RELICS', {
+  this.add.text(L.teamCenterX, teamBottom + 56, 'RELICS', {
     fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
-  this.rerollsLeftText = this.add.text(L.leftX, 578, 'Rerolls available', {
-    fontSize: HUD.SMALL, fill: '#d08cff'
+  const leftBtnYs = [
+    L.leftBtnY0,
+    L.leftBtnY0 + L.leftBtnStep,
+    L.leftBtnY0 + L.leftBtnStep * 2,
+    L.leftBtnY0 + L.leftBtnStep * 3
+  ];
+  this.addHudButton(L.leftBtnX, leftBtnYs[0], 'REROLL SHOP', '#e080ff', () => this.rerollShop());
+  this.addHudButton(L.leftBtnX, leftBtnYs[1], 'BUY SHIP', HUD.color.accent, () => this.buyUnit());
+  this.addHudButton(L.leftBtnX, leftBtnYs[2], 'GENERATE 10 SHIPS', HUD.color.accent, () => this.generateTenShips());
+  this.addHudButton(L.leftBtnX, leftBtnYs[3], 'COLLECTION', HUD.color.warn, () => this.openCollectionScene());
+
+  this.rerollsLeftText = this.add.text(L.leftBtnX, leftBtnYs[0] + 38, 'Rerolls available', {
+    fontSize: HUD.SMALL, fill: '#88aacc'
   }).setOrigin(0.5).setDepth(12);
 
-  this.buysLeftText = this.add.text(L.leftX, 816, 'Buys left: 10/10', {
-    fontSize: HUD.SMALL, fill: HUD.color.text
+  this.buysLeftText = this.add.text(L.leftBtnX, leftBtnYs[2] + 38, 'Buys left: 10/10', {
+    fontSize: HUD.SMALL, fill: '#88aacc'
   }).setOrigin(0.5).setDepth(12);
+
+  this.addHudButton(L.startX, L.startY, 'START BATTLE', HUD.color.text, () => this.startBattle(), 'start');
 
   this.equippedSlotRects = [];
-  const relicWidth = 3 * HUD.RELIC + 2 * HUD.GAP;
+  const relicWidth = 3 * HUD.RELIC + 2 * L.teamGap;
   const relicStartX = L.teamCenterX - relicWidth / 2;
   for (let i = 0; i < 3; i++) {
-    const x = relicStartX + i * (HUD.RELIC + HUD.GAP);
+    const x = relicStartX + i * (HUD.RELIC + L.teamGap);
     const slot = this.add.image(x, L.relicY, 'slot_equipped')
       .setDisplaySize(HUD.RELIC, HUD.RELIC)
       .setDepth(10);
     this.equippedSlotRects.push(slot);
   }
 
-  this.addHudButton(L.leftX, 516, 'REROLL SHOP', '#e080ff', () => this.rerollShop());
-  this.addHudButton(L.leftX, 636, 'BUY SHIP', HUD.color.accent, () => this.buyUnit());
-  this.addHudButton(L.leftX, 752, 'GENERATE 10', HUD.color.accent, () => this.generateTenShips());
-  this.addHudButton(L.leftX, 876, 'COLLECTION', HUD.color.warn, () => this.openCollectionScene());
-
-  this.addHudButton(L.startX, L.startY, 'START BATTLE', HUD.color.text, () => this.startBattle(), 'start');
-
   this.aiGridSlots = [];
-  const aiWidth = 4 * HUD.AI + 3 * HUD.GAP;
+  const aiWidth = 4 * HUD.AI + 3 * 12;
   const aiStartX = L.aiCenterX - aiWidth / 2;
 
-  this.add.text(L.aiCenterX, 276, 'ENEMY FLEET', {
+  this.add.text(L.aiTitleX, L.aiTitleY, 'ENEMY FLEET', {
     fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
   }).setOrigin(0.5).setDepth(12);
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const x = aiStartX + col * (HUD.AI + HUD.GAP);
-    const y = L.aiStartY + row * (HUD.AI + HUD.GAP);
+    const x = aiStartX + col * (HUD.AI + 12);
+    const y = L.aiTopY + row * (HUD.AI + 12);
     this.add.rectangle(x, y, HUD.AI - 6, HUD.AI - 6, 0x0a1122).setDepth(1);
     const slot = this.add.image(x, y, 'slot_ai')
       .setInteractive()

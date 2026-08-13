@@ -1,37 +1,30 @@
-// HUD design system for 1920x1080.
-// Sizes follow native asset aspect ratios so chrome is not squashed.
+// PrepareScene layout spec — 1920x1080, safe 48px.
 
 export const HUD = {
   W: 1920,
   H: 1080,
-  SAFE: 56,
-  GAP: 16,
-  COL_GAP: 28,
+  SAFE: 48,
+  GAP: 14,
 
-  // button_base.png is 770x300 (2.567:1)
-  BTN_W: 256,
-  BTN_H: 100,
-  BTN_FONT: '20px',
+  BTN_W: 260,
+  BTN_H: 60,
+  BTN_FONT: '18px',
 
-  // Compact tab / speed control, same aspect
   TAB_W: 180,
   TAB_H: 70,
   SPEED_W: 128,
   SPEED_H: 50,
 
-  // button_start.png is 757x249 (3.04:1)
   START_W: 400,
   START_H: 132,
   START_FONT: '30px',
 
-  // profile_frame.png is 1061x536 (1.98:1)
-  PROFILE_W: 440,
-  PROFILE_H: 222,
+  PROFILE_W: 340,
+  PROFILE_H: 150,
 
-  // Square slots (team 320x322, shop 130x130, equipped 280x280, ai 280x282)
-  TEAM: 116,
-  SHOP: 108,
-  RELIC: 108,
+  TEAM: 112,
+  SHOP: 96,
+  RELIC: 96,
   AI: 80,
 
   TITLE: '18px',
@@ -49,15 +42,36 @@ export const HUD = {
 };
 
 export const PREPARE_LAYOUT = {
-  profileX: HUD.SAFE,
-  profileY: 28,
-  leftX: 244,
-  shopY: 338,
-  teamCenterX: 930,
-  teamStartY: 360,
-  relicY: 684,
+  profileX: 48,
+  profileY: 24,
+
+  logoX: 960,
+  logoY: 20,
+
+  shopTitleX: 200,
+  shopTitleY: 200,
+  shopFirstX: 110,
+  shopY: 280,
+  shopGap: 14,
+
+  leftBtnX: 200,
+  leftBtnY0: 400,
+  leftBtnStep: 72,
+
+  autoY: 145,
+  fleetTitleX: 960,
+  fleetTitleY: 200,
+  teamCenterX: 960,
+  teamTopY: 320,
+  teamGap: 14,
+
+  relicY: 656,
+
+  aiTitleX: 1640,
+  aiTitleY: 200,
   aiCenterX: 1640,
-  aiStartY: 336,
+  aiTopY: 320,
+
   startX: 960,
-  startY: 988
+  startY: 980
 };
