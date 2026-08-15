@@ -78,6 +78,8 @@ web_modules/
 /coverage
 coverage.json
 contracts/.deps
+contracts/.states
+contracts/artifacts/build-info
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

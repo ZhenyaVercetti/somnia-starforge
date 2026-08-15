@@ -10,7 +10,6 @@ ROOT = Path(__file__).resolve().parents[1] / "frontend" / "public" / "assets"
 TARGETS = {
     "button_base.png": (512, 200),
     "button_start.png": (800, 264),
-    "preview_frame.png": (440, 680),
     "profile_frame.png": (680, 344),
     "slot_team.png": (224, 224),
     "slot_ai.png": (160, 160),
@@ -18,12 +17,6 @@ TARGETS = {
     "slot_shop.png": (192, 192),
     "background/logo.png": (480, 216),
 }
-
-# Same pixel size — only clean + recompress.
-KEEP = [
-    "collection_frame.png",
-    "outer_frame.png",
-]
 
 
 def clean_rgba(arr: np.ndarray) -> np.ndarray:
@@ -69,8 +62,6 @@ def process(rel: str, size: tuple[int, int] | None) -> None:
 def main() -> None:
     for rel, size in TARGETS.items():
         process(rel, size)
-    for rel in KEEP:
-        process(rel, None)
 
 
 if __name__ == "__main__":
