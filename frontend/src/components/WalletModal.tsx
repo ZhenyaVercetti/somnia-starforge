@@ -1,74 +1,100 @@
 // @ts-nocheck
 import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, usePublicClient } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import WalletManager from '../lib/WalletManager';
 
 interface WalletModalProps {
-  onClose: () => void;
+  onConnected: () => void;
+  onDismiss: () => void;
 }
 
-export const WalletModal: React.FC<WalletModalProps> = ({ onClose }) => {
+export const WalletModal: React.FC<WalletModalProps> = ({ onConnected, onDismiss }) => {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
 
   useEffect(() => {
-    if (isConnected && address && publicClient) {
-      (window as any).account = address;
-      (window as any).publicClient = publicClient;
-
-      setTimeout(() => {
-        onClose();
-      }, 800);
+    if (!isConnected || !address || !publicClient || !walletClient) {
+      return;
     }
-  }, [isConnected, address, publicClient, onClose]);
+
+    WalletManager.getInstance().setSession({
+      account: address,
+      publicClient,
+      walletClient
+    });
+
+    const timer = window.setTimeout(() => {
+      onConnected();
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [isConnected, address, publicClient, walletClient, onConnected]);
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      backgroundColor: 'rgba(0, 0, 0, 0.45)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0',
-      zIndex: 99999
-    }} onClick={onClose}>
-      <div style={{
-        backgroundColor: 'rgba(26, 0, 51, 0.88)',   // ← чуть прозрачнее
-        border: '3px solid #00ffff',
-        borderRadius: '20px',
-        padding: '50px 60px',
-        minWidth: '420px',
-        textAlign: 'center',
-        boxShadow: '0 0 60px rgba(0, 255, 255, 0.4)'
-      }} onClick={e => e.stopPropagation()}>
-        
-        <h2 style={{ 
-          color: '#00ffff', 
-          marginBottom: '50px', 
-          fontSize: '28px',
-          lineHeight: '1.3'
-        }}>
-          Welcome to the StarForge:<br />The Void!
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(2, 4, 10, 0.62)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999
+      }}
+      onClick={onDismiss}
+    >
+      <div
+        style={{
+          backgroundColor: 'rgba(8, 13, 22, 0.96)',
+          border: '1px solid rgba(94, 231, 255, 0.45)',
+          boxShadow: '0 0 40px rgba(8, 20, 32, 0.8)',
+          padding: '42px 48px 36px',
+          minWidth: '420px',
+          textAlign: 'center'
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div
+          style={{
+            fontFamily: 'Orbitron, Rajdhani, sans-serif',
+            color: '#f6e27a',
+            fontSize: '22px',
+            letterSpacing: '0.08em',
+            marginBottom: '10px'
+          }}
+        >
+          STARFORGE
+        </div>
+        <h2
+          style={{
+            fontFamily: 'Rajdhani, Arial, sans-serif',
+            color: '#e8f4ff',
+            margin: '0 0 28px',
+            fontSize: '26px',
+            fontWeight: 700
+          }}
+        >
+          Connect to enter the hangar
         </h2>
 
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          marginBottom: '30px' 
-        }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '22px' }}>
           <ConnectButton />
         </div>
 
-        <p style={{ 
-          color: '#888', 
-          fontSize: '14px',
-          marginTop: '10px'
-        }}>
-          Connect to Somnia Testnet
+        <p
+          style={{
+            fontFamily: 'Rajdhani, Arial, sans-serif',
+            color: '#7f96ad',
+            fontSize: '15px',
+            margin: 0
+          }}
+        >
+          Somnia Testnet · Chain 50312
         </p>
       </div>
     </div>

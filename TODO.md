@@ -1,43 +1,44 @@
 # TODO — Somnia StarForge
 
+Актуально **13.08.2026**. Контекст аудита: `AUDIT_HANDOFF.md`.
+
+## Сейчас (после аудита 15.08.2026)
+- [x] Аудит Prepare/Collection/Battle + контракты
+- [x] Last Stand 1 раз, unique team/relics, previousGame для free ships
+- [x] Boot гасится после Connect; команда выровнена по слотам
+- [ ] Прогнать руками на новом Game: кошелёк → 8 кораблей → бой → возврат команды → коллекция
+- [ ] Пользователь сам тестирует лимиты магазина (daily 10, реролл) — не ломать без запроса
+
 ## Приоритет 0 (Блокер)
 - [x] Поднять все временные тексты на самый верх (PrepareScene, BattleScene)
 - [x] Исправить позиционирование Team-блока и логотипа
 - [x] Добавить параллакс-фон в BootScene
 - [x] Сделать модал авторизации полупрозрачным
-- [x] Протестировать replay боя через события (после деплоя Game v1.6)
-- [x] Доработать BattleScene: частицы двигателей, улучшенные взрывы, live HP бары
-- [x] Полностью переработанная CollectionScene с фильтрами и multi-select
-- [x] Полная механика equipped relics (drag, swap, unequip)
-- [x] Исправлена система глубин и input во всех сценах
-- [x] Финальное тестирование и полировка BattleScene
-- [ ] Подготовка к mainnet (оптимизация газа)
-- [ ] Анти-абуз минтинга: daily limit 10 buyUnit + +1 бесплатный корабль за level-up  
-- [x] Полностью переработать BattleScene (2.5D + частицы + анимации) — завершено в v1.6
+- [x] Replay боя через события (Variant 1 live на Game 0x227c…)
+- [x] BattleScene: частицы, взрывы, live HP
+- [x] CollectionScene: фильтры + multi-select (итерация 13.08 — половина экрана)
+- [x] Equipped relics (drag, swap, unequip)
+- [x] Анти-абуз минтинга: daily 10 buyUnit + free ship за level-up — **live**
+- [x] Variant 1 lastBattleEvents (emit, не storage) — **live**, не «отложено»
+- [ ] Подготовка к mainnet (чеклист в MAINNET_LAUNCH_CHECKLIST.md)
+- [x] BattleScene 2.5D + частицы + анимации
 
-## Приоритет 1 (Высокий) — Актуально на 13.05.2026
-- [x] Исправить систему глубин (PrepareScene + CollectionScene)
-  - Корабли/реликвии: depth 8
-  - Слоты/рамки: depth 10 (только визуальные, интерактивность отключена)
-  - Drag: depth 30
-  - Tooltip: depth 100
-  - Внешняя рамка: depth 200
-- [x] Починить hover, drag, double-click на юнитах в команде (PrepareScene)
-- [x] Добавить полноценный drag + click (unequip/swap) для equipped relics
+## Приоритет 1
+- [x] Hover / drag / double-click команды
+- [x] Drag + click equipped relics
+- [ ] Стабилизировать глубины после снятия `outer_frame` (старый spec depth 200 больше не верный)
 
-
-## Приоритет 2 (Средний)
-- [x] Полная переработка CollectionScene (фильтры, multi-select, превью, floating panel)
-- [x] Механика equipped relics (drag between slots + unequip)
-- [ ] Улучшенный боевой лог (цвета, иконки, анимация событий)
-- [ ] Экран победы/поражения с анимацией
+## Приоритет 2
+- [x] Боевой лог: цвета, DESTROYED, анимация строк (базовый вариант 13.08)
+- [x] Экран победы/поражения со статами (базовый вариант 13.08)
+- [ ] Дожать визуал лога/итога после аудита layout
 
 ## Приоритет 3 (Низкий)
 - [ ] Улучшенные туториалы
 - [ ] Система достижений
 - [ ] Звуки и музыка
 
-## Готово в v1.6.1 (13.05.2026)
+## ARCHIVE — Готово в v1.6.1 (13.05.2026)
 - Полная синхронизация глубин и input между PrepareScene и CollectionScene
 - Рабочий drag & drop + double-click для юнитов в команде
 - Полноценный drag + click для equipped relics (свап + unequip)
@@ -45,13 +46,13 @@
 
 
 
-дополнительное ТЗ после полировок 1.6 
+## ARCHIVE — исходное ТЗ Variant 1 (сделано 13.08.2026)
 
 ТЗ: Газ-оптимизация lastBattleEvents (Вариант 1)
 Задача:
 Оптимизировать хранение истории последнего боя в StarForgeGame.sol для снижения gas cost на 1.8–2.1 млн gas за матч.
 Приоритет: Высокий (v1.7 / после основного релиза v1.6)
-Статус: Отложено. Сохранить в TODO.md
+Статус: **Сделано и задеплоено** на Game `0x227cF27Ec12c1cCBfE536f10AE1f765DEfA8cb8a` (13.08.2026). Ниже — исходное ТЗ, оставлено как история.
 1. Текущая проблема
 В функции startMatch после _simulateBattle происходит:
 

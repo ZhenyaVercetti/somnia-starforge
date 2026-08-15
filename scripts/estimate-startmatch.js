@@ -2,9 +2,10 @@ const hre = require("hardhat");
 
 async function main() {
   const [signer] = await hre.ethers.getSigners();
+  const { readFrontendAddresses } = require("./lib/liveAddresses");
   const game = await hre.ethers.getContractAt(
     "StarForgeGame",
-    "0x4628FC45cb2f28A198A4ebF1491791b2E12D92DA",
+    readFrontendAddresses().game,
     signer
   );
   const units = [...await game.getPlayerUnits(signer.address)];

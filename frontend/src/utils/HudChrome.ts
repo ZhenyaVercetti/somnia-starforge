@@ -1,77 +1,167 @@
-// PrepareScene layout spec — 1920x1080, safe 48px.
+// 1920x1080. Slot x/y is the CENTER of the slot.
 
 export const HUD = {
   W: 1920,
   H: 1080,
-  SAFE: 48,
-  GAP: 14,
+  SAFE: 40,
 
-  BTN_W: 260,
-  BTN_H: 60,
-  BTN_FONT: '18px',
+  FONT: 'Rajdhani, Arial, sans-serif',
+  FONT_DISPLAY: 'Orbitron, Rajdhani, sans-serif',
 
-  TAB_W: 180,
-  TAB_H: 70,
-  SPEED_W: 128,
-  SPEED_H: 50,
+  BTN_W: 292,
+  BTN_H: 66,
+  BTN_FONT: '24px',
 
-  START_W: 400,
-  START_H: 132,
-  START_FONT: '30px',
+  TAB_W: 200,
+  TAB_H: 56,
+  SPEED_W: 140,
+  SPEED_H: 54,
 
-  PROFILE_W: 340,
-  PROFILE_H: 150,
+  START_W: 420,
+  START_H: 96,
+  START_FONT: '32px',
 
-  TEAM: 112,
-  SHOP: 96,
-  RELIC: 96,
-  AI: 80,
+  PROFILE_W: 380,
+  PROFILE_H: 140,
 
-  TITLE: '18px',
-  BODY: '16px',
-  SMALL: '15px',
+  TEAM: 148,
+  SHOP: 118,
+  RELIC: 126,
+  AI: 112,
+
+  TITLE: '24px',
+  BODY: '22px',
+  SMALL: '18px',
 
   color: {
-    text: '#eaf6ff',
-    accent: '#7ef3ff',
-    good: '#6dffc0',
-    warn: '#ffe566',
-    bad: '#ff7b8a',
-    muted: '#9bb0c4'
+    text: '#e8f4ff',
+    accent: '#5ee7ff',
+    good: '#5dffb0',
+    warn: '#ffd56a',
+    bad: '#ff6b88',
+    muted: '#7f96ad',
+    gold: '#f6e27a'
   }
 };
 
+// First slot CENTER so the whole row is symmetric around centerX.
+export function gridFirstCenter(centerX: number, count: number, size: number, gap: number): number {
+  return centerX - ((count - 1) * (size + gap)) / 2;
+}
+
 export const PREPARE_LAYOUT = {
-  profileX: 48,
-  profileY: 24,
+  leftX: 250,
+  centerX: 960,
+  rightX: 1660,
 
-  logoX: 960,
-  logoY: 20,
+  profileY: 20,
+  logoY: 8,
 
-  shopTitleX: 200,
-  shopTitleY: 200,
-  shopFirstX: 110,
-  shopY: 280,
-  shopGap: 14,
+  shopTitleY: 214,
+  shopY: 300,
+  shopGap: 18,
 
-  leftBtnX: 200,
-  leftBtnY0: 400,
-  leftBtnStep: 72,
+  leftBtnY0: 470,
+  leftBtnStep: 80,
 
-  autoY: 145,
-  fleetTitleX: 960,
-  fleetTitleY: 200,
-  teamCenterX: 960,
-  teamTopY: 320,
-  teamGap: 14,
+  autoY: 872,
+  fleetTitleY: 176,
+  teamTopY: 316,
+  teamGap: 36,
 
-  relicY: 656,
+  relicY: 736,
 
-  aiTitleX: 1640,
-  aiTitleY: 200,
-  aiCenterX: 1640,
-  aiTopY: 320,
+  aiTitleY: 176,
+  aiTopY: 316,
+  aiGap: 20,
 
-  startX: 960,
-  startY: 980
+  startY: 1008
 };
+
+export function hudText(overrides: Record<string, unknown> = {}) {
+  return {
+    fontFamily: HUD.FONT,
+    fontStyle: '700',
+    ...overrides
+  };
+}
+
+export const RELIC_META = [
+  { key: 'quantum_strike', name: 'Quantum Strike', short: 'ATK' },
+  { key: 'void_shield', name: 'Void Shield', short: 'DEF' },
+  { key: 'nebula_dash', name: 'Nebula Dash', short: 'SPD' },
+  { key: 'echo_core', name: 'Echo Core', short: 'HP' },
+  { key: 'flux_overload', name: 'Flux Overload', short: 'CRIT' },
+  { key: 'last_stand', name: 'Last Stand', short: 'STAND' }
+] as const;
+
+export const FACTION_NAMES = ['Empire', 'Voidborn', 'Mechanoids'] as const;
+export const CLASS_NAMES = ['Fighter', 'Cruiser', 'Dreadnought', 'Drone Swarm'] as const;
+export const CLASS_SHORT = ['Ftr', 'Cru', 'Drd', 'Swarm'] as const;
+export const RARITY_NAMES = ['Common', 'Rare', 'Legendary'] as const;
+
+const SHIP_KEYS: Record<string, string> = {
+  '0_0': 'emperial_fighter',
+  '0_1': 'emperial_cruiser',
+  '0_2': 'emperial_dreadnought',
+  '0_3': 'emperial_droneswarm',
+  '1_0': 'voidborn_fighter',
+  '1_1': 'voidborn_cruiser',
+  '1_2': 'voidborn_dreadnought',
+  '1_3': 'voidborn_droneswarm',
+  '2_0': 'mechanoid_fighter',
+  '2_1': 'mechanoid_cruiser',
+  '2_2': 'mechanoid_dreadnought',
+  '2_3': 'mechanoid_droneswarm'
+};
+
+const RELIC_EFFECTS = [
+  'Raises ATK for the whole fleet',
+  'Raises DEF for the whole fleet',
+  'Raises SPD for the whole fleet',
+  'Raises HP for the whole fleet',
+  'Raises crit chance for the fleet',
+  'Once per ship: survive a killing blow at 1 HP'
+];
+
+export function displayText(overrides: Record<string, unknown> = {}) {
+  return {
+    fontFamily: HUD.FONT_DISPLAY,
+    fontStyle: '700',
+    ...overrides
+  };
+}
+
+export function factionName(faction: number): string {
+  return FACTION_NAMES[faction] || 'Unknown';
+}
+
+export function className(unitClass: number): string {
+  return CLASS_NAMES[unitClass] || 'Unknown';
+}
+
+export function classShort(unitClass: number): string {
+  return CLASS_SHORT[unitClass] || 'Unit';
+}
+
+export function rarityName(rarity: number): string {
+  return RARITY_NAMES[rarity] || 'Unknown';
+}
+
+export function rarityColor(rarity: number): string {
+  if (rarity === 2) return HUD.color.gold;
+  if (rarity === 1) return HUD.color.good;
+  return '#7ec8ff';
+}
+
+export function shipKey(faction: number, unitClass: number): string {
+  return SHIP_KEYS[`${faction}_${unitClass}`] || 'emperial_fighter';
+}
+
+export function relicMeta(relicType: number) {
+  return RELIC_META[relicType] || RELIC_META[0];
+}
+
+export function relicEffect(relicType: number): string {
+  return RELIC_EFFECTS[relicType] || 'Unknown effect';
+}

@@ -1,17 +1,30 @@
-// frontend/src/lib/WalletManager.ts
-import { createPublicClient, http, formatEther, type Address } from 'viem';
-import { somniaTestnet } from 'viem/chains';
+import type { Address, PublicClient, WalletClient } from 'viem';
+
+export type WalletSession = {
+  account: Address;
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+};
+
+declare global {
+  interface Window {
+    account?: Address;
+    publicClient?: PublicClient;
+    walletClient?: WalletClient;
+    walletManager?: WalletManager;
+    openWalletModal?: () => void;
+    startGame?: () => void;
+    game?: any;
+  }
+}
 
 class WalletManager {
   private static instance: WalletManager;
-  
-  public account: Address | null = null;
-  public chainId: number = 50312;
 
-  private publicClient = createPublicClient({
-    chain: somniaTestnet,
-    transport: http('https://dream-rpc.somnia.network'),
-  });
+  public account: Address | null = null;
+  public publicClient: PublicClient | null = null;
+  public walletClient: WalletClient | null = null;
+  public chainId: number = 50312;
 
   static getInstance(): WalletManager {
     if (!WalletManager.instance) {
@@ -20,31 +33,45 @@ class WalletManager {
     return WalletManager.instance;
   }
 
-  async connect(): Promise<Address> {
-    // Здесь будет реальное подключение через RainbowKit
-    // Пока заглушка, чтобы не падало
-    if (!this.account) {
-      this.account = '0x0000000000000000000000000000000000000001'; // временно
+  setSession(session: WalletSession): void {
+    this.account = session.account;
+    this.publicClient = session.publicClient;
+    this.walletClient = session.walletClient;
+    window.account = session.account;
+    window.publicClient = session.publicClient;
+    window.walletClient = session.walletClient;
+    window.walletManager = this;
+  }
+
+  restoreFromWindow(): boolean {
+    if (window.account && window.publicClient && window.walletClient) {
+      this.account = window.account;
+      this.publicClient = window.publicClient;
+      this.walletClient = window.walletClient;
+      return true;
     }
-    return this.account;
+    return false;
   }
 
-  async getBalance(): Promise<string> {
-    if (!this.account) return '0';
-    const balance = await this.publicClient.getBalance({ address: this.account });
-    return formatEther(balance);
+  getPublicClient(): PublicClient | null {
+    return this.publicClient ?? window.publicClient ?? null;
   }
 
-  getPublicClient() {
-    return this.publicClient;
+  getWalletClient(): WalletClient | null {
+    return this.walletClient ?? window.walletClient ?? null;
   }
 
   disconnect(): void {
     this.account = null;
+    this.publicClient = null;
+    this.walletClient = null;
+    delete window.account;
+    delete window.publicClient;
+    delete window.walletClient;
   }
 
   isConnected(): boolean {
-    return !!this.account;
+    return !!this.account && !!this.getWalletClient();
   }
 }
 

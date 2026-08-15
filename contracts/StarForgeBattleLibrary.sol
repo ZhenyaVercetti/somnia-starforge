@@ -56,7 +56,7 @@ struct BattleEvent {
         uint16[] aiMaxHp;
     }
 
-    uint8 constant MAX_ROUNDS = 18;
+    uint8 constant MAX_ROUNDS = 22;
     uint256 constant MAX_EVENTS = 120;
 
     function _getBaseHP(StarForgeUnitNFT.Rarity rarity) internal pure returns (uint16) {
@@ -105,10 +105,14 @@ struct BattleEvent {
         StarForgeUnitNFT unitNFT,
         StarForgeRelic relicContract,
         uint256[] memory playerRelics,
-        uint16 playerLevel
+        uint16 playerLevel,
+        uint256 battles
     ) internal view returns (BattleResult memory) {
         CombatUnit[] memory playerTeam = _getPlayerTeam(playerTeamIds, unitNFT, playerLevel, relicContract, playerRelics);
         CombatUnit[] memory aiTeamStats = _getAITeam(aiTeam);
+        _applyLevelBonus(aiTeamStats, playerLevel);
+        uint256 relicScale = _relicMirror(battles, _equippedRelicValue(relicContract, playerRelics));
+        _applyRelicsScaled(aiTeamStats, relicContract, playerRelics, relicScale);
 
         _applyFactionSynergy(playerTeam);
         _applyFactionSynergy(aiTeamStats);
@@ -153,7 +157,7 @@ struct BattleEvent {
             round++;
         }
 
-        bool playerWon = !_isTeamAlive(aiTeamStats);
+        bool playerWon = _decideWinner(playerTeam, aiTeamStats, playerMaxHp, aiMaxHp);
 
         BattleEvent[] memory finalEvents = new BattleEvent[](eventCount);
         for (uint256 i = 0; i < eventCount; i++) {
@@ -251,6 +255,36 @@ struct BattleEvent {
         return base > 18 ? 18 : base;
     }
 
+    function _shadowProgress(uint256 battles) internal pure returns (uint256) {
+        return battles > 100 ? 100 : battles;
+    }
+
+    function _equippedRelicValue(StarForgeRelic relicContract, uint256[] memory relics) internal view returns (uint256 sum) {
+        for (uint256 i = 0; i < relics.length; i++) {
+            if (relics[i] == 0) {
+                continue;
+            }
+            StarForgeRelic.RelicData memory relicData = relicContract.getRelic(relics[i]);
+            if (relicData.relicType == StarForgeRelic.RelicType.LAST_STAND) {
+                continue;
+            }
+            sum += relicData.value;
+        }
+    }
+
+    function _relicMirror(uint256 battles, uint256 relicValueSum) internal pure returns (uint256) {
+        uint256 base = 65 + _shadowProgress(battles) * 10 / 100;
+        uint256 fat = relicValueSum > 38 ? relicValueSum - 38 : 0;
+        if (fat > 14) {
+            fat = 14;
+        }
+        uint256 scale = base + fat;
+        if (scale > 80) {
+            scale = 80;
+        }
+        return scale;
+    }
+
     function _applyLevelBonus(CombatUnit[] memory team, uint16 level) internal pure {
         if (level == 0) return;
         uint256 multiplier = 100 + uint256(level) * 3;
@@ -277,19 +311,35 @@ struct BattleEvent {
         StarForgeRelic relicContract,
         uint256[] memory relics
     ) internal view {
+        _applyRelicsScaled(team, relicContract, relics, 100);
+    }
+
+    function _applyRelicsScaled(
+        CombatUnit[] memory team,
+        StarForgeRelic relicContract,
+        uint256[] memory relics,
+        uint256 scalePercent
+    ) internal view {
         for (uint256 i = 0; i < relics.length; i++) {
             if (relics[i] == 0) continue;
             StarForgeRelic.RelicData memory r = relicContract.getRelic(relics[i]);
+            uint8 value = uint8((uint256(r.value) * scalePercent) / 100);
+            if (value == 0 && r.relicType != StarForgeRelic.RelicType.LAST_STAND) continue;
             for (uint256 j = 0; j < team.length; j++) {
-                if (r.relicType == StarForgeRelic.RelicType.ATTACK_BOOST) team[j].attack += r.value;
-                else if (r.relicType == StarForgeRelic.RelicType.DEFENSE_BOOST) team[j].defense += r.value;
-                else if (r.relicType == StarForgeRelic.RelicType.SPEED_BOOST) team[j].speed += r.value;
-                else if (r.relicType == StarForgeRelic.RelicType.HP_BOOST) {
-                    team[j].hp = team[j].hp * (100 + uint16(r.value) * 3) / 100;
+                if (r.relicType == StarForgeRelic.RelicType.ATTACK_BOOST) {
+                    team[j].attack = _satAdd8(team[j].attack, value);
+                } else if (r.relicType == StarForgeRelic.RelicType.DEFENSE_BOOST) {
+                    team[j].defense = _satAdd8(team[j].defense, value);
+                } else if (r.relicType == StarForgeRelic.RelicType.SPEED_BOOST) {
+                    team[j].speed = _satAdd8(team[j].speed, value);
+                } else if (r.relicType == StarForgeRelic.RelicType.HP_BOOST) {
+                    team[j].hp = _satScaleHp(team[j].hp, value);
                     team[j].maxHp = team[j].hp;
+                } else if (r.relicType == StarForgeRelic.RelicType.CRIT_CHANCE) {
+                    team[j].critChance = _satAdd8(team[j].critChance, value);
+                } else if (r.relicType == StarForgeRelic.RelicType.LAST_STAND && scalePercent >= 50) {
+                    team[j].hasLastStand = true;
                 }
-                else if (r.relicType == StarForgeRelic.RelicType.CRIT_CHANCE) team[j].critChance += r.value;
-                else if (r.relicType == StarForgeRelic.RelicType.LAST_STAND) team[j].hasLastStand = true;
             }
         }
     }
@@ -389,9 +439,15 @@ struct BattleEvent {
         if (damageDealt > defenders[targetIdx].hp) damageDealt = defenders[targetIdx].hp;
 
         bool lastStandTriggered = false;
-        if (defenders[targetIdx].hasLastStand && defenders[targetIdx].hp <= damageDealt) {
+        if (
+            defenders[targetIdx].hasLastStand &&
+            defenders[targetIdx].hp <= damageDealt &&
+            defenders[targetIdx].hp > 0
+        ) {
+            // Consume Last Stand once. A second lethal hit must be able to kill the unit.
             damageDealt = defenders[targetIdx].hp - 1;
             defenders[targetIdx].hp = 1;
+            defenders[targetIdx].hasLastStand = false;
             lastStandTriggered = true;
             effect = "Last Stand";
         } else {
@@ -416,6 +472,57 @@ events[eventIdx] = BattleEvent({
 });
 
         return true;
+    }
+
+    function _satAdd8(uint8 baseValue, uint8 addend) private pure returns (uint8) {
+        uint256 sum = uint256(baseValue) + uint256(addend);
+        return sum >= 255 ? 255 : uint8(sum);
+    }
+
+    function _satScaleHp(uint16 hp, uint8 value) private pure returns (uint16) {
+        uint256 nextHp = uint256(hp) * (100 + uint256(value) * 3) / 100;
+        return nextHp > type(uint16).max ? type(uint16).max : uint16(nextHp);
+    }
+
+    function _remainingHp(CombatUnit[] memory team) internal pure returns (uint256 hp) {
+        for (uint256 i = 0; i < team.length; i++) {
+            hp += team[i].hp;
+        }
+    }
+
+    function _totalMaxHp(uint16[] memory maxHp) internal pure returns (uint256 total) {
+        for (uint256 i = 0; i < maxHp.length; i++) {
+            total += maxHp[i];
+        }
+    }
+
+    function _decideWinner(
+        CombatUnit[] memory playerTeam,
+        CombatUnit[] memory aiTeam,
+        uint16[] memory playerMaxHp,
+        uint16[] memory aiMaxHp
+    ) internal pure returns (bool playerWon) {
+        bool playerAlive = _isTeamAlive(playerTeam);
+        bool aiAlive = _isTeamAlive(aiTeam);
+        if (!aiAlive && playerAlive) {
+            return true;
+        }
+        if (!playerAlive) {
+            return false;
+        }
+
+        // Timeout: compare remaining HP as a share of max HP so tank relics are not an auto-loss.
+        uint256 playerHp = _remainingHp(playerTeam);
+        uint256 aiHp = _remainingHp(aiTeam);
+        uint256 playerMax = _totalMaxHp(playerMaxHp);
+        uint256 aiMax = _totalMaxHp(aiMaxHp);
+        if (playerMax == 0) {
+            return false;
+        }
+        if (aiMax == 0) {
+            return true;
+        }
+        return playerHp * aiMax > aiHp * playerMax;
     }
 
     function _isTeamAlive(CombatUnit[] memory team) internal pure returns (bool) {

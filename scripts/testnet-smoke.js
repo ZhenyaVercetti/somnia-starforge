@@ -5,7 +5,6 @@
 
 const hre = require("hardhat");
 
-const GAME = "0x4628FC45cb2f28A198A4ebF1491791b2E12D92DA";
 const BUY_UNIT_PRICE = hre.ethers.parseEther("0.01");
 
 function parseGameLogs(game, receipt) {
@@ -30,7 +29,10 @@ async function main() {
   const addressesPath = require("path").join(__dirname, "..", "frontend", "src", "lib", "contractAddresses.ts");
   const source = require("fs").readFileSync(addressesPath, "utf8");
   const gameMatch = source.match(/GAME_ADDRESS = '([^']+)'/);
-  const gameAddress = hre.ethers.getAddress((gameMatch ? gameMatch[1] : GAME).toLowerCase());
+  if (!gameMatch) {
+    throw new Error("GAME_ADDRESS missing from frontend/src/lib/contractAddresses.ts");
+  }
+  const gameAddress = hre.ethers.getAddress(gameMatch[1].toLowerCase());
 
   const game = await hre.ethers.getContractAt("StarForgeGame", gameAddress, signer);
   const balance = await hre.ethers.provider.getBalance(signer.address);

@@ -10,8 +10,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
-    using StarForgeBattleLibrary for *;
-
     // ==================== STORAGE ====================
 
     mapping(address => uint256[3]) public equippedRelics;
@@ -28,6 +26,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     mapping(address => BattleSummary) public lastBattleSummary;
     mapping(address => uint16) public freeShipsGranted;
+    address public previousGame;
 
     uint256 public constant DAILY_PAID_BUY_LIMIT = 10;
 
@@ -89,6 +88,11 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     function setPlayerProfileContract(address _playerProfile) external onlyOwner {
         playerProfileContract = StarForgePlayerProfile(_playerProfile);
+    }
+
+    function setPreviousGame(address _previousGame) external onlyOwner {
+        require(_previousGame != address(this), "Self");
+        previousGame = _previousGame;
     }
 
     function setPrices(
@@ -179,11 +183,11 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     function equipRelics(uint256[3] calldata relics) external whenNotPaused {
         playerProfileContract.createProfile(msg.sender);
 
-        for (uint256 i = 0; i < 3; i++) {
-            if (relics[i] != 0) {
-                require(relicContract.balanceOf(msg.sender, relics[i]) > 0, "You do not own this relic");
-            }
-        }
+        uint256[] memory relicsMem = new uint256[](3);
+        relicsMem[0] = relics[0];
+        relicsMem[1] = relics[1];
+        relicsMem[2] = relics[2];
+        _requireUniqueOwnedRelics(relicsMem);
 
         equippedRelics[msg.sender] = relics;
         emit RelicsEquipped(msg.sender, relics);
@@ -194,60 +198,14 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     function startMatch(uint256[] calldata team, uint256[] calldata equipped) external whenNotPaused nonReentrant {
         playerProfileContract.createProfile(msg.sender);
         require(team.length >= 4 && team.length <= 8, "Invalid team size");
+        _requireOwnedUniqueTeam(team);
+        uint256[] memory activeEquipped = _resolveEquipped(equipped);
 
-        // Проверка владения юнитами (теперь через профиль)
-        uint256[] memory ownedUnits = playerProfileContract.getPlayerUnits(msg.sender);
-        for (uint256 i = 0; i < team.length; i++) {
-            bool owns = false;
-            for (uint256 j = 0; j < ownedUnits.length; j++) {
-                if (ownedUnits[j] == team[i]) {
-                    owns = true;
-                    break;
-                }
-            }
-            require(owns, "You do not own this unit");
-        }
-
-        uint256[] memory activeEquipped = equipped.length > 0 ? equipped : new uint256[](3);
-        if (equipped.length == 0) {
-            for (uint256 i = 0; i < 3; i++) {
-                activeEquipped[i] = equippedRelics[msg.sender][i];
-            }
-        } else {
-            require(equipped.length <= 3, "Too many relics");
-            for (uint256 i = 0; i < equipped.length; i++) {
-                if (equipped[i] != 0) {
-                    require(relicContract.balanceOf(msg.sender, equipped[i]) > 0, "You do not own this relic");
-                }
-            }
-            activeEquipped = equipped;
-        }
-
-        StarForgeBattleLibrary.ShopItem[] memory aiTeam = new StarForgeBattleLibrary.ShopItem[](8);
+        StarForgePlayerProfile.PlayerProfile memory profileData = playerProfileContract.getProfile(msg.sender);
+        uint16 playerLevel = profileData.level;
+        uint256 battles = uint256(profileData.wins) + uint256(profileData.losses);
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, block.prevrandao, block.number)));
-
-        for (uint8 i = 0; i < 8; i++) {
-            uint256 aiSeed = uint256(keccak256(abi.encodePacked(seed, i, playerProfileContract.getProfile(msg.sender).level)));
-            uint8 atk = uint8(8 + (aiSeed % 13));
-            uint8 def = uint8(7 + ((aiSeed >> 8) % 12));
-            uint8 spd = uint8(8 + ((aiSeed >> 16) % 11));
-            uint8 faction = uint8((aiSeed >> 24) % 3);
-            uint8 unitClass = uint8((aiSeed >> 32) % 4);
-            uint8 rarity = _getWeightedRarity(aiSeed);
-
-            aiTeam[i] = StarForgeBattleLibrary.ShopItem({
-                isRelic: false,
-                id: 0,
-                faction: StarForgeUnitNFT.Faction(faction),
-                rarity: StarForgeUnitNFT.Rarity(rarity),
-                unitClass: StarForgeUnitNFT.UnitClass(unitClass),
-                attack: atk,
-                defense: def,
-                speed: spd,
-                relicType: 0,
-                relicValue: 0
-            });
-        }
+        StarForgeBattleLibrary.ShopItem[] memory aiTeam = _buildShadowAI(team, battles, seed);
 
         for (uint8 i = 0; i < 8; i++) {
             lastAI[msg.sender][i].isRelic    = aiTeam[i].isRelic;
@@ -270,7 +228,8 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             unitNFT,
             relicContract,
             activeEquipped,
-            playerProfileContract.getProfile(msg.sender).level
+            playerLevel,
+            battles
         );
 
         bytes32 battleId = keccak256(abi.encodePacked(
@@ -366,7 +325,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             return 0;
         }
         uint16 entitled = level - 1;
-        uint16 granted = freeShipsGranted[player];
+        uint16 granted = _grantedFreeShips(player);
         if (entitled <= granted) {
             return 0;
         }
@@ -384,6 +343,81 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         if (roll < 60) return 0;
         if (roll < 90) return 1;
         return 2;
+    }
+
+    function _shadowProgress(uint256 battles) internal pure returns (uint256) {
+        return battles > 100 ? 100 : battles;
+    }
+
+    function _lerpShadowStat(uint256 weakVal, uint256 playerVal, uint256 progress) internal pure returns (uint8) {
+        uint256 mixed = weakVal * (100 - progress) + playerVal * progress;
+        uint256 scale = 104 + progress * 6 / 100;
+        uint256 value = mixed * scale / 10000;
+        if (value == 0) {
+            value = 1;
+        }
+        if (value > 255) {
+            value = 255;
+        }
+        return uint8(value);
+    }
+
+    function _buildShadowAI(
+        uint256[] memory team,
+        uint256 battles,
+        uint256 seed
+    ) internal view returns (StarForgeBattleLibrary.ShopItem[] memory aiTeam) {
+        uint256 progress = _shadowProgress(battles);
+        uint256 n = team.length;
+        aiTeam = new StarForgeBattleLibrary.ShopItem[](8);
+
+        for (uint8 i = 0; i < 8; i++) {
+            uint256 aiSeed = uint256(keccak256(abi.encodePacked(seed, i, progress)));
+            uint8 atk;
+            uint8 def;
+            uint8 spd;
+            uint8 faction;
+            uint8 unitClass;
+            uint8 rarity;
+
+            if (i < n) {
+                StarForgeUnitNFT.Unit memory u = unitNFT.getUnit(team[i]);
+                // Same ranges as player mint. Early AI must not be wet paper.
+                uint8 weakAtk = uint8(10 + (aiSeed % 11));
+                uint8 weakDef = uint8(8 + ((aiSeed >> 8) % 11));
+                uint8 weakSpd = uint8(9 + ((aiSeed >> 16) % 11));
+                atk = _lerpShadowStat(weakAtk, u.attack, progress);
+                def = _lerpShadowStat(weakDef, u.defense, progress);
+                spd = _lerpShadowStat(weakSpd, u.speed, progress);
+                if ((aiSeed >> 48) % 100 < progress) {
+                    rarity = uint8(u.rarity);
+                } else {
+                    rarity = _getWeightedRarity(aiSeed);
+                }
+                faction = uint8(u.faction);
+                unitClass = uint8(u.unitClass);
+            } else {
+                atk = uint8(14 + (aiSeed % 7));
+                def = uint8(12 + ((aiSeed >> 8) % 7));
+                spd = uint8(13 + ((aiSeed >> 16) % 7));
+                rarity = progress < 50 ? 1 : 2;
+                faction = uint8((aiSeed >> 24) % 3);
+                unitClass = uint8((aiSeed >> 32) % 4);
+            }
+
+            aiTeam[i] = StarForgeBattleLibrary.ShopItem({
+                isRelic: false,
+                id: 0,
+                faction: StarForgeUnitNFT.Faction(faction),
+                rarity: StarForgeUnitNFT.Rarity(rarity),
+                unitClass: StarForgeUnitNFT.UnitClass(unitClass),
+                attack: atk,
+                defense: def,
+                speed: spd,
+                relicType: 0,
+                relicValue: 0
+            });
+        }
     }
 
     function _generateShopItem(uint256 seed) internal pure returns (ShopItem memory) {
@@ -432,18 +466,58 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
             return;
         }
 
+        uint16 granted = _grantedFreeShips(player);
         uint256[] memory tokenIds = new uint256[](pending);
         for (uint16 i = 0; i < pending; i++) {
-            tokenIds[i] = _mintRandomUnit(player, 1000 + uint256(freeShipsGranted[player]) + uint256(i));
+            tokenIds[i] = _mintRandomUnit(player, 1000 + uint256(granted) + uint256(i));
         }
 
-        freeShipsGranted[player] += pending;
+        freeShipsGranted[player] = granted + pending;
         emit LevelUpShipsGranted(player, pending, tokenIds);
+    }
+
+    function _grantedFreeShips(address player) internal view returns (uint16) {
+        uint16 local = freeShipsGranted[player];
+        if (local > 0 || previousGame == address(0)) {
+            return local;
+        }
+        return StarForgeGame(previousGame).freeShipsGranted(player);
+    }
+
+    function _requireOwnedUniqueTeam(uint256[] calldata team) internal view {
+        for (uint256 i = 0; i < team.length; i++) {
+            require(unitNFT.ownerOf(team[i]) == msg.sender, "Not owner");
+            for (uint256 j = 0; j < i; j++) {
+                require(team[i] != team[j], "Dup unit");
+            }
+        }
+    }
+
+    function _requireUniqueOwnedRelics(uint256[] memory relics) internal view {
+        for (uint256 i = 0; i < relics.length; i++) {
+            if (relics[i] == 0) continue;
+            require(relicContract.balanceOf(msg.sender, relics[i]) > 0, "Not owner");
+            for (uint256 j = 0; j < i; j++) {
+                require(relics[i] != relics[j], "Dup relic");
+            }
+        }
+    }
+
+    function _resolveEquipped(uint256[] calldata equipped) internal view returns (uint256[] memory active) {
+        active = new uint256[](3);
+        if (equipped.length == 0) {
+            for (uint256 i = 0; i < 3; i++) active[i] = equippedRelics[msg.sender][i];
+        } else {
+            require(equipped.length <= 3, "Too many relics");
+            for (uint256 i = 0; i < equipped.length; i++) active[i] = equipped[i];
+        }
+        _requireUniqueOwnedRelics(active);
     }
 
     function clearPlayerData() external whenNotPaused {
         delete equippedRelics[msg.sender];
         delete playerShop[msg.sender];
         delete lastBattleSummary[msg.sender];
+        delete lastAI[msg.sender];
     }
 }

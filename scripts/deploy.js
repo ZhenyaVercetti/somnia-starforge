@@ -32,7 +32,7 @@ const TESTNET_DEFAULTS = {
   unitNFT: "0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1",
   relic: "0x619e19df1975A8D289545834aAff3FEEf1b84909",
   playerProfile: "0x2C8976ECc9e9bDf939745ee61b1aD858607563d9",
-  currentGame: "0xcc51dbf77d96b477485122BA2F6Ee6beBBA21B88"
+  currentGame: "0x2087baAb3Ee7456E6B3100A58BAc7144662ea3fF"
 };
 
 const PREVIOUS_GAMES = [
@@ -40,7 +40,17 @@ const PREVIOUS_GAMES = [
   "0x4628FC45cb2f28A198A4ebF1491791b2E12D92DA",
   "0x6107dCb032ef91350e139563fDE7776E4ccd0fab",
   "0xcc51dbf77d96b477485122BA2F6Ee6beBBA21B88",
-  "0xB0768AE07a84F8172424ED331c80525D1B4564de"
+  "0xDA71D142CD494E2527e676667E62F1f3644448B0",
+  "0xB0768AE07a84F8172424ED331c80525D1B4564de",
+  "0x438736261D0620C66c20cF415e45Ca346c14F124",
+  "0x03a87273e545be3cE10DD0bdAc137E2646a002E7",
+  "0x6Ee9412b22763c28ddBFA972A30daA8aF258e807",
+  "0xD7216Ea7371B7CD75db7b644136261720CE76c48",
+  "0x666508a2CB4c5c9DE44C83724bD44338E1E80ED7",
+  "0x992F0E1C91fb2899BE882DfC50269d650007301C",
+  "0xe24D45FEc2635d556d10f86902A58FcDf8795355",
+  "0x227cF27Ec12c1cCBfE536f10AE1f765DEfA8cb8a",
+  "0x2087baAb3Ee7456E6B3100A58BAc7144662ea3fF"
 ];
 
 function requirePrivateKey() {
@@ -106,7 +116,7 @@ async function sendOwnerCall(label, contract, method, args) {
   }
 }
 
-async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, playerProfile) {
+async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, playerProfile, currentGame) {
   const completed = [];
 
   const nftContract = await hre.ethers.getContractAt("StarForgeUnitNFT", unitNFT, deployer);
@@ -151,6 +161,17 @@ async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, player
       [relic]
     )
   );
+
+  if (currentGame && currentGame.toLowerCase() !== newGame.toLowerCase()) {
+    completed.push(
+      await sendOwnerCall(
+        `StarForgeGame.setPreviousGame(${currentGame})`,
+        game.connect(deployer),
+        "setPreviousGame",
+        [currentGame]
+      )
+    );
+  }
 
   const GAME_ROLE = hre.ethers.id("GAME_ROLE");
   for (const oldGame of PREVIOUS_GAMES) {
@@ -209,12 +230,21 @@ function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile) {
   const deployment = `# DEPLOYMENT.md
 **Актуально на ${dateLabel} — единственный источник правды по адресам**
 
+Testnet: Chain ID **50312**, RPC \`https://dream-rpc.somnia.network\`
+
 ## Актуальные адреса (testnet)
 
 - **StarForgeUnitNFT**: \`${unitNFT}\`
 - **StarForgeRelic**: \`${relic}\`
 - **StarForgePlayerProfile**: \`${playerProfile}\`
 - **StarForgeGame** (новый): \`${newGame}\` ← **актуальный**
+  - Shadow Fleet (ИИ всегда 8), Variant 1 battle events (emit)
+  - anti-abuse daily 10 + free ship за level-up
+  - Last Stand 1 раз, unique team/relics, previousGame = old Game
+
+## Предыдущий Game
+
+- \`${TESTNET_DEFAULTS.currentGame}\` — снят с NFT/Relic/Profile GAME_ROLE
 
 ## Порядок деплоя и связывания контрактов
 
@@ -228,14 +258,10 @@ function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile) {
 2. После деплоя выполняем:
 
 \`\`\`solidity
-// 1. NFT → новый Game
 StarForgeUnitNFT.setGameContract(${newGame})
-
-// 2. Relic → новый Game
 StarForgeRelic.setGameContract(${newGame})
-
-// 3. PlayerProfile → новый Game
 StarForgePlayerProfile.setGameContract(${newGame})
+StarForgeGame.setPreviousGame(${TESTNET_DEFAULTS.currentGame})
 \`\`\`
 `;
 
@@ -350,7 +376,8 @@ async function main() {
     game,
     unitNFT,
     relic,
-    playerProfile
+    playerProfile,
+    TESTNET_DEFAULTS.currentGame
   );
 
   writeDeploymentFiles(newGame, unitNFT, relic, playerProfile);

@@ -36,7 +36,7 @@ const projectId = '79a5509a7deb1555059b927ba77dbad0'; // Замени на св�
 const connectors = connectorsForWallets(
   [
     {
-      groupName: 'Рекомендуемые',
+      groupName: 'Recommended',
       wallets: [
         rainbowWallet,
         metaMaskWallet,

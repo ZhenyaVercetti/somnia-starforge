@@ -1,7 +1,9 @@
 const hre = require("hardhat");
 
-const PROFILE = "0x2C8976ECc9e9bDf939745ee61b1aD858607563d9";
-const CURRENT_GAME = "0x4628FC45cb2f28A198A4ebF1491791b2E12D92DA";
+const { readFrontendAddresses } = require("./lib/liveAddresses");
+const live = readFrontendAddresses();
+const PROFILE = live.profile;
+const CURRENT_GAME = live.game;
 const OLD_GAMES = [
   "0x05bcfA66B38259ea33B6986C1f04F028f0129a9F",
   "0xB0768AE07a84F8172424ED331c80525D1B4564de"

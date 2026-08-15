@@ -4,6 +4,7 @@
 // events / playerWon / playerMaxHp / aiMaxHp / playerUnitsData / aiUnitsData.
 
 import Phaser from 'phaser';
+import { HUD, displayText, hudText, shipKey, rarityName, className } from '../utils/HudChrome';
 
 interface BattleEvent {
   round: number;
@@ -30,6 +31,7 @@ interface Combatant {
   baseScale: number;
   faction: number;
   unitClass: number;
+  rarity: number;
   alive: boolean;
   lastStandLit: boolean;
   idleTween: Phaser.Tweens.Tween | null;
@@ -40,6 +42,11 @@ const FACTION_ENGINE: Record<number, { tint: number; tintAlt: number; glow: numb
   1: { tint: 0xd48cff, tintAlt: 0x7a20ff, glow: 0xb44cff },
   2: { tint: 0xffb347, tintAlt: 0xfff1a8, glow: 0xff7a18 }
 };
+
+// Original timeline * 1.7 (70% faster), then another 50% (1.5x).
+const PLAYBACK_SCALE_NORMAL = 2.55;
+const PLAYBACK_SCALE_FAST = PLAYBACK_SCALE_NORMAL * 2;
+const PLAYBACK_SCALE_SKIP = PLAYBACK_SCALE_NORMAL * 3;
 
 export default class BattleScene extends Phaser.Scene {
   private battleEvents: BattleEvent[] = [];
@@ -57,8 +64,17 @@ export default class BattleScene extends Phaser.Scene {
   private fullBattleLog: string[] = [];
   private logContainer: Phaser.GameObjects.Container | null = null;
   private logTitle: Phaser.GameObjects.Text | null = null;
+  private logPanel: Phaser.GameObjects.Rectangle | null = null;
   private battleSpeedMultiplier = 1;
+  private playbackTimeScale = PLAYBACK_SCALE_NORMAL;
+  private skipActive = false;
+  private speedFast = false;
   private isPlaying = false;
+  private resultOpen = false;
+  private maxRound = 0;
+  private roundHud: Phaser.GameObjects.Text | null = null;
+  private sideLabelPlayer: Phaser.GameObjects.Text | null = null;
+  private sideLabelEnemy: Phaser.GameObjects.Text | null = null;
 
   private backgroundLayers: Phaser.GameObjects.Image[] = [];
   private cameraDriftTween: Phaser.Tweens.Tween | null = null;
@@ -73,7 +89,10 @@ export default class BattleScene extends Phaser.Scene {
   private overlay: Phaser.GameObjects.Rectangle | null = null;
   private speedBtnBase: Phaser.GameObjects.Image | null = null;
   private speedBtnText: Phaser.GameObjects.Text | null = null;
+  private skipBtnBase: Phaser.GameObjects.Image | null = null;
+  private skipBtnText: Phaser.GameObjects.Text | null = null;
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
+  private savedTeam: number[] = [];
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -86,9 +105,17 @@ export default class BattleScene extends Phaser.Scene {
     this.aiMaxHp = data.aiMaxHp || [];
     this.playerUnitsData = data.playerUnitsData || [];
     this.aiUnitsData = data.aiUnitsData || [];
+    this.savedTeam = Array.isArray(data.savedTeam) ? data.savedTeam.map((id: unknown) => Number(id)) : [];
     this.currentEventIndex = 0;
     this.isPlaying = false;
     this.battleSpeedMultiplier = 1;
+    this.skipActive = false;
+    this.speedFast = false;
+    this.playbackTimeScale = PLAYBACK_SCALE_NORMAL;
+    this.resultOpen = false;
+    this.maxRound = 0;
+    this.fullBattleLog = [];
+    this.battleLogTexts = [];
   }
 
   preload() {
@@ -96,8 +123,11 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('nebula_mid', 'assets/background/nebula_mid.png');
     this.load.image('nebula_close', 'assets/background/nebula_close.png');
     this.load.image('arena_platform', 'assets/background/arena_platform.png');
-    this.load.image('outer_frame', 'assets/outer_frame.png');
+
     this.load.image('button_base', 'assets/button_base.png');
+    this.load.image('ui_titlebar', 'assets/ui/ui_titlebar.png');
+    this.load.image('ui_plate', 'assets/ui/ui_plate.png');
+    this.load.image('ui_result', 'assets/ui/ui_result.png');
 
     this.load.image('laser_blue', 'assets/effects/laser_blue.png');
     this.load.image('laser_red', 'assets/effects/laser_red.png');
@@ -157,15 +187,13 @@ export default class BattleScene extends Phaser.Scene {
     this.createSharedEmitters();
     this.createCinematicOverlay();
     this.createSpeedButton();
+    this.createSkipButton();
+    this.applyPlaybackRate();
     this.startCameraDrift();
 
     this.setupTeams();
     this.setupBattleLog();
-
-    this.add.image(960, 540, 'outer_frame')
-      .setDisplaySize(1920, 1080)
-      .setDepth(900)
-      .setScrollFactor(0);
+    this.setupBattleChrome();
 
     if (this.battleEvents.length === 0) {
       this.showEmptyState();
@@ -426,29 +454,91 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private createSpeedButton() {
-    this.speedBtnBase = this.add.image(1840, 52, 'button_base')
-      .setDisplaySize(128, 50)
+    this.speedBtnBase = this.add.image(1836, 48, 'button_base')
+      .setDisplaySize(120, HUD.SPEED_H)
       .setInteractive({ useHandCursor: true })
       .setDepth(910)
       .setScrollFactor(0);
 
-    this.speedBtnText = this.add.text(1840, 52, 'x2', {
-      fontSize: '26px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(911).setScrollFactor(0);
+    this.speedBtnText = this.add.text(1836, 48, 'x2', hudText({
+      fontSize: '22px',
+      color: '#ffffff'
+    })).setOrigin(0.5).setDepth(911).setScrollFactor(0);
 
-    this.speedBtnBase.on('pointerdown', () => {
-      if (this.battleSpeedMultiplier === 1) {
-        this.battleSpeedMultiplier = 0.5;
-        this.speedBtnText?.setText('x1');
-        this.speedBtnText?.setColor('#ffff66');
-      } else {
-        this.battleSpeedMultiplier = 1;
-        this.speedBtnText?.setText('x2');
-        this.speedBtnText?.setColor('#ffffff');
+    this.speedBtnBase.on('pointerdown', () => this.toggleFastSpeed());
+  }
+
+  private createSkipButton() {
+    this.skipBtnBase = this.add.image(1696, 48, 'button_base')
+      .setDisplaySize(120, HUD.SPEED_H)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(910)
+      .setScrollFactor(0);
+
+    this.skipBtnText = this.add.text(1696, 48, 'SKIP', hudText({
+      fontSize: '18px',
+      color: '#ffffff'
+    })).setOrigin(0.5).setDepth(911).setScrollFactor(0);
+
+    this.skipBtnBase.on('pointerdown', () => this.toggleSkip());
+    this.input.keyboard?.on('keydown-SPACE', () => this.toggleSkip());
+    this.input.keyboard?.on('keydown-ESC', () => this.toggleSkip());
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (this.resultOpen) {
+        this.returnToPrepare();
       }
     });
+  }
+
+  private toggleFastSpeed() {
+    this.speedFast = !this.speedFast;
+    this.skipActive = false;
+    this.refreshSpeedButton();
+    this.refreshSkipButton();
+    this.applyPlaybackRate();
+  }
+
+  private toggleSkip() {
+    if (this.resultOpen) {
+      this.returnToPrepare();
+      return;
+    }
+    if (!this.isPlaying) {
+      return;
+    }
+    this.skipActive = !this.skipActive;
+    this.refreshSkipButton();
+    this.applyPlaybackRate();
+  }
+
+  private refreshSpeedButton() {
+    if (this.speedFast) {
+      this.speedBtnText?.setText('x1');
+      this.speedBtnText?.setColor('#ffff66');
+    } else {
+      this.speedBtnText?.setText('x2');
+      this.speedBtnText?.setColor('#ffffff');
+    }
+  }
+
+  private refreshSkipButton() {
+    if (this.skipActive) {
+      this.skipBtnText?.setColor('#ffff66');
+    } else {
+      this.skipBtnText?.setColor('#ffffff');
+    }
+  }
+
+  private applyPlaybackRate() {
+    if (this.skipActive) {
+      this.playbackTimeScale = PLAYBACK_SCALE_SKIP;
+    } else if (this.speedFast) {
+      this.playbackTimeScale = PLAYBACK_SCALE_FAST;
+    } else {
+      this.playbackTimeScale = PLAYBACK_SCALE_NORMAL;
+    }
+    this.time.timeScale = this.playbackTimeScale;
+    this.tweens.timeScale = this.playbackTimeScale;
   }
 
   // ---------------------------------------------------------------------------
@@ -533,13 +623,13 @@ export default class BattleScene extends Phaser.Scene {
     engine.startFollow(ship, isPlayer ? -22 : 22, 10);
 
     const barY = y - 42;
-    const hpBg = this.add.rectangle(x, barY, 54, 5, 0x140818)
-      .setStrokeStyle(1, palette.glow, 0.35)
+    const hpBg = this.add.rectangle(x, barY, 56, 6, 0x140818)
+      .setStrokeStyle(1, palette.glow, 0.45)
       .setDepth(y + 34)
-      .setAlpha(0);
-    const hpFill = this.add.rectangle(x, barY, 54, 5, isPlayer ? 0x5dffb0 : 0xff6b7d)
+      .setAlpha(0.92);
+    const hpFill = this.add.rectangle(x, barY, 56, 6, isPlayer ? 0x5dffb0 : 0xff6b7d)
       .setDepth(y + 35)
-      .setAlpha(0);
+      .setAlpha(1);
     (hpFill as any).maxHp = maxHp;
     (hpFill as any).currentHp = maxHp;
 
@@ -574,6 +664,7 @@ export default class BattleScene extends Phaser.Scene {
       baseScale,
       faction,
       unitClass,
+      rarity: Number(unit.rarity ?? 0),
       alive: true,
       lastStandLit: false,
       idleTween
@@ -606,6 +697,7 @@ export default class BattleScene extends Phaser.Scene {
 
     const event = this.battleEvents[this.currentEventIndex];
     this.currentEventIndex += 1;
+    this.updateRoundHud(Number(event.round) || 0);
     this.animateEvent(event);
 
     const kill = Number(event.remainingHp) <= 0;
@@ -618,8 +710,8 @@ export default class BattleScene extends Phaser.Scene {
     const isPlayer = event.isPlayerSide;
     const attackers = isPlayer ? this.playerUnits : this.aiUnits;
     const defenders = isPlayer ? this.aiUnits : this.playerUnits;
-    const attacker = attackers[event.attackerIndex % attackers.length];
-    const target = defenders[event.targetIndex % defenders.length];
+    const attacker = attackers[event.attackerIndex];
+    const target = defenders[event.targetIndex];
     if (!attacker || !target || !attacker.ship || !target.ship) return;
 
     const speed = this.battleSpeedMultiplier;
@@ -933,6 +1025,7 @@ export default class BattleScene extends Phaser.Scene {
     this.delay(500 * this.battleSpeedMultiplier, () => {
       if (target.engine) target.engine.stop();
     });
+    this.refreshSideLabels();
   }
 
   private playExplosion(x: number, y: number) {
@@ -977,7 +1070,7 @@ export default class BattleScene extends Phaser.Scene {
 
     target.hpBg.setAlpha(0.9);
     target.hpFill.setAlpha(0.95);
-    target.hpFill.width = 54 * percent;
+    target.hpFill.width = 56 * percent;
 
     let color = 0x5dffb0;
     if (percent < 0.3) color = 0xff4455;
@@ -1028,8 +1121,8 @@ export default class BattleScene extends Phaser.Scene {
     this.time.timeScale = 0.22;
     this.tweens.timeScale = 0.22;
     this.delay(ms, () => {
-      this.time.timeScale = 1;
-      this.tweens.timeScale = 1;
+      this.time.timeScale = this.playbackTimeScale;
+      this.tweens.timeScale = this.playbackTimeScale;
     }, false);
   }
 
@@ -1055,20 +1148,94 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private setupBattleLog() {
-    this.logContainer = this.add.container(960, 948).setDepth(880).setScrollFactor(0);
-    this.logTitle = this.add.text(960, 922, 'BATTLE LOG', {
-      fontSize: '16px',
-      color: '#f6e27a',
-      fontStyle: 'bold',
+    this.fullBattleLog = [];
+    this.battleLogTexts.forEach((entry) => entry.destroy());
+    this.battleLogTexts = [];
+    this.logPanel?.destroy();
+    this.logTitle?.destroy();
+    this.logContainer?.destroy();
+
+    this.add.image(960, 1000, 'ui_plate')
+      .setDisplaySize(1080, 150)
+      .setAlpha(0.72)
+      .setDepth(878)
+      .setScrollFactor(0);
+    this.logPanel = this.add.rectangle(960, 1006, 1040, 128, 0x080d16, 0.42)
+      .setStrokeStyle(1, 0x1f3a4d, 0.7)
+      .setDepth(879)
+      .setScrollFactor(0);
+    this.logTitle = this.add.text(960, 932, 'COMBAT LOG', displayText({
+      fontSize: '14px',
+      color: HUD.color.gold,
       stroke: '#1a1020',
       strokeThickness: 3
-    }).setOrigin(0.5).setDepth(881).setScrollFactor(0);
+    })).setOrigin(0.5).setDepth(881).setScrollFactor(0);
+    this.logContainer = this.add.container(960, 948).setDepth(880).setScrollFactor(0);
+  }
+
+  private setupBattleChrome() {
+    this.maxRound = this.battleEvents.reduce(
+      (max, event) => Math.max(max, Number(event.round) || 0),
+      0
+    );
+    this.add.image(960, 42, 'ui_titlebar')
+      .setDisplaySize(520, 64)
+      .setAlpha(0.96)
+      .setDepth(911)
+      .setScrollFactor(0);
+    this.roundHud = this.add.text(
+      960,
+      40,
+      this.maxRound > 0 ? `ROUND 0 / ${this.maxRound}` : 'BATTLE',
+      displayText({
+        fontSize: '26px',
+        color: HUD.color.gold,
+        stroke: '#120818',
+        strokeThickness: 5
+      })
+    ).setOrigin(0.5).setDepth(912).setScrollFactor(0);
+
+    this.sideLabelPlayer = this.add.text(250, 128, 'YOUR FLEET', displayText({
+      fontSize: '20px',
+      color: '#9fd6ff',
+      stroke: '#120818',
+      strokeThickness: 4
+    })).setOrigin(0.5).setDepth(860).setScrollFactor(0);
+
+    this.sideLabelEnemy = this.add.text(1660, 128, 'VOID FLEET', displayText({
+      fontSize: '20px',
+      color: '#ff9aa8',
+      stroke: '#120818',
+      strokeThickness: 4
+    })).setOrigin(0.5).setDepth(860).setScrollFactor(0);
+
+    this.refreshSideLabels();
+  }
+
+  private updateRoundHud(round: number) {
+    if (!this.roundHud) {
+      return;
+    }
+    const total = this.maxRound || round;
+    this.roundHud.setText(`ROUND ${round} / ${total}`);
+  }
+
+  private refreshSideLabels() {
+    const playerAlive = this.playerUnits.filter((unit) => unit.alive).length;
+    const aiAlive = this.aiUnits.filter((unit) => unit.alive).length;
+    this.sideLabelPlayer?.setText(`YOUR FLEET  ${playerAlive}`);
+    this.sideLabelEnemy?.setText(`VOID FLEET  ${aiAlive}`);
   }
 
   private pushLogLine(event: BattleEvent, damage: number, effect: string) {
-    const attackerName = `${this.getRarityName(event.attackerRarity)} ${this.getClassName(event.attackerClass)}`;
-    const targetName = `${this.getRarityName(event.targetRarity)} ${this.getClassName(event.targetClass)}`;
+    const attackers = event.isPlayerSide ? this.playerUnits : this.aiUnits;
+    const defenders = event.isPlayerSide ? this.aiUnits : this.playerUnits;
+    const attacker = attackers[event.attackerIndex];
+    const target = defenders[event.targetIndex];
+    const attackerName = `${this.getRarityName(attacker?.rarity ?? event.attackerRarity)} ${this.getClassName(attacker?.unitClass ?? event.attackerClass)}`;
+    const targetName = `${this.getRarityName(target?.rarity ?? event.targetRarity)} ${this.getClassName(target?.unitClass ?? event.targetClass)}`;
     const side = event.isPlayerSide ? 'YOU' : 'VOID';
+    const isKill = Number(event.remainingHp) <= 0 && effect !== 'DODGE';
     let color = event.isPlayerSide ? '#9fd6ff' : '#ff9aa8';
     let suffix = `${damage}`;
     if (effect === 'CRIT') {
@@ -1081,6 +1248,10 @@ export default class BattleScene extends Phaser.Scene {
       color = '#ff6b7a';
       suffix = `LAST STAND ${damage}`;
     }
+    if (isKill) {
+      color = event.isPlayerSide ? '#7dffc4' : '#ff6b88';
+      suffix = `${suffix}  ·  DESTROYED`;
+    }
 
     const line = `R${event.round}  ${side}  ${attackerName} → ${targetName}  ${suffix}`;
     this.addToLog(line, color);
@@ -1088,50 +1259,97 @@ export default class BattleScene extends Phaser.Scene {
 
   private addToLog(text: string, color = '#d0d0ff') {
     this.fullBattleLog.push(text);
-    const logText = this.add.text(0, 0, text, {
-      fontSize: '15px',
+    const logText = this.add.text(0, -10, text, hudText({
+      fontSize: '16px',
       color,
-      fontStyle: 'bold',
       stroke: '#0a0612',
       strokeThickness: 3,
-      wordWrap: { width: 1400 },
+      wordWrap: { width: 980 },
       align: 'center'
-    }).setOrigin(0.5, 0).setDepth(882);
+    })).setOrigin(0.5, 0).setDepth(882).setAlpha(0).setScale(1.06);
 
     this.battleLogTexts.unshift(logText);
     this.logContainer?.add(logText);
     this.battleLogTexts.forEach((entry, index) => {
-      entry.y = index * 22;
-      entry.setAlpha(1 - index * 0.16);
+      this.tweens.add({
+        targets: entry,
+        y: index * 20,
+        alpha: index === 0 ? 1 : Math.max(0.32, 1 - index * 0.13),
+        scale: 1,
+        duration: 160,
+        ease: 'Cubic.easeOut'
+      });
     });
 
-    if (this.battleLogTexts.length > 4) {
+    if (this.battleLogTexts.length > 6) {
       const old = this.battleLogTexts.pop();
-      old?.destroy();
+      if (old) {
+        this.tweens.add({
+          targets: old,
+          alpha: 0,
+          duration: 120,
+          onComplete: () => old.destroy()
+        });
+      }
     }
   }
 
   private showEmptyState() {
-    this.add.text(960, 420, 'NO BATTLE DATA FROM CONTRACT', {
+    this.add.rectangle(960, 500, 760, 220, 0x080d16, 0.88)
+      .setStrokeStyle(1, 0x5ee7ff, 0.3)
+      .setDepth(919);
+    this.add.text(960, 450, 'NO BATTLE DATA', displayText({
       fontSize: '32px',
-      color: '#ff4444',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(920);
+      color: HUD.color.bad
+    })).setOrigin(0.5).setDepth(920);
+    this.add.text(960, 494, 'The match receipt had no events.', hudText({
+      fontSize: HUD.BODY,
+      color: HUD.color.muted
+    })).setOrigin(0.5).setDepth(920);
 
-    const backBtn = this.add.image(960, 520, 'button_base')
-      .setDisplaySize(256, 100)
+    const backBtn = this.add.image(960, 560, 'button_base')
+      .setDisplaySize(280, 64)
       .setInteractive({ useHandCursor: true })
       .setDepth(920);
-    this.add.text(960, 520, 'BACK TO PREPARE', {
+    this.add.text(960, 560, 'GO BACK', hudText({
       fontSize: '22px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(921);
+      color: '#ffffff'
+    })).setOrigin(0.5).setDepth(921);
     backBtn.on('pointerdown', () => this.returnToPrepare());
   }
 
   private showFinalResult() {
     this.isPlaying = false;
+    this.resultOpen = true;
+    this.skipActive = false;
+    this.playbackTimeScale = 1;
+    this.time.timeScale = 1;
+    this.tweens.timeScale = 1;
+
+    const hudFade = [
+      this.logPanel,
+      this.logTitle,
+      this.logContainer,
+      this.speedBtnBase,
+      this.speedBtnText,
+      this.skipBtnBase,
+      this.skipBtnText,
+      this.roundHud,
+      this.sideLabelPlayer,
+      this.sideLabelEnemy
+    ].filter((obj) => !!obj);
+    if (hudFade.length > 0) {
+      this.tweens.add({
+        targets: hudFade,
+        alpha: 0,
+        duration: 240,
+        onComplete: () => {
+          this.speedBtnBase?.disableInteractive();
+          this.skipBtnBase?.disableInteractive();
+        }
+      });
+    }
+
     const winners = this.playerWon ? this.playerUnits : this.aiUnits;
     const midX = winners.length > 0
       ? winners.reduce((sum, unit) => sum + unit.homeX, 0) / winners.length
@@ -1161,48 +1379,82 @@ export default class BattleScene extends Phaser.Scene {
 
     const title = this.playerWon ? 'VICTORY' : 'DEFEAT';
     const color = this.playerWon ? '#5dffb0' : '#ff4d6d';
+    const playerAlive = this.playerUnits.filter((unit) => unit.alive).length;
+    const aiAlive = this.aiUnits.filter((unit) => unit.alive).length;
+    const playerTotal = Math.max(this.playerUnits.length, 1);
+    const aiTotal = Math.max(this.aiUnits.length, 1);
+    const lastRound = this.battleEvents.length > 0
+      ? Number(this.battleEvents[this.battleEvents.length - 1].round) || 0
+      : 0;
+    const playerKills = this.battleEvents.filter(
+      (event) => event.isPlayerSide && Number(event.remainingHp) <= 0
+    ).length;
+    const aiKills = this.battleEvents.filter(
+      (event) => !event.isPlayerSide && Number(event.remainingHp) <= 0
+    ).length;
+    const subtitle = playerAlive > 0 && aiAlive > 0
+      ? (this.playerWon ? 'Timeout: your fleet held more HP' : 'Timeout: enemy held more HP')
+      : (this.playerWon ? `${playerAlive} ships remaining` : `${aiAlive} enemy ships remaining`);
+    const statsLine = `YOUR FLEET  ${playerAlive}/${playerTotal}     ENEMY  ${aiAlive}/${aiTotal}     ROUNDS  ${lastRound}     KILLS  ${playerKills}–${aiKills}`;
 
     const veil = this.add.rectangle(960, 540, 1920, 1080, 0x050010, 0)
       .setDepth(930)
       .setScrollFactor(0);
-    this.tweens.add({ targets: veil, alpha: 0.35, duration: 500 });
+    this.tweens.add({ targets: veil, alpha: 0.48, duration: 500 });
 
-    const result = this.add.text(960, 86, title, {
+    const plate = this.add.image(960, 220, 'ui_result')
+      .setDisplaySize(920, 340)
+      .setAlpha(0)
+      .setDepth(934)
+      .setScrollFactor(0);
+    this.tweens.add({ targets: plate, alpha: 0.96, duration: 360 });
+
+    const result = this.add.text(960, 160, title, displayText({
       fontSize: '72px',
       color,
-      fontStyle: 'bold',
       stroke: '#120818',
       strokeThickness: 8
-    }).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0).setScale(0.6);
+    })).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0).setScale(0.7);
 
     this.tweens.add({
       targets: result,
       alpha: 1,
       scale: 1,
-      duration: 480,
+      duration: 520,
       ease: 'Back.easeOut'
     });
 
-    const glow = this.add.image(960, 86, 'energy_ring')
-      .setScale(1.25)
-      .setTint(this.playerWon ? 0x3dff9a : 0xff3355)
-      .setAlpha(0)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(935)
-      .setScrollFactor(0);
-    this.tweens.add({ targets: glow, alpha: 0.45, duration: 500, yoyo: true, repeat: 2 });
+    const subtitleText = this.add.text(960, 228, subtitle, hudText({
+      fontSize: '26px',
+      color: '#d8e6f4',
+      stroke: '#120818',
+      strokeThickness: 3
+    })).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0);
 
-    const btn = this.add.image(960, 980, 'button_base')
-      .setDisplaySize(256, 100)
+    const statsText = this.add.text(960, 274, statsLine, hudText({
+      fontSize: '22px',
+      color: HUD.color.gold,
+      stroke: '#120818',
+      strokeThickness: 3
+    })).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0);
+
+    this.tweens.add({
+      targets: [subtitleText, statsText],
+      alpha: 1,
+      duration: 360,
+      delay: 180
+    });
+
+    const btn = this.add.image(960, 348, 'button_base')
+      .setDisplaySize(280, 64)
       .setInteractive({ useHandCursor: true })
       .setDepth(941)
       .setScrollFactor(0)
       .setAlpha(0);
-    const btnText = this.add.text(960, 980, 'GO BACK', {
-      fontSize: '26px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(942).setScrollFactor(0).setAlpha(0);
+    const btnText = this.add.text(960, 348, 'GO BACK', hudText({
+      fontSize: '22px',
+      color: '#ffffff'
+    })).setOrigin(0.5).setDepth(942).setScrollFactor(0).setAlpha(0);
 
     this.tweens.add({
       targets: [btn, btnText],
@@ -1216,7 +1468,22 @@ export default class BattleScene extends Phaser.Scene {
 
   private returnToPrepare() {
     this.shutdownCleanup();
-    this.scene.start('PrepareScene');
+    const walletManager = window.walletManager;
+    if (walletManager) {
+      walletManager.restoreFromWindow();
+    }
+    this.scene.start('PrepareScene', {
+      account: window.account,
+      publicClient: window.publicClient,
+      walletClient: window.walletClient,
+      walletManager,
+      savedTeam: [...this.savedTeam],
+      lastBattleResult: {
+        won: this.playerWon,
+        playerAlive: this.playerUnits.filter((unit) => unit.alive).length,
+        aiAlive: this.aiUnits.filter((unit) => unit.alive).length
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -1224,21 +1491,7 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   private getShipKey(faction: number, unitClass: number): string {
-    const map: Record<string, string> = {
-      '0_0': 'emperial_fighter',
-      '0_1': 'emperial_cruiser',
-      '0_2': 'emperial_dreadnought',
-      '0_3': 'emperial_droneswarm',
-      '1_0': 'voidborn_fighter',
-      '1_1': 'voidborn_cruiser',
-      '1_2': 'voidborn_dreadnought',
-      '1_3': 'voidborn_droneswarm',
-      '2_0': 'mechanoid_fighter',
-      '2_1': 'mechanoid_cruiser',
-      '2_2': 'mechanoid_dreadnought',
-      '2_3': 'mechanoid_droneswarm'
-    };
-    return map[`${faction}_${unitClass}`] || 'emperial_fighter';
+    return shipKey(faction, unitClass);
   }
 
   private getDestroyedShipKey(faction?: number, unitClass?: number): string | null {
@@ -1261,14 +1514,11 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private getRarityName(rarity?: number): string {
-    if (rarity === 2) return 'Legendary';
-    if (rarity === 1) return 'Rare';
-    return 'Common';
+    return rarityName(Number(rarity) || 0);
   }
 
   private getClassName(unitClass?: number): string {
-    const names = ['Fighter', 'Cruiser', 'Dreadnought', 'Drone Swarm'];
-    return names[unitClass || 0] || 'Unknown';
+    return className(Number(unitClass) || 0);
   }
 
   private delay(ms: number, fn: () => void, scaleWithBattle = true) {
@@ -1321,6 +1571,14 @@ export default class BattleScene extends Phaser.Scene {
     this.logContainer = null;
     this.logTitle?.destroy();
     this.logTitle = null;
+    this.logPanel?.destroy();
+    this.logPanel = null;
+    this.roundHud?.destroy();
+    this.roundHud = null;
+    this.sideLabelPlayer?.destroy();
+    this.sideLabelPlayer = null;
+    this.sideLabelEnemy?.destroy();
+    this.sideLabelEnemy = null;
 
     this.overlay?.destroy();
     this.overlay = null;
@@ -1328,6 +1586,14 @@ export default class BattleScene extends Phaser.Scene {
     this.speedBtnBase = null;
     this.speedBtnText?.destroy();
     this.speedBtnText = null;
+    this.skipBtnBase?.destroy();
+    this.skipBtnBase = null;
+    this.skipBtnText?.destroy();
+    this.skipBtnText = null;
+    this.resultOpen = false;
+    this.input.keyboard?.off('keydown-SPACE');
+    this.input.keyboard?.off('keydown-ESC');
+    this.input.keyboard?.off('keydown-ENTER');
 
     this.backgroundLayers = [];
     this.cameraDriftTween = null;

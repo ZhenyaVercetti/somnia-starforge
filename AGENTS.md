@@ -11,11 +11,12 @@ Never suggest other developers or agents.
 - Communication with user: Russian, direct, no fluff, no motivational phrases, no extra emojis.
 
 ## Stack (strict)
-- On-chain: Solidity 0.8.27+ , Hardhat / Thirdweb / @somnia-chain/streams
-- Deploy: Remix (Thirdweb does not allow deploy inside itself)
+- On-chain: Solidity 0.8.27+ , Hardhat
+- Deploy: `npx hardhat run scripts/deploy.js --network somniaTestnet` (Remix only as fallback)
 - Testnet: Chain ID 50312, RPC https://dream-rpc.somnia.network
 - Mainnet: Chain ID 5031
-- Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + @somniaforge/sdk + Sequence SDK
+- Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + RainbowKit
+- Patterns in use: Ownable + ReentrancyGuard + Pausable on Game; AccessControl only on PlayerProfile; ERC-721 / ERC-1155 soulbound. No UUPS.
 
 ## Core Rules (never break)
 - Think only in terms of EVM + Somnia (TPS allows fully on-chain battle resolution).
@@ -34,16 +35,17 @@ Never suggest other developers or agents.
 
 ## Documents
 - DEPLOYMENT.md is the single source of truth for contract addresses.
+- AUDIT_HANDOFF.md is the handoff for a follow-up audit agent. Read it first if the user asks for audit/review.
 - You maintain GDD.
-- User maintains CHANGELOG, TODO, FRONTEND_ARCH etc.
+- CHANGELOG, TODO, FRONTEND_ARCH: update only when the user explicitly asks.
 - Never update or overwrite any document automatically. Only give updated text when user explicitly asks.
 
 ## Deploy reminders (always)
 When updating StarForgeGame.sol:
-1. Deploy NEW StarForgeGame with `_unitNFT = current StarForgeUnitNFT address`
-2. In StarForgeUnitNFT call `setGameContract(new Game address)`
-3. In new StarForgeGame call `setRelicContract(current Relic address)`
-4. In Relic call `setGameContract(new StarForgeGame address)`
+1. Deploy NEW StarForgeGame with ctor `(current NFT, current Relic, current Profile)`
+2. NFT / Relic / Profile: `setGameContract(new Game)`
+3. New Game: `setRelicContract(current Relic)` and `setPreviousGame(old Game)` so free ships do not remint
+4. Profile: revoke `GAME_ROLE` from old Game addresses
 
 When updating StarForgeUnitNFT.sol:
 1. Deploy new NFT
@@ -56,7 +58,12 @@ When updating StarForgeRelic.sol:
 
 Always remind current addresses from DEPLOYMENT.md and the new ones after update.
 
-## Current state
-- Version: v1.6 / v1.6.3
-- Goal: finish v1.6 and release to mainnet
-- Priority: gas optimization of lastBattleEvents (Variant 1), mint anti-abuse, mainnet prep
+## Current state (15.08.2026)
+- Version: v1.6 / audit session 15.08.2026
+- Live Game (testnet): see DEPLOYMENT.md
+- On-chain: Variant 1 battle events, daily 10 + free ship on level-up, Shadow Fleet always 8
+- Audit 15.08: Last Stand once, unique team/relics, previousGame for free ships, Boot stop, slot-aligned team
+- Frontend: Phaser scenes + RainbowKit. Team persists via prepareSession. Collection = left half overlay. No outer_frame on Prepare/Boot/Battle.
+- Goal: user-test shop limits on the new Game, then mainnet
+- Do not retune shop/limits/AI unless asked
+- Full context: AUDIT_HANDOFF.md

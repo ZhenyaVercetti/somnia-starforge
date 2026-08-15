@@ -10,7 +10,7 @@ contract StarForgeRelic is ERC1155, Ownable {
 
     address public gameContract;
 
-    uint256 private _nextRelicId;
+    uint256 private _nextRelicId = 1;
 
     struct RelicData {
         RelicType relicType;

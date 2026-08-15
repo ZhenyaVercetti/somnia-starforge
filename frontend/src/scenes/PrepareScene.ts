@@ -1,66 +1,73 @@
 // @ts-nocheck
 // frontend/src/scenes/PrepareScene.ts
 import * as Phaser from 'phaser';
-import { getContract, parseEventLogs } from 'viem';
-import { PLAYER_PROFILE_ADDRESS } from '../lib/contractAddresses';
+import { getContract, parseEventLogs, encodeFunctionData } from 'viem';
+import type { WalletClient } from 'viem';
+import { PLAYER_PROFILE_ADDRESS, GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS } from '../lib/contractAddresses';
+import { gameAbi, nftAbi, relicAbi, profileAbi } from '../lib/abis';
+import { somniaTestnet } from '../lib/wagmiConfig';
 import WalletManager from '../lib/WalletManager';
 import { UnitVisualFactory } from '../utils/UnitVisualFactory';
-import { GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS, CHAIN_ID, RPC_URL } from '../lib/contractAddresses';
-import { HUD, PREPARE_LAYOUT } from '../utils/HudChrome';
+import {
+  HUD,
+  PREPARE_LAYOUT,
+  hudText,
+  displayText,
+  gridFirstCenter,
+  relicMeta,
+  relicEffect,
+  factionName,
+  className,
+  rarityName,
+  rarityColor,
+  shipKey
+} from '../utils/HudChrome';
+import {
+  loadPrepareSession,
+  savePrepareSession,
+  emptyTeamSlots,
+  compactTeamIds,
+  filledTeamCount,
+  alignTeamToSlots,
+  alignRelicSlots
+} from '../lib/prepareSession';
 
 
 export default class PrepareScene extends Phaser.Scene {
   
 async init(data?: any) {
-  console.log('PrepareScene init — data:', data);
+  this.walletManager = data?.walletManager || window.walletManager || WalletManager.getInstance();
+  this.walletManager.restoreFromWindow();
 
-  // 1. Try to get from data (passed from main-react)
-  if (data?.account && data?.publicClient) {
-    this.account = data.account;
-    this.publicClient = data.publicClient;
-    this.isWalletReady = true;
-    this.createContracts();
-    console.log('✅ PrepareScene ready (from data), account:', this.account);
+  this.account = data?.account || this.walletManager.account || window.account || null;
+  this.publicClient = data?.publicClient || this.walletManager.getPublicClient() || window.publicClient || null;
+  this.walletClient = data?.walletClient || this.walletManager.getWalletClient() || window.walletClient || null;
+
+  if (!this.account || !this.publicClient || !this.walletClient) {
+    console.error('PrepareScene blocked: wallet is not connected');
+    this.isWalletReady = false;
     return;
   }
 
-  // 2. Try to get from window (saved from WalletModal)
-  if ((window as any).account && (window as any).publicClient) {
-    this.account = (window as any).account;
-    this.publicClient = (window as any).publicClient;
-    this.isWalletReady = true;
-    this.createContracts();
-    console.log('✅ PrepareScene ready (from window), account:', this.account);
-    return;
-  }
-
-  // 3. Try from walletManager
-  if (data?.walletManager) {
-    this.walletManager = data.walletManager;
-  } else if ((window as any).walletManager) {
-    this.walletManager = (window as any).walletManager;
-  } else {
-    this.walletManager = WalletManager.getInstance();
-  }
-
-  this.account = this.walletManager?.account || null;
-  this.publicClient = this.walletManager?.getPublicClient() || null;
-
-  if (!this.account || !this.publicClient) {
-    console.error('❌ account or publicClient not initialized');
-    return;
-  }
-
+  this.walletManager.setSession({
+    account: this.account,
+    publicClient: this.publicClient,
+    walletClient: this.walletClient
+  });
   this.isWalletReady = true;
   this.createContracts();
 
-
+  if (Array.isArray(data?.savedTeam) && data.savedTeam.length > 0 && this.account) {
+    savePrepareSession(this.account, { team: data.savedTeam.map((id: unknown) => Number(id)) });
+  }
 
   if (data?.addUnits && Array.isArray(data.addUnits)) {
     setTimeout(() => this.addMultipleUnitsToTeam(data.addUnits), 350);
   }
 
-  console.log('PrepareScene initialized, account:', this.account);
+  if (data?.lastBattleResult && typeof data.lastBattleResult.won === 'boolean') {
+    this.pendingLastResult = data.lastBattleResult;
+  }
 }
 
 
@@ -72,41 +79,38 @@ async init(data?: any) {
   private relicContract: any;
   private account: `0x${string}` | null = null;
   private publicClient: any;
-  private shopBuyButtons: Phaser.GameObjects.Text[] = [];
+  private walletClient: WalletClient | null = null;
   private shopContainer: Phaser.GameObjects.Container | null = null;
   private equippedTexts: Phaser.GameObjects.Text[] = [];
 
-  private unitsInTeam: number[] = [];
-  private team: number[] = [];
+  private team: number[] = emptyTeamSlots();
   private playerUnitIds: number[] = [];
   private equippedRelics: number[] = [0, 0, 0];
   private isWalletReady = false;
-  private ownedSprites: Phaser.GameObjects.GameObject[] = [];
   private shopSprites: Phaser.GameObjects.Sprite[] = [];
   private gridSlots: Phaser.GameObjects.Rectangle[] = [];
-  private playerProfileText: Phaser.GameObjects.Text | null = null;
   private tooltip: Phaser.GameObjects.Text | null = null;
   private lastClickTime = 0;
   private teamSlotOccupants: (Phaser.GameObjects.GameObject | null)[] = [];
-  private originalPositions: Map<number, {x: number, y: number}> = new Map();
   private aiSprites: Phaser.GameObjects.Sprite[] = [];
-  private aiTexts: Phaser.GameObjects.Text[] = [];
   private equippedSlotRects: Phaser.GameObjects.Rectangle[] = [];
   private equippedSprites: Phaser.GameObjects.GameObject[] = [];
   private aiGridSlots: Phaser.GameObjects.Rectangle[] = [];
-  private collectionButton: Phaser.GameObjects.Text | null = null;
   private playerLevelText: Phaser.GameObjects.Text | null = null;
   private playerStatsText: Phaser.GameObjects.Text | null = null;
   private teamCounterText: Phaser.GameObjects.Text | null = null;
   private teamOperationLock = false;
-  private lastKnownLevel: number = 0;
-  private slotPulses: Phaser.Tweens.Tween[] = [];
-  private connectModalContainer: Phaser.GameObjects.Container | null = null;
-  private isConnectModalOpen = false;
   private shopTexts: Phaser.GameObjects.Text[] = [];
-  private shopBuyButtons: Phaser.GameObjects.Text[] = [];
-  private buysLeftText: Phaser.GameObjects.Text | null = null;
-private rerollsLeftText: Phaser.GameObjects.Text | null = null;
+  private rerollsLeftText: Phaser.GameObjects.Text | null = null;
+  private sceneMessage?: { panel: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text };
+  private fleetHintText: Phaser.GameObjects.Text | null = null;
+  private aiTitleText: Phaser.GameObjects.Text | null = null;
+  private pendingShipsText: Phaser.GameObjects.Text | null = null;
+  private teamReady = false;
+  private matchBusy = false;
+  private busyOverlay: Phaser.GameObjects.Container | null = null;
+  private levelProgressBar: Phaser.GameObjects.Rectangle | null = null;
+  private pendingLastResult: { won: boolean; playerAlive?: number; aiAlive?: number } | null = null;
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -120,302 +124,6 @@ private createContracts() {
     console.error('Cannot create contracts — account or publicClient missing');
     return;
   }
-
-const gameAbi = [
-  {
-    "inputs": [],
-    "name": "createProfile",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "hasProfile",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "profiles",
-    "outputs": [
-      { "internalType": "uint16", "name": "level", "type": "uint16" },
-      { "internalType": "uint32", "name": "xp", "type": "uint32" },
-      { "internalType": "uint256", "name": "wins", "type": "uint256" },
-      { "internalType": "uint256", "name": "losses", "type": "uint256" },
-      { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buyUnit",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buyUnitPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rerollShop",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rerollPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "slot", "type": "uint256" }],
-    "name": "buyFromShop",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buyUnitShopPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "type": "event",
-    "name": "BattleResolved",
-    "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "battleId", "type": "bytes32" },
-      { "indexed": true, "internalType": "address", "name": "player", "type": "address" },
-      { "indexed": false, "internalType": "bool", "name": "playerWon", "type": "bool" },
-      { "indexed": false, "internalType": "uint16[]", "name": "playerMaxHp", "type": "uint16[]" },
-      { "indexed": false, "internalType": "uint16[]", "name": "aiMaxHp", "type": "uint16[]" }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "BattleEventEmitted",
-    "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "battleId", "type": "bytes32" },
-      { "indexed": false, "internalType": "uint8", "name": "round", "type": "uint8" },
-      { "indexed": false, "internalType": "bool", "name": "isPlayerSide", "type": "bool" },
-      { "indexed": false, "internalType": "uint8", "name": "attackerIndex", "type": "uint8" },
-      { "indexed": false, "internalType": "uint8", "name": "targetIndex", "type": "uint8" },
-      { "indexed": false, "internalType": "uint16", "name": "damage", "type": "uint16" },
-      { "indexed": false, "internalType": "uint16", "name": "remainingHp", "type": "uint16" },
-      { "indexed": false, "internalType": "uint8", "name": "specialEffect", "type": "uint8" }
-    ]
-  },
-  {
-    "inputs": [],
-    "name": "buyRelicShopPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256[]", "name": "team", "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "equipped", "type": "uint256[]" }
-    ],
-    "name": "startMatch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-{
-  "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-  "name": "getLastBattleResult",
-  "outputs": [
-    { "internalType": "bool", "name": "", "type": "bool" },
-    { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
-    { "internalType": "uint16[]", "name": "", "type": "uint16[]" },
-    { "internalType": "bytes32", "name": "", "type": "bytes32" }
-  ],
-  "stateMutability": "view",
-  "type": "function"
-},
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getCurrentAI",
-    "outputs": [{
-      "components": [
-        { "internalType": "bool", "name": "isRelic", "type": "bool" },
-        { "internalType": "uint256", "name": "id", "type": "uint256" },
-        { "internalType": "uint8", "name": "faction", "type": "uint8" },
-        { "internalType": "uint8", "name": "rarity", "type": "uint8" },
-        { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
-        { "internalType": "uint8", "name": "attack", "type": "uint8" },
-        { "internalType": "uint8", "name": "defense", "type": "uint8" },
-        { "internalType": "uint8", "name": "speed", "type": "uint8" },
-        { "internalType": "uint8", "name": "relicType", "type": "uint8" },
-        { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
-      ],
-      "internalType": "struct StarForgeGame.ShopItem[8]",
-      "name": "",
-      "type": "tuple[8]"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256[3]", "name": "relics", "type": "uint256[3]" }],
-    "name": "equipRelics",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getEquippedRelics",
-    "outputs": [{ "internalType": "uint256[3]", "name": "", "type": "uint256[3]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getLastBattleSummary",
-    "outputs": [{
-      "components": [
-        { "internalType": "bool", "name": "playerWon", "type": "bool" },
-        { "internalType": "uint16[]", "name": "playerFinalHp", "type": "uint16[]" },
-        { "internalType": "uint16[]", "name": "aiFinalHp", "type": "uint16[]" },
-        { "internalType": "bytes32", "name": "battleId", "type": "bytes32" },
-        { "internalType": "uint64", "name": "timestamp", "type": "uint64" }
-      ],
-      "internalType": "struct StarForgeGame.BattleSummary",
-      "name": "",
-      "type": "tuple"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-{
-  "inputs": [],
-  "name": "generateTenShips",
-  "outputs": [],
-  "stateMutability": "payable",
-  "type": "function"
-},
-
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getPlayerUnits",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getPlayerRelics",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getPlayerShop",
-    "outputs": [{
-      "components": [
-        { "internalType": "bool", "name": "isRelic", "type": "bool" },
-        { "internalType": "uint256", "name": "id", "type": "uint256" },
-        { "internalType": "uint8", "name": "faction", "type": "uint8" },
-        { "internalType": "uint8", "name": "rarity", "type": "uint8" },
-        { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
-        { "internalType": "uint8", "name": "attack", "type": "uint8" },
-        { "internalType": "uint8", "name": "defense", "type": "uint8" },
-        { "internalType": "uint8", "name": "speed", "type": "uint8" },
-        { "internalType": "uint8", "name": "relicType", "type": "uint8" },
-        { "internalType": "uint8", "name": "relicValue", "type": "uint8" }
-      ],
-      "internalType": "struct StarForgeGame.ShopItem[3]",
-      "name": "",
-      "type": "tuple[3]"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "getRemainingBuys",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "canReroll",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-    "name": "pendingLevelUpShips",
-    "outputs": [{ "internalType": "uint16", "name": "", "type": "uint16" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "claimLevelUpShips",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-
-  const nftAbi = [
-    {
-      "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-      "name": "getUnit",
-      "outputs": [{
-        "components": [
-          { "internalType": "uint8", "name": "faction", "type": "uint8" },
-          { "internalType": "uint8", "name": "rarity", "type": "uint8" },
-          { "internalType": "uint8", "name": "unitClass", "type": "uint8" },
-          { "internalType": "uint8", "name": "attack", "type": "uint8" },
-          { "internalType": "uint8", "name": "defense", "type": "uint8" },
-          { "internalType": "uint8", "name": "speed", "type": "uint8" }
-        ],
-        "internalType": "struct StarForgeUnitNFT.Unit",
-        "name": "",
-        "type": "tuple"
-      }],
-      "stateMutability": "view",
-      "type": "function"
-    }
-  ];
-
-  const relicAbi = [
-    {
-      "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
-      "name": "getRelic",
-      "outputs": [{
-        "components": [
-          { "internalType": "uint8", "name": "relicType", "type": "uint8" },
-          { "internalType": "uint8", "name": "value", "type": "uint8" },
-          { "internalType": "string", "name": "name", "type": "string" }
-        ],
-        "internalType": "struct StarForgeRelic.RelicData",
-        "name": "",
-        "type": "tuple"
-      }],
-      "stateMutability": "view",
-      "type": "function"
-    }
-  ];
 
   this.gameContract = getContract({
     address: GAME_ADDRESS,
@@ -437,25 +145,90 @@ const gameAbi = [
 }
 
 
-private async sendGameTransaction(functionName: string, args: any[] = [], value: bigint = 0n) {
-  if (!this.gameContract || !this.account || !this.publicClient) {
+private clearSceneMessage() {
+  if (this.sceneMessage) {
+    this.sceneMessage.panel.destroy();
+    this.sceneMessage.text.destroy();
+    this.sceneMessage = undefined;
+  }
+}
+
+private showSceneMessage(text: string, color = '#ff7b8a', duration = 2800) {
+  this.clearSceneMessage();
+  const panel = this.add.rectangle(960, 450, 980, 92, 0x080d16, 0.92)
+    .setStrokeStyle(1, 0x5ee7ff, 0.28)
+    .setDepth(970);
+  const msg = this.add.text(960, 450, text, hudText({
+    fontSize: '24px',
+    fill: color,
+    wordWrap: { width: 900 },
+    align: 'center'
+  })).setOrigin(0.5).setDepth(971);
+  this.sceneMessage = { panel, text: msg };
+  this.time.delayedCall(duration, () => {
+    if (this.sceneMessage && this.sceneMessage.text === msg) {
+      this.clearSceneMessage();
+    }
+  });
+  return msg;
+}
+
+private reloadOpenCollection() {
+  const collectionScene = this.scene.get('CollectionScene') as any;
+  if (collectionScene?.scene?.isActive() && typeof collectionScene.loadCollectionData === 'function') {
+    return collectionScene.loadCollectionData();
+  }
+}
+
+private showBusyOverlay(text: string) {
+  this.hideBusyOverlay();
+  const veil = this.add.rectangle(960, 540, 1920, 1080, 0x050010, 0.58)
+    .setDepth(960)
+    .setInteractive();
+  const panel = this.add.rectangle(960, 520, 920, 110, 0x080614, 0.88)
+    .setStrokeStyle(1, 0xf6e27a, 0.3)
+    .setDepth(961);
+  const label = this.add.text(960, 520, text, hudText({
+    fontSize: '28px',
+    fill: HUD.color.warn,
+    align: 'center',
+    wordWrap: { width: 860 }
+  })).setOrigin(0.5).setDepth(962);
+  this.busyOverlay = this.add.container(0, 0, [veil, panel, label]).setDepth(960);
+}
+
+private hideBusyOverlay() {
+  this.busyOverlay?.destroy(true);
+  this.busyOverlay = null;
+}
+
+private async readPayablePrice(functionName: string, fallback: bigint): Promise<bigint> {
+  try {
+    const value = await this.gameContract.read[functionName]();
+    if (typeof value === 'bigint' && value > 0n) {
+      return value;
+    }
+  } catch (error) {
+    console.error(`Failed to read ${functionName}`, error);
+  }
+  return fallback;
+}
+
+private async sendGameTransaction(
+  functionName: string,
+  args: any[] = [],
+  value: bigint = 0n,
+  options: { silent?: boolean } = {}
+) {
+  const walletClient = this.walletClient || this.walletManager.getWalletClient();
+  if (!this.gameContract || !this.account || !this.publicClient || !walletClient) {
+    if (!options.silent) {
+      this.showSceneMessage('Connect wallet first');
+    }
     throw new Error('Contract or wallet not ready');
   }
 
-  const { createWalletClient, custom, encodeFunctionData } = await import('viem');
-
-  const walletClient = createWalletClient({
-    chain: {
-      id: CHAIN_ID,
-      name: 'Somnia Testnet',
-      nativeCurrency: { name: 'Somnia Test Token', symbol: 'STT', decimals: 18 },
-      rpcUrls: { default: { http: [RPC_URL] } }
-    },
-    transport: custom((window as any).ethereum)
-  });
-
   try {
-    // Simulate first to get the exact revert reason from the contract
     await this.publicClient.simulateContract({
       address: this.gameContract.address,
       abi: this.gameContract.abi,
@@ -465,31 +238,38 @@ private async sendGameTransaction(functionName: string, args: any[] = [], value:
       value
     });
 
+    let gas = await this.publicClient.estimateContractGas({
+      address: this.gameContract.address,
+      abi: this.gameContract.abi,
+      functionName,
+      args,
+      account: this.account,
+      value
+    });
+    gas = (gas * 13n) / 10n;
+    if (functionName === 'startMatch' && gas < 12_000_000n) {
+      gas = 12_000_000n;
+    }
+
     const data = encodeFunctionData({
       abi: this.gameContract.abi,
       functionName,
       args
     });
 
-    const hash = await walletClient.sendTransaction({
+    return await walletClient.sendTransaction({
       account: this.account,
+      chain: somniaTestnet,
       to: this.gameContract.address,
       data,
-      value
+      value,
+      gas
     });
-
-    return hash;
-
   } catch (err: any) {
     console.error('sendGameTransaction ERROR:', err);
-
-    // Show exact contract revert reason to the user
-    if (err.cause?.reason) {
-      alert(`Contract revert: ${err.cause.reason}`);
-    } else if (err.shortMessage) {
-      alert(err.shortMessage);
-    } else {
-      alert('Transaction failed. Check console for details.');
+    if (!options.silent) {
+      const errMsg = err.cause?.reason || err.shortMessage || err.message || 'Transaction failed';
+      this.showSceneMessage(String(errMsg));
     }
     throw err;
   }
@@ -506,9 +286,10 @@ private async sendGameTransaction(functionName: string, args: any[] = [], value:
     this.load.image('button_base', 'assets/button_base.png');
     this.load.image('button_start', 'assets/button_start.png');
     this.load.image('profile_frame', 'assets/profile_frame.png');
-    this.load.image('outer_frame', 'assets/outer_frame.png');
-    this.load.image('collection_frame', 'assets/collection_frame.png');
-    this.load.image('preview_frame', 'assets/preview_frame.png');
+
+    this.load.image('ui_titlebar', 'assets/ui/ui_titlebar.png');
+    this.load.image('ui_plate', 'assets/ui/ui_plate.png');
+    this.load.image('ui_result', 'assets/ui/ui_result.png');
 
     this.load.image('emperial_fighter', 'assets/units/portraits/emperial_fighter.png');
     this.load.image('emperial_cruiser', 'assets/units/portraits/emperial_cruiser.png');
@@ -536,31 +317,64 @@ private async sendGameTransaction(functionName: string, args: any[] = [], value:
   }
 
 create() {
-  this.team = [];
+  this.team = emptyTeamSlots();
   this.teamSlotOccupants = new Array(8).fill(null);
   this.equippedRelics = [0, 0, 0];
   this.equippedSprites = [];
   this.equippedTexts = [];
-  this.lastKnownLevel = 0;
   this.teamOperationLock = false;
-  this.originalPositions.clear();
+  this.teamReady = false;
+  this.matchBusy = false;
+  this.hideBusyOverlay();
 
   this.addGameUI();
+
+  if (!this.isWalletReady) {
+    const veil = this.add.rectangle(960, 540, 1920, 1080, 0x02040a, 0.62).setDepth(400);
+    const plate = this.add.rectangle(960, 520, 760, 180, 0x080d16, 0.94)
+      .setStrokeStyle(1, 0x5ee7ff, 0.35)
+      .setDepth(401);
+    const prompt = this.add.text(960, 500, 'CONNECT WALLET TO PLAY', displayText({
+      fontSize: '28px', fill: HUD.color.accent
+    })).setOrigin(0.5).setDepth(402).setInteractive({ useHandCursor: true });
+    const hint = this.add.text(960, 548, 'Somnia Testnet  ·  50312', hudText({
+      fontSize: HUD.SMALL, fill: HUD.color.muted
+    })).setOrigin(0.5).setDepth(402);
+    prompt.on('pointerdown', () => {
+      if (window.openWalletModal) {
+        window.openWalletModal();
+      }
+    });
+    veil.setInteractive();
+    plate.setInteractive();
+    return;
+  }
+
   this.initEquippedState();
   this.updatePlayerProfile();
-  this.loadOwnedUnits();
+  this.loadOwnedUnits().then(async () => {
+    await this.restoreSavedTeam();
+    this.teamReady = true;
+    this.updateTeamCounter();
+  });
   this.loadPlayerShop();
   this.loadCurrentAI();
   this.updatePlayerProfile();
 
   this.input.topOnly = false;
+  this.bindPrepareHotkeys();
 
-  console.log('✅ PrepareScene created');
-  console.log('🔍 Button diagnostics:');
-  console.log('  isWalletReady:', this.isWalletReady);
-  console.log('  gameContract:', !!this.gameContract);
-  console.log('  account:', this.account);
-  console.log('  publicClient:', !!this.publicClient);
+  if (this.pendingLastResult) {
+    const won = this.pendingLastResult.won;
+    const playerAlive = this.pendingLastResult.playerAlive;
+    const suffix = typeof playerAlive === 'number' ? `  ·  ${playerAlive} ships left` : '';
+    this.showSceneMessage(
+      (won ? 'Last battle: VICTORY' : 'Last battle: DEFEAT') + suffix,
+      won ? '#6dffc0' : '#ff7b8a',
+      3400
+    );
+    this.pendingLastResult = null;
+  }
 }
 
 private normalizeUnit(unit: any) {
@@ -601,15 +415,17 @@ private safeBigIntToNumber(value: bigint | number | undefined): number {
 private async loadOwnedUnits() {
   if (!this.account || !this.gameContract || !this.nftContract) return;
 
-  this.ownedSprites.forEach(s => s.destroy());
-  this.ownedSprites = [];
-
   try {
     const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
     this.playerUnitIds = ownedIds.map(id => Number(id));
 
-    this.team = this.team.filter(id => this.playerUnitIds.includes(id));
-    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+    this.team = this.team.map((id) => (id > 0 && this.playerUnitIds.includes(id) ? id : 0));
+    if (this.teamReady) {
+      this.updateTeamCounter();
+    } else if (this.teamCounterText) {
+      this.teamCounterText.setText(`YOUR FLEET  ${filledTeamCount(this.team)}/8`);
+    }
+    this.refreshFleetHint();
 
   } catch (e) {
     console.error('loadOwnedUnits error', e);
@@ -625,72 +441,80 @@ private async loadPlayerShop() {
   }
   this.shopSprites = [];
   this.shopTexts = [];
-  this.shopBuyButtons = [];
 
   try {
     const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
-    console.log('Shop data received:', shopData);
+    const relicPrice = await this.readPayablePrice('buyRelicShopPrice', 8000000000000000n);
+    const priceLabel = `${Number(relicPrice) / 1e18} ETH`;
+    // price is shown on the card tooltip only
 
-    this.shopContainer = this.add.container(0, 0);
+    this.shopContainer = this.add.container(0, 0).setDepth(11);
 
-    const shopSlotSize = 96;
-    const shopSpacing = 14;
-    const shopStartX = 110;
-    const shopY = 280;
+    const shopSlotSize = HUD.SHOP;
+    const shopSpacing = PREPARE_LAYOUT.shopGap;
+    const shopStartX = gridFirstCenter(PREPARE_LAYOUT.leftX, 3, shopSlotSize, shopSpacing);
+    const shopY = PREPARE_LAYOUT.shopY;
 
     for (let i = 0; i < 3; i++) {
       const item = shopData[i] || { isRelic: false, relicType: 0, relicValue: 0 };
       const x = shopStartX + i * (shopSlotSize + shopSpacing);
       const y = shopY;
-
-      const bg = this.add.rectangle(x, y, shopSlotSize - 8, shopSlotSize - 8, 0x0a1122).setDepth(1);
-      this.shopContainer.add(bg);
+      const filled = !!(item.isRelic && item.relicValue > 0);
+      const meta = relicMeta(Number(item.relicType));
 
       const slotImage = this.add.image(x, y, 'slot_shop')
-        .setInteractive()
+        .setInteractive({ useHandCursor: filled })
         .setDisplaySize(shopSlotSize, shopSlotSize)
-        .setDepth(10);
+        .setDepth(10)
+        .setAlpha(filled ? 1 : 0.72);
       this.shopContainer.add(slotImage);
 
-      let displayName = 'EMPTY';
-      let tooltipText = 'Empty slot';
-      let relicKey = '';
-      let iconScale = 0.88;
+      let tooltipText = filled
+        ? `${meta.name}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}\nBuy ${priceLabel}`
+        : 'Empty. Reroll to fill the shop.';
 
-      if (item.isRelic && item.relicValue > 0) {
-        const typeNames = ['Quantum Strike', 'Void Shield', 'Nebula Dash', 'Echo Core', 'Flux Overload', 'Last Stand'];
-        displayName = typeNames[item.relicType] || 'Unknown Relic';
-        tooltipText = `${displayName}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}`;
-
-        const relicMap: Record<number, string> = {
-          0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-          3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-        };
-        relicKey = relicMap[item.relicType] || 'quantum_strike';
+      if (filled) {
+        const sprite = this.add.sprite(x, y - 6, meta.key)
+          .setInteractive({ useHandCursor: true })
+          .setDisplaySize(70, 70)
+          .setDepth(11);
+        (sprite as any).shopSlot = i;
+        this.shopContainer.add(sprite);
+        this.shopSprites.push(sprite);
+        sprite.on('pointerover', () => this.showTooltip(x + 120, y - 36, tooltipText));
+        sprite.on('pointerout', () => this.hideTooltip());
+        sprite.on('pointerdown', () => this.buyFromShopSlot(i));
       }
 
-      const sprite = this.add.sprite(x, y, relicKey || 'slot_shop')
-        .setInteractive()
-        .setScale(relicKey ? iconScale : 1)
-        .setDepth(4);
-      (sprite as any).shopSlot = i;
-      this.shopContainer.add(sprite);
-      this.shopSprites.push(sprite);
+      const caption = this.add.text(
+        x,
+        y + HUD.SHOP / 2 + 12,
+        filled ? `+${item.relicValue} ${meta.name}` : 'EMPTY',
+        hudText({
+          fontSize: '13px',
+          fill: filled ? '#e080ff' : HUD.color.muted,
+          align: 'center',
+          wordWrap: { width: HUD.SHOP + 16 }
+        })
+      ).setOrigin(0.5).setDepth(12);
+      this.shopContainer.add(caption);
+      this.shopTexts.push(caption);
 
-      const slotLabel = (item.isRelic && item.relicValue > 0) ? 'BUY' : 'EMPTY';
-      const slotText = this.add.text(x, y + 62, slotLabel, {
-        fontSize: '15px', fill: '#aaaaaa', align: 'center'
-      }).setOrigin(0.5).setDepth(12);
-      this.shopContainer.add(slotText);
-      this.shopTexts.push(slotText);
-
-      if (slotLabel === 'BUY') {
-        slotText.setInteractive().on('pointerdown', () => this.buyFromShopSlot(i));
+      if (filled) {
+        const priceText = this.add.text(x, y + HUD.SHOP / 2 + 46, `BUY  ${priceLabel}`, hudText({
+          fontSize: '13px',
+          fill: HUD.color.gold
+        })).setOrigin(0.5).setDepth(12);
+        this.shopContainer.add(priceText);
+        this.shopTexts.push(priceText);
       }
-      this.shopBuyButtons.push(slotText);
 
-      sprite.on('pointerover', () => this.showTooltip(x + 140, y - 40, tooltipText));
-      sprite.on('pointerout', () => this.hideTooltip());
+      slotImage.on('pointerover', () => this.showTooltip(x + 120, y - 36, tooltipText));
+      slotImage.on('pointerout', () => this.hideTooltip());
+      if (filled) {
+        slotImage.on('pointerdown', () => this.buyFromShopSlot(i));
+      }
+
     }
 
   } catch (e) {
@@ -704,11 +528,32 @@ private async loadPlayerShop() {
     await this.loadEquippedRelics();
   }
 
+  private persistEquippedRelics() {
+    if (!this.account) {
+      return;
+    }
+    savePrepareSession(this.account, { relics: this.equippedRelics });
+  }
+
   private async initEquippedState() {
     if (!this.account || !this.gameContract) return;
     try {
-      const equipped: bigint[] = await this.gameContract.read.getEquippedRelics([this.account]);
-      this.equippedRelics = equipped.map(id => Number(id));
+      const saved = loadPrepareSession(this.account);
+      let nextRelics: number[];
+      if (saved && Array.isArray(saved.relics)) {
+        nextRelics = alignRelicSlots(saved.relics);
+      } else {
+        const equipped: bigint[] = await this.gameContract.read.getEquippedRelics([this.account]);
+        nextRelics = alignRelicSlots(equipped.map((id) => Number(id)));
+      }
+      try {
+        const ownedRaw: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+        const owned = new Set(ownedRaw.map((id) => Number(id)));
+        nextRelics = nextRelics.map((id) => (id > 0 && owned.has(id) ? id : 0));
+      } catch {
+        // Keep the local loadout if the ownership read fails.
+      }
+      this.equippedRelics = alignRelicSlots(nextRelics);
       await this.refreshRelics();
     } catch (e) {
       console.error('initEquippedState error', e);
@@ -742,17 +587,21 @@ private async loadEquippedRelics() {
       const relicId = this.equippedRelics[i];
       const relicData = await this.relicContract.read.getRelic([BigInt(relicId)]);
 
-      const relicMap: Record<number, string> = {
-        0: 'quantum_strike', 1: 'void_shield', 2: 'nebula_dash',
-        3: 'echo_core', 4: 'flux_overload', 5: 'last_stand'
-      };
+      const meta = relicMeta(Number(relicData.relicType));
+      const relicKey = meta.key;
 
-      const relicKey = relicMap[relicData.relicType] || 'quantum_strike';
-
-      const sprite = this.add.sprite(slot.x, slot.y, relicKey)
-        .setScale(0.80)
-        .setInteractive()
+      const sprite = this.add.sprite(slot.x, slot.y - 6, relicKey)
+        .setDisplaySize(78, 78)
+        .setInteractive({ useHandCursor: true })
         .setDepth(12);
+
+      const caption = this.add.text(slot.x, slot.y + HUD.RELIC / 2 + 12, `+${relicData.value} ${meta.name}`, hudText({
+        fontSize: '13px',
+        fill: '#e080ff',
+        align: 'center',
+        wordWrap: { width: HUD.RELIC + 24 }
+      })).setOrigin(0.5).setDepth(13);
+      this.equippedTexts.push(caption);
 
       (sprite as any).relicId = relicId;
       (sprite as any).isEquipped = true;
@@ -762,8 +611,8 @@ private async loadEquippedRelics() {
       this.equippedSprites.push(sprite);
 
       sprite.on('pointerover', () => {
-        this.showTooltip(slot.x + 60, slot.y - 45,
-          `${relicData.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}`);
+        this.showTooltip(slot.x + 70, slot.y - 50,
+          `${relicData.name || meta.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}\nClick to unequip · drag to swap`);
       });
       sprite.on('pointerout', () => this.hideTooltip());
 
@@ -776,7 +625,7 @@ private async loadEquippedRelics() {
         dragStartX = pointer.x;
         dragStartY = pointer.y;
         sprite.setDepth(30);
-        sprite.setScale(0.95);
+        sprite.setDisplaySize(92, 92);
       });
 
       sprite.on('drag', (_: any, dragX: number, dragY: number) => {
@@ -784,8 +633,8 @@ private async loadEquippedRelics() {
         sprite.y = dragY;
       });
 
-      sprite.on('dragend', (pointer: Phaser.Input.Pointer) => {
-        sprite.setScale(0.80);
+      sprite.on('dragend', async (pointer: Phaser.Input.Pointer) => {
+        sprite.setDisplaySize(80, 80);
         sprite.setDepth(12);
 
         const movedDistance = Math.sqrt(Math.pow(pointer.x - dragStartX, 2) + Math.pow(pointer.y - dragStartY, 2));
@@ -807,7 +656,8 @@ private async loadEquippedRelics() {
             const temp = this.equippedRelics[i];
             this.equippedRelics[i] = this.equippedRelics[s];
             this.equippedRelics[s] = temp;
-            this.refreshRelics();
+            await this.refreshRelics();
+            this.persistEquippedRelics();
             droppedOnAnotherSlot = true;
             break;
           }
@@ -831,6 +681,7 @@ private async loadEquippedRelics() {
     if (slotIndex < 0 || slotIndex > 2) return;
     this.equippedRelics[slotIndex] = relicId;
     await this.refreshRelics();
+    this.persistEquippedRelics();
   }
 
   private async unequipRelic(slotIndex: number) {
@@ -840,31 +691,18 @@ private async loadEquippedRelics() {
 
     this.equippedRelics[slotIndex] = 0;
     await this.refreshRelics();
+    this.persistEquippedRelics();
 
     const collectionScene = this.scene.get('CollectionScene') as any;
     if (collectionScene && collectionScene.scene.isActive()) {
-      const alreadyExists = collectionScene.relicsData.some((r: any) => r.id === relicId);
-      if (!alreadyExists) {
-        collectionScene.relicsData.push({ id: relicId, relic: null });
-        if (typeof collectionScene.applyFiltersAndSort === 'function') {
-          collectionScene.applyFiltersAndSort();
-        } else if (typeof collectionScene.refreshGrid === 'function') {
-          collectionScene.refreshGrid();
-        }
+      if (typeof collectionScene.loadCollectionData === 'function') {
+        collectionScene.loadCollectionData();
       }
     }
   }
 
 private getRelicEffectDescription(relicType: number): string {
-  const desc = [
-    'Increases ATK for all units',
-    'Increases DEF for all units',
-    'Increases SPD for all units',
-    'Increases HP for all units',
-    'Increases crit chance (Quantum Flux)',
-    'Last stand before death (Last Stand)'
-  ];
-  return desc[relicType] || 'Unknown effect';
+  return relicEffect(relicType);
 }
 
 private async loadCurrentAI() {
@@ -889,10 +727,25 @@ private async loadCurrentAI() {
   try {
     const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
 
-    if (!aiData || !Array.isArray(aiData) || aiData.length === 0) {
-      const placeholder = this.add.text(PREPARE_LAYOUT.aiCenterX, 520, 'ENEMY TEAM\nWILL BE GENERATED\nON BATTLE START', {
-        fontSize: '18px', color: '#888888', align: 'center', fontStyle: 'bold'
-      }).setOrigin(0.5).setDepth(20);
+    const empty = !aiData || !Array.isArray(aiData) || aiData.every((unit: any) => {
+      return !unit || (Number(unit.attack) === 0 && Number(unit.defense) === 0 && Number(unit.speed) === 0);
+    });
+
+    if (this.aiTitleText) {
+      this.aiTitleText.setText(empty ? 'ENEMY FLEET' : 'LAST ENEMY FLEET');
+    }
+
+    if (empty) {
+      const placeholder = this.add.text(
+        PREPARE_LAYOUT.rightX,
+        520,
+        'Shadow Fleet waits\nfor the first battle\n\nAlways 8 ships.\nEmpty player slots\nbecome strong fillers.',
+        hudText({
+          fontSize: HUD.SMALL,
+          fill: HUD.color.muted,
+          align: 'center'
+        })
+      ).setOrigin(0.5).setDepth(20);
       this.aiSprites.push(placeholder as any);
       return;
     }
@@ -904,11 +757,10 @@ private async loadCurrentAI() {
       const unit = aiData[i];
       if (!unit || unit.isRelic) continue;
 
-      const style = this.getRarityTintAndScale(Number(unit.rarity));
-      const shipKey = this.getShipKey(Number(unit.faction), Number(unit.unitClass));
+      const shipTexture = shipKey(Number(unit.faction), Number(unit.unitClass));
 
       const container = UnitVisualFactory.createUnitWithFrame(
-        this, slot.x, slot.y, shipKey, Number(unit.rarity), style.scale * 0.30, 0.85
+        this, slot.x, slot.y, shipTexture, Number(unit.rarity), 96
       );
 
       const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
@@ -921,14 +773,14 @@ private async loadCurrentAI() {
       slot.setData('aiSprite', container);
       this.aiSprites.push(container);
 
-      const tooltipText = `${this.getFactionName(Number(unit.faction))} ${this.getRarityName(Number(unit.rarity))} ${this.getClassName(Number(unit.unitClass))}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
+      const tooltipText = `${factionName(Number(unit.faction))} ${rarityName(Number(unit.rarity))} ${className(Number(unit.unitClass))}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
       ship.on('pointerover', () => this.showTooltip(slot.x + 55, slot.y - 45, tooltipText));
       ship.on('pointerout', () => this.hideTooltip());
     }
 
   } catch (e) {
     console.error('loadCurrentAI error:', e);
-    const errorText = this.add.text(PREPARE_LAYOUT.aiCenterX, 520, 'FAILED TO LOAD\nENEMY TEAM', {
+    const errorText = this.add.text(PREPARE_LAYOUT.rightX, 520, 'FAILED TO LOAD\nENEMY TEAM', {
       fontSize: '18px', color: '#ff4444', align: 'center'
     }).setOrigin(0.5).setDepth(20);
     this.aiSprites.push(errorText as any);
@@ -949,7 +801,6 @@ private async autoSelectTeam() {
 
     this.clearTeam();
 
-    // === LOAD ALL DATA IN PARALLEL (FAST) ===
     const unitPromises = this.playerUnitIds.map(async (id) => {
       try {
         const unit = await this.nftContract.read.getUnit([BigInt(id)]);
@@ -970,26 +821,91 @@ private async autoSelectTeam() {
 
     for (let i = 0; i < toSelect.length; i++) {
       const unitInfo = toSelect[i];
-      if (this.team.length >= 8) break;
+      if (filledTeamCount(this.team) >= 8) break;
 
       const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
       if (freeSlotIndex !== -1) {
-        this.team.push(unitInfo.id);
+        this.team[freeSlotIndex] = unitInfo.id;
         await this.createTeamUnitVisual(unitInfo.id, freeSlotIndex);
-        await new Promise(resolve => setTimeout(resolve, 180));
       }
     }
 
     this.updateTeamCounter();
+    await this.autoEquipRelics();
 
   } finally {
     this.teamOperationLock = false;
   }
 }
 
+  private async autoEquipRelics() {
+    if (!this.account || !this.gameContract || !this.relicContract) {
+      return;
+    }
+    let ownedIds: number[] = [];
+    try {
+      const raw: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+      ownedIds = raw.map((id) => Number(id)).filter((id) => id > 0);
+    } catch {
+      return;
+    }
+    if (ownedIds.length === 0) {
+      this.equippedRelics = [0, 0, 0];
+      await this.refreshRelics();
+      this.persistEquippedRelics();
+      return;
+    }
 
-  private clearTeam() {
+    const scored = await Promise.all(ownedIds.map(async (id) => {
+      try {
+        const relic = await this.relicContract.read.getRelic([BigInt(id)]);
+        return {
+          id,
+          value: Number(relic.value),
+          relicType: Number(relic.relicType)
+        };
+      } catch {
+        return null;
+      }
+    }));
+    const ranked = (scored.filter(Boolean) as { id: number; value: number; relicType: number }[])
+      .sort((a, b) => b.value - a.value || a.relicType - b.relicType);
+
+    const picked: number[] = [];
+    const usedTypes = new Set<number>();
+    for (const relic of ranked) {
+      if (picked.length >= 3) break;
+      if (usedTypes.has(relic.relicType)) continue;
+      picked.push(relic.id);
+      usedTypes.add(relic.relicType);
+    }
+    for (const relic of ranked) {
+      if (picked.length >= 3) break;
+      if (picked.includes(relic.id)) continue;
+      picked.push(relic.id);
+    }
+
+    this.equippedRelics = [picked[0] || 0, picked[1] || 0, picked[2] || 0];
+    await this.refreshRelics();
+    this.persistEquippedRelics();
+    await this.reloadOpenCollection();
+  }
+
+  private async clearEquippedRelics() {
+    this.equippedRelics = [0, 0, 0];
+    await this.refreshRelics();
+    this.persistEquippedRelics();
+    await this.reloadOpenCollection();
+  }
+
+  private async clearLoadout() {
     if (this.teamOperationLock) return;
+    this.clearTeam();
+    await this.clearEquippedRelics();
+  }
+
+  private clearTeam(force = false) {
+    if (this.teamOperationLock && !force) return;
 
     for (let i = 0; i < this.teamSlotOccupants.length; i++) {
       const occupant = this.teamSlotOccupants[i];
@@ -999,12 +915,14 @@ private async autoSelectTeam() {
       }
     }
 
-    this.team = [];
-    this.originalPositions.clear();
-    if (this.teamCounterText) this.teamCounterText.setText('TEAM: 0/8');
+    this.team = emptyTeamSlots();
+    this.updateTeamCounter();
 
-    this.gridSlots.forEach(slot => {
-      if (slot) slot.setInteractive();
+    this.gridSlots.forEach((slot) => {
+      if (slot) {
+        slot.setInteractive();
+        this.startEmptySlotPulse(slot);
+      }
     });
   }
 
@@ -1017,26 +935,7 @@ private async updatePlayerProfile() {
   try {
     const profileContract = getContract({
       address: PLAYER_PROFILE_ADDRESS,
-      abi: [
-        {
-          "inputs": [{ "internalType": "address", "name": "player", "type": "address" }],
-          "name": "getProfile",
-          "outputs": [{
-            "components": [
-              { "internalType": "uint16", "name": "level", "type": "uint16" },
-              { "internalType": "uint32", "name": "xp", "type": "uint32" },
-              { "internalType": "uint256", "name": "wins", "type": "uint256" },
-              { "internalType": "uint256", "name": "losses", "type": "uint256" },
-              { "internalType": "uint16", "name": "currentAITier", "type": "uint16" }
-            ],
-            "internalType": "struct StarForgePlayerProfile.PlayerProfile",
-            "name": "",
-            "type": "tuple"
-          }],
-          "stateMutability": "view",
-          "type": "function"
-        }
-      ],
+      abi: profileAbi,
       client: { public: this.publicClient }
     });
 
@@ -1052,11 +951,15 @@ private async updatePlayerProfile() {
     }
 
     const xpNeeded = level * 55 + 90;
+    const played = wins + losses;
+    const winrate = played > 0 ? Math.round((wins / played) * 100) : 0;
     if (this.playerStatsText) {
-      this.playerStatsText.setText(`XP ${xp}/${xpNeeded} • W:${wins} L:${losses}`);
+      this.playerStatsText.setText(`XP ${xp}/${xpNeeded}   ${wins}W ${losses}L   ${winrate}%`);
     }
-
-    console.log('Profile updated:', { level, xp, wins, losses });
+    if (this.levelProgressBar) {
+      const ratio = xpNeeded > 0 ? Math.min(1, Math.max(0, xp / xpNeeded)) : 0;
+      this.levelProgressBar.width = 300 * ratio;
+    }
 
   } catch (e) {
     console.error('updatePlayerProfile error:', e);
@@ -1067,12 +970,21 @@ private async updatePlayerProfile() {
     const canReroll = await this.gameContract.read.canReroll([this.account]);
     const remainingNumber = this.safeBigIntToNumber(remainingBuys);
 
-    if (this.buysLeftText) {
-      this.buysLeftText.setText(`Buys left: ${remainingNumber}/10`);
+    if (this.rerollsLeftText) {
+      const rerollLabel = canReroll ? 'Reroll ready' : 'Reroll spent';
+      this.rerollsLeftText.setText(`Buys ${remainingNumber}/10   ·   ${rerollLabel}`);
     }
 
-    if (this.rerollsLeftText) {
-      this.rerollsLeftText.setText(canReroll ? 'Rerolls available' : 'Rerolls: 0/2');
+    const pending = this.safeBigIntToNumber(await this.gameContract.read.pendingLevelUpShips([this.account]));
+    if (this.pendingShipsText) {
+      if (pending > 0) {
+        this.pendingShipsText.setText(`CLAIM ${pending} FREE SHIP${pending === 1 ? '' : 'S'}`);
+        this.pendingShipsText.setVisible(true);
+        this.pendingShipsText.setInteractive({ useHandCursor: true });
+      } else {
+        this.pendingShipsText.setVisible(false);
+        this.pendingShipsText.disableInteractive();
+      }
     }
   } catch (e) {
     console.error('Failed to load limits', e);
@@ -1084,17 +996,20 @@ private async updatePlayerProfile() {
 
 private showTooltip(x: number, y: number, text: string) {
     if (!this.tooltip || this.tooltip.scene !== this) {
-      this.tooltip = this.add.text(0, 0, '', {
-        fontSize: '24px',
-        fill: '#ffffff',
-        backgroundColor: '#112233',
-        padding: { x: 18, y: 12 },
-        align: 'left'
-      }).setOrigin(0.5, 1).setDepth(100);
+      this.tooltip = this.add.text(0, 0, '', hudText({
+        fontSize: '18px',
+        fill: HUD.color.text,
+        backgroundColor: '#081018',
+        padding: { x: 12, y: 8 },
+        align: 'left',
+        wordWrap: { width: 280 }
+      })).setOrigin(0.5, 1).setDepth(100);
     }
 
     this.tooltip.setText(text);
-    this.tooltip.setPosition(x, y - 22);
+    const clampedX = Phaser.Math.Clamp(x, 160, 1760);
+    const clampedY = Phaser.Math.Clamp(y - 22, 80, 1000);
+    this.tooltip.setPosition(clampedX, clampedY);
     this.tooltip.setVisible(true);
   }
 
@@ -1102,162 +1017,132 @@ private showTooltip(x: number, y: number, text: string) {
     if (this.tooltip) this.tooltip.setVisible(false);
   }
 
-private clearTemporaryTexts() {
-  this.children.getAll().forEach(child => {
-    if (child instanceof Phaser.GameObjects.Text) {
-      const text = child.text.toLowerCase();
-      if (text.includes('purchased') || text.includes('rerolled') || text.includes('tx sent') || text.includes('victory')) {
-        child.destroy();
-      }
-    }
-  });
-}
-
   private getFactionName(faction: number): string {
-    const names = ['Empire', 'Voidborn', 'Mechanoids'];
-    return names[faction] || 'Unknown';
+    return factionName(faction);
   }
 
   private getRarityName(rarity: number): string {
-    const names = ['Common', 'Rare', 'Legendary'];
-    return names[rarity] || 'Unknown';
+    return rarityName(rarity);
   }
 
   private getClassName(unitClass: number): string {
-    const names = ['Fighter', 'Cruiser', 'Dreadnought', 'Drone Swarm'];
-    return names[unitClass] || 'Unknown';
+    return className(unitClass);
   }
 
 private async buyUnit() {
-  console.log('🟢 BUY pressed');
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
+    this.showSceneMessage('Connect wallet first');
+    return;
   }
 
   try {
-    console.log('📤 Sending buyUnit...');
-    const hash = await this.sendGameTransaction('buyUnit', [], 10000000000000000n); // 0.01 ETH
-
-    console.log('✅ TX sent:', hash);
-    const waiting = this.add.text(960, 200, 'TX buyUnit sent... waiting for on-chain (3 sec)', { 
-      fontSize: '36px', fill: '#ffff00' 
-    }).setDepth(500);
-
+    const price = await this.readPayablePrice('buyUnitPrice', 10000000000000000n);
+    const hash = await this.sendGameTransaction('buyUnit', [], price);
+    this.showSceneMessage('Buying ship...', '#ffe566', 8000);
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-    waiting.destroy();
-
-    const msg = this.add.text(960, 200, 'Unit purchased on-chain!', { 
-      fontSize: '48px', fill: '#00ff00' 
-    }).setDepth(500);
-    setTimeout(() => msg.destroy(), 2200);
-
-    setTimeout(() => this.loadOwnedUnits(), 3000);
+    await this.loadOwnedUnits();
+    await this.updatePlayerProfile();
+    await this.reloadOpenCollection();
+    this.showSceneMessage('Unit purchased on-chain!', '#6dffc0', 2200);
   } catch (e: any) {
-    console.error('❌ buyUnit error:', e);
+    console.error('buyUnit error:', e);
     const errMsg = e.shortMessage || e.message || 'Unknown error';
-    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, { 
-      fontSize: '36px', fill: '#ff4444' 
-    }).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4000);
+    this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
   }
 }
 
 private async buyFromShopSlot(slot: number) {
-  console.log('BUY FROM SHOP pressed, slot:', slot);
+
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
+    this.showSceneMessage('Connect wallet first');
+    return;
   }
 
   try {
-    console.log('Sending buyFromShop...');
-    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], 10000000000000000n);
+    const price = await this.readPayablePrice('buyRelicShopPrice', 8000000000000000n);
+    const hash = await this.sendGameTransaction('buyFromShop', [BigInt(slot)], price);
+    this.showSceneMessage('Buying relic...', '#ffe566', 8000);
 
-    console.log('TX sent:', hash);
-
-    const waiting = this.add.text(960, 200, `TX buyFromShop [${slot}] sent... waiting for on-chain (3 sec)`, {
-      fontSize: '36px', fill: '#ffff00'
-    }).setDepth(500);
-
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
-    waiting.destroy();
-
-    await new Promise(resolve => setTimeout(resolve, 1800));
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
     await this.loadPlayerShop();
     await this.loadCurrentAI();
     await this.loadOwnedUnits();
+    await this.updatePlayerProfile();
 
-    // Force reload CollectionScene if it is open
-    const collectionScene = this.scene.get('CollectionScene') as any;
-    if (collectionScene && collectionScene.scene.isActive() && typeof collectionScene.loadCollectionData === 'function') {
-      await collectionScene.loadCollectionData();
-    }
+    await this.reloadOpenCollection();
 
-    const msg = this.add.text(960, 200, `Artifact purchased!`, {
-      fontSize: '42px', fill: '#00ff00'
-    }).setDepth(500);
-    setTimeout(() => msg.destroy(), 1800);
+    this.showSceneMessage('Artifact purchased!', '#6dffc0', 1800);
 
   } catch (e: any) {
     console.error('buyFromShopSlot error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
-    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, {
-      fontSize: '36px', fill: '#ff4444'
-    }).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4000);
+    this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
   }
 }
 
 
 private async rerollShop() {
-  console.log('REROLL pressed');
+
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
+    this.showSceneMessage('Connect wallet first');
+    return;
   }
 
   try {
-    console.log('Sending rerollShop...');
-    const hash = await this.sendGameTransaction('rerollShop', [], 5000000000000000n);
+    const price = await this.readPayablePrice('rerollPrice', 5000000000000000n);
+    const hash = await this.sendGameTransaction('rerollShop', [], price);
+    this.showSceneMessage('Rerolling shop...', '#ffe566', 8000);
 
-    console.log('TX sent:', hash);
-    const waiting = this.add.text(960, 200, 'TX reroll sent... waiting for on-chain (3 sec)', {
-      fontSize: '42px', fill: '#ffff00'
-    }).setDepth(500);
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
-    waiting.destroy();
+    await new Promise(resolve => setTimeout(resolve, 400));
 
-    await new Promise(resolve => setTimeout(resolve, 2200));
-
-    // Принудительная пересборка магазина
     if (this.shopContainer) {
       this.shopContainer.destroy(true);
       this.shopContainer = null;
     }
     this.shopSprites = [];
     this.shopTexts = [];
-    this.shopBuyButtons = [];
 
     await this.loadPlayerShop();
     await this.loadCurrentAI();
     await this.updatePlayerProfile();
 
-    const msg = this.add.text(960, 200, 'Shop rerolled — new artifacts', {
-      fontSize: '42px', fill: '#00ff00'
-    }).setDepth(500);
-    setTimeout(() => msg.destroy(), 1800);
+    this.showSceneMessage('Shop rerolled — new artifacts', '#6dffc0', 1800);
 
   } catch (e: any) {
     console.error('rerollShop error:', e);
     const errMsg = e.shortMessage || e.message || 'Reroll error';
-    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, {
-      fontSize: '36px', fill: '#ff4444'
-    }).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4000);
+    this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
   }
 }
 
+
+private startEmptySlotPulse(slot: Phaser.GameObjects.Image) {
+  this.stopEmptySlotPulse(slot);
+  slot.setDisplaySize(HUD.TEAM, HUD.TEAM);
+  slot.setAlpha(0.78);
+  (slot as any).pulseTween = this.tweens.add({
+    targets: slot,
+    alpha: 1,
+    duration: 1600,
+    yoyo: true,
+    repeat: -1,
+    ease: 'Sine.easeInOut'
+  });
+}
+
+private stopEmptySlotPulse(slot: Phaser.GameObjects.Image) {
+  if ((slot as any).pulseTween) {
+    (slot as any).pulseTween.stop();
+    (slot as any).pulseTween = null;
+  }
+  this.tweens.killTweensOf(slot);
+  slot.setDisplaySize(HUD.TEAM, HUD.TEAM);
+  slot.setAlpha(1);
+}
 
 private addHudButton(
   x: number,
@@ -1265,68 +1150,98 @@ private addHudButton(
   label: string,
   color: string,
   onClick: () => void,
-  kind: 'base' | 'start' = 'base'
+  kind: 'base' | 'start' | 'slim' = 'base'
 ) {
-  const width = kind === 'start' ? HUD.START_W : HUD.BTN_W;
-  const height = kind === 'start' ? HUD.START_H : HUD.BTN_H;
-  const fontSize = kind === 'start' ? HUD.START_FONT : HUD.BTN_FONT;
+  const width = kind === 'start' ? HUD.START_W : kind === 'slim' ? 196 : HUD.BTN_W;
+  const height = kind === 'start' ? HUD.START_H : kind === 'slim' ? 52 : HUD.BTN_H;
+  const fontSize = kind === 'start' ? HUD.START_FONT : kind === 'slim' ? '22px' : HUD.BTN_FONT;
   const texture = kind === 'start' ? 'button_start' : 'button_base';
   const base = this.add.image(x, y, texture)
     .setInteractive({ useHandCursor: true })
     .setDisplaySize(width, height)
     .setDepth(12);
-  const text = this.add.text(x, y, label, {
-    fontSize, fill: color, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(13);
+  const text = this.add.text(x, y, label, hudText({
+    fontSize, fill: color
+  })).setOrigin(0.5).setDepth(13);
   (base as any).linkedText = text;
   base.on('pointerdown', onClick);
   this.addButtonEffects(base);
   return base;
 }
 
+private addSectionTitle(x: number, y: number, label: string) {
+  return this.add.text(x, y, label, displayText({
+    fontSize: HUD.TITLE,
+    fill: HUD.color.gold
+  })).setOrigin(0.5).setDepth(12);
+}
+
 private addGameUI() {
   const L = PREPARE_LAYOUT;
+  const leftX = L.leftX;
+  const centerX = L.centerX;
+  const rightX = L.rightX;
   const bg = this.add.image(960, 540, 'mainbackground').setDepth(-20);
   bg.setDisplaySize(1920, 1080);
 
-  this.add.image(L.profileX, L.profileY, 'profile_frame')
-    .setOrigin(0, 0)
+  this.add.rectangle(leftX, L.shopY + 18, 440, 214, 0x0c1420, 0.55)
+    .setStrokeStyle(1, 0x1f3a4d, 0.8)
+    .setDepth(4);
+  this.add.rectangle(centerX, L.teamTopY + 92, 780, 420, 0x0c1420, 0.36)
+    .setStrokeStyle(1, 0x1f3a4d, 0.55)
+    .setDepth(4);
+  this.add.rectangle(centerX, L.relicY + 6, 540, 172, 0x0c1420, 0.4)
+    .setStrokeStyle(1, 0x1f3a4d, 0.55)
+    .setDepth(4);
+  this.add.rectangle(rightX, L.aiTopY + 68, 500, 328, 0x0c1420, 0.36)
+    .setStrokeStyle(1, 0x1f3a4d, 0.55)
+    .setDepth(4);
+
+  this.add.image(leftX, L.profileY, 'profile_frame')
+    .setOrigin(0.5, 0)
     .setDisplaySize(HUD.PROFILE_W, HUD.PROFILE_H)
     .setDepth(5);
 
-  this.playerLevelText = this.add.text(L.profileX + 18, L.profileY + 18, 'LVL 1', {
-    fontSize: '28px', fill: HUD.color.accent, fontStyle: 'bold'
-  }).setDepth(12);
+  const profileLeft = leftX - HUD.PROFILE_W / 2;
+  this.playerLevelText = this.add.text(profileLeft + 40, L.profileY + 24, 'LVL 1', displayText({
+    fontSize: '32px', fill: HUD.color.accent
+  })).setDepth(12);
 
-  this.playerStatsText = this.add.text(L.profileX + 18, L.profileY + 62, 'XP 0/90  •  W:0 L:0', {
-    fontSize: HUD.BODY, fill: HUD.color.text
-  }).setDepth(12);
+  this.playerStatsText = this.add.text(profileLeft + 36, L.profileY + 70, 'XP 0/90   0W 0L', hudText({
+    fontSize: '18px', fill: HUD.color.text
+  })).setDepth(12);
 
-  const progressBg = this.add.rectangle(L.profileX + 18, L.profileY + 112, 300, 10, 0x112233)
-    .setStrokeStyle(2, 0x2ec7d6).setOrigin(0, 0).setDepth(8);
-  const progressBar = this.add.rectangle(L.profileX + 18, L.profileY + 112, 0, 10, 0x5dffb0)
+  this.pendingShipsText = this.add.text(profileLeft + 40, L.profileY + HUD.PROFILE_H + 8, '', hudText({
+    fontSize: HUD.SMALL, fill: HUD.color.good
+  })).setDepth(12).setVisible(false);
+  this.pendingShipsText.on('pointerdown', () => {
+    void this.claimLevelUpShips();
+  });
+  this.pendingShipsText.on('pointerover', () => this.pendingShipsText?.setColor(HUD.color.gold));
+  this.pendingShipsText.on('pointerout', () => this.pendingShipsText?.setColor(HUD.color.good));
+
+  this.add.rectangle(profileLeft + 40, L.profileY + 108, 300, 10, 0x112233)
+    .setStrokeStyle(1, 0x2ec7d6, 0.55).setOrigin(0, 0).setDepth(8);
+  this.levelProgressBar = this.add.rectangle(profileLeft + 40, L.profileY + 108, 0, 10, 0x5dffb0)
     .setOrigin(0, 0).setDepth(9);
-  (this as any).levelProgressBar = progressBar;
 
-  const logo = this.add.image(L.logoX, L.logoY, 'logo').setOrigin(0.5, 0).setDepth(15);
-  logo.setScale(Math.min(64 / logo.height, 240 / logo.width));
+  const logo = this.add.image(centerX, L.logoY, 'logo').setOrigin(0.5, 0).setDepth(15);
+  logo.setScale(Math.min(118 / logo.height, 520 / logo.width));
 
-  this.add.text(L.shopTitleX, L.shopTitleY, 'SHOP', {
-    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(12);
+  this.addSectionTitle(leftX, L.shopTitleY, 'SHOP · RELICS');
 
   this.gridSlots = [];
   this.teamSlotOccupants = new Array(8).fill(null);
 
-  const teamWidth = 4 * HUD.TEAM + 3 * L.teamGap;
-  const teamStartX = L.teamCenterX - teamWidth / 2;
+  const teamStartX = gridFirstCenter(centerX, 4, HUD.TEAM, L.teamGap);
 
-  this.addHudButton(800, L.autoY, 'AUTO SELECT', HUD.color.good, () => this.autoSelectTeam());
-  this.addHudButton(1120, L.autoY, 'CLEAR TEAM', HUD.color.bad, () => this.clearTeam());
+  this.teamCounterText = this.add.text(centerX, L.fleetTitleY, 'YOUR FLEET  0/8', displayText({
+    fontSize: '26px', fill: HUD.color.warn
+  })).setOrigin(0.5).setDepth(12);
 
-  this.add.text(L.fleetTitleX, L.fleetTitleY, 'YOUR FLEET', {
-    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(12);
+  this.fleetHintText = this.add.text(centerX, L.fleetTitleY + 28, '', hudText({
+    fontSize: HUD.SMALL, fill: HUD.color.muted
+  })).setOrigin(0.5).setDepth(12);
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
@@ -1334,32 +1249,21 @@ private addGameUI() {
     const x = teamStartX + col * (HUD.TEAM + L.teamGap);
     const y = L.teamTopY + row * (HUD.TEAM + L.teamGap);
 
-    this.add.rectangle(x, y, HUD.TEAM - 8, HUD.TEAM - 8, 0x0a1122).setDepth(1);
     const slot = this.add.image(x, y, 'slot_team')
-      .setInteractive()
+      .setInteractive({ useHandCursor: true })
       .setDisplaySize(HUD.TEAM, HUD.TEAM)
       .setDepth(10);
     this.gridSlots.push(slot);
     this.addButtonEffects(slot);
+    this.startEmptySlotPulse(slot);
     slot.on('pointerover', () => {
-      this.showTooltip(slot.x + 80, slot.y - 65, 'Select a ship in your collection');
+      this.showTooltip(slot.x + 80, slot.y - 56, 'Open collection to assign a ship');
     });
     slot.on('pointerout', () => this.hideTooltip());
     slot.on('pointerdown', () => this.openCollectionScene());
   }
 
-  this.add.image(960, 540, 'outer_frame')
-    .setDisplaySize(1920, 1080)
-    .setDepth(200);
-
-  const teamBottom = L.teamTopY + HUD.TEAM + L.teamGap + HUD.TEAM / 2;
-  this.teamCounterText = this.add.text(L.teamCenterX, teamBottom + 28, 'TEAM: 0/8', {
-    fontSize: '20px', fill: HUD.color.warn, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(12);
-
-  this.add.text(L.teamCenterX, teamBottom + 56, 'RELICS', {
-    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(12);
+  this.addSectionTitle(centerX, L.relicY - 102, 'RELICS');
 
   const leftBtnYs = [
     L.leftBtnY0,
@@ -1367,24 +1271,23 @@ private addGameUI() {
     L.leftBtnY0 + L.leftBtnStep * 2,
     L.leftBtnY0 + L.leftBtnStep * 3
   ];
-  this.addHudButton(L.leftBtnX, leftBtnYs[0], 'REROLL SHOP', '#e080ff', () => this.rerollShop());
-  this.addHudButton(L.leftBtnX, leftBtnYs[1], 'BUY SHIP', HUD.color.accent, () => this.buyUnit());
-  this.addHudButton(L.leftBtnX, leftBtnYs[2], 'GENERATE 10 SHIPS', HUD.color.accent, () => this.generateTenShips());
-  this.addHudButton(L.leftBtnX, leftBtnYs[3], 'COLLECTION', HUD.color.warn, () => this.openCollectionScene());
+  this.addHudButton(leftX, leftBtnYs[0], 'REROLL SHOP', '#e080ff', () => this.rerollShop());
+  this.addHudButton(leftX, leftBtnYs[1], 'BUY SHIP', HUD.color.accent, () => this.buyUnit());
+  this.addHudButton(leftX, leftBtnYs[2], 'GENERATE 10', HUD.color.accent, () => this.generateTenShips());
+  this.addHudButton(leftX, leftBtnYs[3], 'COLLECTION', HUD.color.warn, () => this.openCollectionScene());
 
-  this.rerollsLeftText = this.add.text(L.leftBtnX, leftBtnYs[0] + 38, 'Rerolls available', {
-    fontSize: HUD.SMALL, fill: '#88aacc'
-  }).setOrigin(0.5).setDepth(12);
+  this.rerollsLeftText = this.add.text(leftX, leftBtnYs[3] + 64, 'Rerolls · Buys 10/10', hudText({
+    fontSize: HUD.SMALL, fill: HUD.color.muted
+  })).setOrigin(0.5).setDepth(12);
 
-  this.buysLeftText = this.add.text(L.leftBtnX, leftBtnYs[2] + 38, 'Buys left: 10/10', {
-    fontSize: HUD.SMALL, fill: '#88aacc'
-  }).setOrigin(0.5).setDepth(12);
-
-  this.addHudButton(L.startX, L.startY, 'START BATTLE', HUD.color.text, () => this.startBattle(), 'start');
+  this.add.text(centerX, L.startY - 72, 'ENTER start   ·   C collection', hudText({
+    fontSize: '15px',
+    fill: HUD.color.muted
+  })).setOrigin(0.5).setDepth(12);
+  this.addHudButton(centerX, L.startY, 'START BATTLE', HUD.color.text, () => this.startBattle(), 'start');
 
   this.equippedSlotRects = [];
-  const relicWidth = 3 * HUD.RELIC + 2 * L.teamGap;
-  const relicStartX = L.teamCenterX - relicWidth / 2;
+  const relicStartX = gridFirstCenter(centerX, 3, HUD.RELIC, L.teamGap);
   for (let i = 0; i < 3; i++) {
     const x = relicStartX + i * (HUD.RELIC + L.teamGap);
     const slot = this.add.image(x, L.relicY, 'slot_equipped')
@@ -1392,24 +1295,21 @@ private addGameUI() {
       .setDepth(10);
     this.equippedSlotRects.push(slot);
   }
+  this.addHudButton(centerX - 168, L.autoY, 'AUTO', HUD.color.good, () => this.autoSelectTeam());
+  this.addHudButton(centerX + 168, L.autoY, 'CLEAR', HUD.color.bad, () => this.clearLoadout());
 
   this.aiGridSlots = [];
-  const aiWidth = 4 * HUD.AI + 3 * 12;
-  const aiStartX = L.aiCenterX - aiWidth / 2;
-
-  this.add.text(L.aiTitleX, L.aiTitleY, 'ENEMY FLEET', {
-    fontSize: HUD.TITLE, fill: HUD.color.muted, fontStyle: 'bold'
-  }).setOrigin(0.5).setDepth(12);
+  const aiStartX = gridFirstCenter(rightX, 4, HUD.AI, L.aiGap);
+  this.aiTitleText = this.addSectionTitle(rightX, L.aiTitleY, 'ENEMY FLEET');
 
   for (let i = 0; i < 8; i++) {
     const col = i % 4;
     const row = Math.floor(i / 4);
-    const x = aiStartX + col * (HUD.AI + 12);
-    const y = L.aiTopY + row * (HUD.AI + 12);
-    this.add.rectangle(x, y, HUD.AI - 6, HUD.AI - 6, 0x0a1122).setDepth(1);
+    const x = aiStartX + col * (HUD.AI + L.aiGap);
+    const y = L.aiTopY + row * (HUD.AI + L.aiGap);
     const slot = this.add.image(x, y, 'slot_ai')
       .setInteractive()
-      .setDisplaySize(HUD.AI, HUD.AI)
+      .setDisplaySize(96, 96)
       .setDepth(10);
     this.aiGridSlots.push(slot);
     this.addButtonEffects(slot);
@@ -1418,48 +1318,44 @@ private addGameUI() {
 
 
 private async startBattle() {
-  console.log('START BATTLE pressed');
+  if (this.matchBusy) {
+    return;
+  }
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
-  }
-
-  if (this.team.length < 4) {
-    const msg = this.add.text(960, 450, 'Minimum 4 units in team (per contract rules)', {
-      fontSize: '36px', fill: '#ff4444', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(500);
-    setTimeout(() => msg.destroy(), 2800);
+    this.showSceneMessage('Connect wallet first');
     return;
   }
 
-  if (this.team.length > 8) {
-    const msg = this.add.text(960, 450, 'Maximum 8 units', {
-      fontSize: '36px', fill: '#ff4444'
-    }).setOrigin(0.5).setDepth(500);
-    setTimeout(() => msg.destroy(), 2000);
+  if (this.playerUnitIds.length === 0) {
+    this.showSceneMessage('Buy or generate 10 ships first', '#ffe566');
     return;
   }
+
+  if (filledTeamCount(this.team) !== 8) {
+    const missing = 8 - filledTeamCount(this.team);
+    this.showSceneMessage(
+      `Need 8 ships. Empty slots become strong AI (${missing} empty). Use AUTO SELECT.`,
+      '#ff7b8a',
+      3600
+    );
+    return;
+  }
+
+  this.matchBusy = true;
+  this.showBusyOverlay('RESOLVING BATTLE ON-CHAIN...');
 
   try {
-    console.log('Sending startMatch... team length:', this.team.length);
-
     const hash = await this.sendGameTransaction(
       'startMatch',
       [
-        this.team.map(id => BigInt(id)),
+        compactTeamIds(this.team).map(id => BigInt(id)),
         this.equippedRelics.map(id => BigInt(id))
       ],
       0n
     );
 
-    console.log('TX startMatch sent:', hash);
-
-    const waitingText = this.add.text(960, 450, 'Transaction sent. Waiting for confirmation...', {
-      fontSize: '32px', fill: '#ffff00'
-    }).setOrigin(0.5).setDepth(500);
-
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
-    waitingText.destroy();
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
     if (receipt.status !== 'success') {
       throw new Error('Transaction failed on-chain');
@@ -1499,13 +1395,14 @@ private async startBattle() {
     const events: any[] = parsed.events;
 
     const playerUnitsData: any[] = [];
-    for (const id of this.team) {
+    for (const id of compactTeamIds(this.team)) {
       try {
         const rawUnit = await this.nftContract.read.getUnit([BigInt(id)]);
         const unit = this.normalizeUnit(rawUnit);
         playerUnitsData.push({
           faction: unit.faction,
-          unitClass: unit.unitClass
+          unitClass: unit.unitClass,
+          rarity: unit.rarity
         });
       } catch (e) {
         console.error('Failed to load player unit', id, e);
@@ -1525,8 +1422,9 @@ private async startBattle() {
           for (const u of aiData) {
             if (!u.isRelic) {
               aiUnitsData.push({
-                faction: Number(u.faction) || 1,
-                unitClass: Number(u.unitClass) || 0
+                faction: Number(u.faction ?? 0),
+                unitClass: Number(u.unitClass ?? 0),
+                rarity: Number(u.rarity ?? 0)
               });
             }
           }
@@ -1546,11 +1444,10 @@ private async startBattle() {
       throw new Error('Battle data incomplete on blockchain');
     }
 
-    const successMsg = this.add.text(960, 380, 'BATTLE STARTED!', {
-      fontSize: '48px', fill: '#00ff88', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(500);
-    setTimeout(() => successMsg.destroy(), 900);
-
+    this.teamReady = true;
+    this.saveCurrentTeam();
+    this.hideBusyOverlay();
+    this.matchBusy = false;
     this.scene.start('BattleScene', {
       events: events,
       playerWon: playerWon,
@@ -1558,21 +1455,40 @@ private async startBattle() {
       aiMaxHp: aiMaxHp,
       playerUnitsData: playerUnitsData,
       aiUnitsData: aiUnitsData,
-      battleId: battleId
+      battleId: battleId,
+      savedTeam: compactTeamIds(this.team)
     });
 
   } catch (e: any) {
     console.error('startBattle error:', e);
+    this.hideBusyOverlay();
+    this.matchBusy = false;
     const errMsg = e.shortMessage || e.message || 'Unknown blockchain error';
-    const errorText = this.add.text(960, 450, `Error: ${errMsg}`, {
-      fontSize: '34px', fill: '#ff4444'
-    }).setOrigin(0.5).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4500);
+    this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4500);
   }
 }
 
 
+private bindPrepareHotkeys() {
+  this.input.keyboard?.off('keydown-ENTER');
+  this.input.keyboard?.off('keydown-C');
+  this.input.keyboard?.on('keydown-ENTER', () => {
+    if (this.scene.isActive('CollectionScene') || this.matchBusy) {
+      return;
+    }
+    void this.startBattle();
+  });
+  this.input.keyboard?.on('keydown-C', () => {
+    this.openCollectionScene();
+  });
+}
+
 private openCollectionScene() {
+  if (this.scene.isActive('CollectionScene')) {
+    this.scene.stop('CollectionScene');
+    return;
+  }
+
   const equippedIds = this.equippedRelics.filter(id => id > 0);
 
   this.scene.launch('CollectionScene', {
@@ -1583,7 +1499,8 @@ private openCollectionScene() {
     account: this.account,
     publicClient: this.publicClient,
     returnTo: 'PrepareScene',
-    equippedRelicIds: equippedIds
+    equippedRelicIds: equippedIds,
+    teamIds: compactTeamIds(this.team)
   });
 }
 
@@ -1592,17 +1509,17 @@ private openCollectionScene() {
     this.teamOperationLock = true;
 
     try {
-      const remaining = 8 - this.team.length;
+      const remaining = 8 - filledTeamCount(this.team);
       const actuallyAdded: number[] = [];
 
       if (newIds.length > remaining) {
-        this.clearTeam();
+        this.clearTeam(true);
         const toAdd = newIds.slice(0, 8);
         for (const id of toAdd) {
           if (!this.team.includes(id)) {
             const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
             if (freeSlotIndex !== -1) {
-              this.team.push(id);
+              this.team[freeSlotIndex] = id;
               await this.createTeamUnitVisual(id, freeSlotIndex);
               actuallyAdded.push(id);
             }
@@ -1610,11 +1527,11 @@ private openCollectionScene() {
         }
       } else {
         for (const id of newIds) {
-          if (this.team.length >= 8) break;
+          if (filledTeamCount(this.team) >= 8) break;
           if (!this.team.includes(id)) {
             const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
             if (freeSlotIndex !== -1) {
-              this.team.push(id);
+              this.team[freeSlotIndex] = id;
               await this.createTeamUnitVisual(id, freeSlotIndex);
               actuallyAdded.push(id);
             }
@@ -1650,11 +1567,9 @@ public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
 
   this.equippedRelics = equippedCopy;
   await this.refreshRelics();
+  this.persistEquippedRelics();
 
-  const msg = this.add.text(960, 200, `RELICS ACTIVATED (${newRelicIds.length})`, {
-    fontSize: '42px', fill: '#00ff88'
-  }).setOrigin(0.5);
-  setTimeout(() => msg.destroy(), 2200);
+  this.showSceneMessage(`Relics equipped (${newRelicIds.length})`, HUD.color.good, 1800);
 }
 
 private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
@@ -1665,14 +1580,12 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const unit = this.normalizeUnit(rawUnit);
 
     const slot = this.gridSlots[slotIndex];
-    const style = this.getRarityTintAndScale(unit.rarity);
-    const shipKey = this.getShipKey(unit.faction, unit.unitClass);
+    const textureKey = shipKey(unit.faction, unit.unitClass);
     const rarityNum = unit.rarity;
-    const baseScale = style.scale * 0.42;
-    const finalShipScale = baseScale * 0.75;
+    const shipDisplay = Math.round(HUD.TEAM * 0.56);
 
     const container = UnitVisualFactory.createUnitWithFrame(
-      this, slot.x, slot.y, shipKey, rarityNum, baseScale, 0.75
+      this, slot.x, slot.y, textureKey, rarityNum, HUD.TEAM
     );
 
     const ship = container.getAt(container.length - 1) as Phaser.GameObjects.Sprite;
@@ -1681,6 +1594,12 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       container.destroy();
       return;
     }
+
+    const caption = this.add.text(0, HUD.TEAM / 2 + 12, className(unit.unitClass), hudText({
+      fontSize: '13px',
+      fill: rarityColor(unit.rarity)
+    })).setOrigin(0.5);
+    container.add(caption);
 
     (container as any).tokenId = tokenId;
     (container as any).unit = unit;
@@ -1691,17 +1610,13 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
     this.teamSlotOccupants[slotIndex] = container;
 
-    if ((slot as any).pulseTween) {
-      (slot as any).pulseTween.stop();
-      (slot as any).pulseTween = null;
-    }
+    this.stopEmptySlotPulse(slot);
     slot.disableInteractive();
-
-    this.originalPositions.set(tokenId, { x: slot.x, y: slot.y });
 
     this.tweens.add({
       targets: ship,
-      scale: ship.scale * 1.04,
+      displayWidth: shipDisplay * 1.04,
+      displayHeight: shipDisplay * 1.04,
       duration: 2500,
       yoyo: true,
       repeat: -1,
@@ -1712,7 +1627,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const originalHeight = slot.displayHeight;
 
     ship.on('pointerover', () => {
-      const tooltipText = `${this.getFactionName(unit.faction)} ${this.getRarityName(unit.rarity)} ${this.getClassName(unit.unitClass)}\nATK ${unit.attack} DEF ${unit.defense} SPD ${unit.speed}`;
+      const tooltipText = `${factionName(unit.faction)} ${rarityName(unit.rarity)} ${className(unit.unitClass)}\nATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
       this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
     });
 
@@ -1730,7 +1645,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
     ship.on('dragstart', () => {
       container.setDepth(30);
-      ship.setScale(style.scale * 1.15);
+      ship.setDisplaySize(shipDisplay * 1.08, shipDisplay * 1.08);
       slot.setDisplaySize(originalWidth, originalHeight);
     });
 
@@ -1741,7 +1656,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
     ship.on('dragend', () => {
       container.setDepth(8);
-      ship.setScale(finalShipScale);
+      ship.setDisplaySize(shipDisplay, shipDisplay);
 
       let droppedOnSlot = false;
       for (let s = 0; s < 8; s++) {
@@ -1759,35 +1674,37 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
           break;
         }
       }
-      if (!droppedOnSlot) {
-        this.removeFromTeam(slotIndex);
+      if (droppedOnSlot) {
+        return;
+      }
+
+      const L = PREPARE_LAYOUT;
+      const teamWidth = 4 * HUD.TEAM + 3 * L.teamGap;
+      const teamHeight = 2 * HUD.TEAM + L.teamGap;
+      const inFleet =
+        container.x > L.centerX - teamWidth / 2 - 70 &&
+        container.x < L.centerX + teamWidth / 2 + 70 &&
+        container.y > L.teamTopY - 70 &&
+        container.y < L.teamTopY + teamHeight + 70;
+
+      if (inFleet) {
+        container.x = slot.x;
+        container.y = slot.y;
       } else {
-        container.x = this.gridSlots[slotIndex].x;
-        container.y = this.gridSlots[slotIndex].y;
+        this.removeFromTeam(slotIndex);
       }
     });
 
   } catch (e) {
     console.error(`createTeamUnitVisual error for ${tokenId}:`, e);
-    this.team = this.team.filter(id => id !== tokenId);
+    this.team[slotIndex] = 0;
     this.teamSlotOccupants[slotIndex] = null;
     const slot = this.gridSlots[slotIndex];
     if (slot) {
       slot.setInteractive();
-      if (!(slot as any).pulseTween) {
-        const pulse = this.tweens.add({
-          targets: slot,
-          scaleX: 1.03,
-          scaleY: 1.03,
-          duration: 1300,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut'
-        });
-        (slot as any).pulseTween = pulse;
-      }
+      this.startEmptySlotPulse(slot);
     }
-    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+    if (this.teamCounterText) this.teamCounterText.setText(`YOUR FLEET  ${filledTeamCount(this.team)}/8`);
   }
 }
 
@@ -1797,26 +1714,15 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
     const tokenId = (occupant as any).tokenId;
 
-    this.team = this.team.filter(id => id !== tokenId);
+    this.team[slotIndex] = 0;
     occupant.destroy();
     this.teamSlotOccupants[slotIndex] = null;
-    this.originalPositions.delete(tokenId);
     this.updateTeamCounter();
 
     const teamSlot = this.gridSlots[slotIndex];
     if (teamSlot) {
       teamSlot.setInteractive();
-
-      const pulse = this.tweens.add({
-        targets: teamSlot,
-        scaleX: 1.03,
-        scaleY: 1.03,
-        duration: 1800,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-      (teamSlot as any).pulseTween = pulse;
+      this.startEmptySlotPulse(teamSlot);
     }
 
     const collectionScene = this.scene.get('CollectionScene') as any;
@@ -1837,20 +1743,6 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     }
   }
 
-  public returnUnitToCollection(unitId: number) {
-    const collectionScene = this.scene.get('CollectionScene') as any;
-    if (collectionScene && collectionScene.scene.isActive()) {
-      collectionScene.loadCollectionData();
-    }
-  }
-
-  public returnRelicToCollection(relicId: number) {
-    const collectionScene = this.scene.get('CollectionScene') as any;
-    if (collectionScene && collectionScene.scene.isActive()) {
-      collectionScene.loadCollectionData();
-    }
-  }
-
   private clearTeamVisuals() {
     this.teamSlotOccupants.forEach(occupant => {
       if (occupant) occupant.destroy();
@@ -1868,56 +1760,118 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   }
 
   private getShipKey(faction: number, unitClass: number): string {
-    const map: Record<string, string> = {
-      '0_0': 'emperial_fighter', '0_1': 'emperial_cruiser', '0_2': 'emperial_dreadnought', '0_3': 'emperial_droneswarm',
-      '1_0': 'voidborn_fighter', '1_1': 'voidborn_cruiser', '1_2': 'voidborn_dreadnought', '1_3': 'voidborn_droneswarm',
-      '2_0': 'mechanoid_fighter', '2_1': 'mechanoid_cruiser', '2_2': 'mechanoid_dreadnought', '2_3': 'mechanoid_droneswarm',
-    };
-    return map[`${faction}_${unitClass}`] || 'emperial_fighter';
-  }
-
-  private getRarityTintAndScale(rarity: number) {
-    if (rarity === 2) return { tint: 0xffee00, scale: 0.89 };
-    if (rarity === 1) return { tint: 0x00ff77, scale: 0.84 };
-    return { tint: 0x44aaff, scale: 0.78 };
+    return shipKey(faction, unitClass);
   }
 
   private updateTeamCounter() {
-    if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
+    const count = filledTeamCount(this.team);
+    if (this.teamCounterText) {
+      this.teamCounterText.setText(`YOUR FLEET  ${count}/8`);
+      this.teamCounterText.setColor(count === 8 ? HUD.color.good : HUD.color.warn);
+    }
+    this.refreshFleetHint();
+    this.saveCurrentTeam();
   }
 
-  private async generateTenShips() {
-  console.log('GENERATE 10 SHIPS pressed');
+  private saveCurrentTeam() {
+    if (!this.account || !this.teamReady) {
+      return;
+    }
+    savePrepareSession(this.account, {
+      team: compactTeamIds(this.team),
+      relics: this.equippedRelics
+    });
+  }
+
+  private async restoreSavedTeam() {
+    if (!this.account || filledTeamCount(this.team) > 0) {
+      return;
+    }
+    const saved = loadPrepareSession(this.account);
+    if (!saved || saved.team.length === 0) {
+      return;
+    }
+    const valid = saved.team.filter((id) => this.playerUnitIds.includes(id)).slice(0, 8);
+    if (valid.length === 0) {
+      return;
+    }
+    this.team = alignTeamToSlots(valid);
+    await this.rebuildTeamVisuals();
+  }
+
+  private refreshFleetHint() {
+    const count = filledTeamCount(this.team);
+    if (this.teamCounterText) {
+      this.teamCounterText.setText(`YOUR FLEET  ${count}/8`);
+      this.teamCounterText.setColor(count === 8 ? HUD.color.good : HUD.color.warn);
+    }
+    if (!this.fleetHintText) {
+      return;
+    }
+    if (this.playerUnitIds.length === 0) {
+      this.fleetHintText.setText('Generate 10, then AUTO');
+      this.fleetHintText.setColor(HUD.color.warn);
+      return;
+    }
+    if (count < 8) {
+      this.fleetHintText.setText(`${8 - count} empty — AI fills them`);
+      this.fleetHintText.setColor(HUD.color.warn);
+      return;
+    }
+    this.fleetHintText.setText('');
+  }
+
+  private async claimLevelUpShips() {
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
-    return alert('Connect wallet first');
+    this.showSceneMessage('Connect wallet first');
+    return;
+  }
+  try {
+    const pending = this.safeBigIntToNumber(await this.gameContract.read.pendingLevelUpShips([this.account]));
+    if (pending <= 0) {
+      this.showSceneMessage('No free ships to claim', HUD.color.muted, 1800);
+      return;
+    }
+    const hash = await this.sendGameTransaction('claimLevelUpShips', [], 0n);
+    this.showSceneMessage('Claiming free ships...', HUD.color.warn, 8000);
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+    await this.loadOwnedUnits();
+    await this.updatePlayerProfile();
+    await this.reloadOpenCollection();
+    this.showSceneMessage(`${pending} free ship${pending === 1 ? '' : 's'} claimed`, HUD.color.good, 2200);
+  } catch (e: any) {
+    const errMsg = e.shortMessage || e.message || 'Claim failed';
+    this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
+  }
+}
+
+private async generateTenShips() {
+
+  if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
+    this.showSceneMessage('Connect wallet first');
+    return;
   }
 
   try {
-    const hash = await this.sendGameTransaction('generateTenShips', [], 100000000000000000n); // 0.1 ETH
+    const unitPrice = await this.readPayablePrice('buyUnitPrice', 10000000000000000n);
+    const hash = await this.sendGameTransaction('generateTenShips', [], unitPrice * 10n);
+    this.showSceneMessage('Generating 10 ships...', '#ffe566', 8000);
 
-    console.log('TX sent:', hash);
-    const waiting = this.add.text(960, 200, 'Generating 10 ships...', {
-      fontSize: '36px', fill: '#ffff00'
-    }).setDepth(500);
-
-    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
-    waiting.destroy();
+    await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
     await this.loadOwnedUnits();
     await this.updatePlayerProfile();
+    await this.reloadOpenCollection();
+    if (filledTeamCount(this.team) === 0 && this.playerUnitIds.length >= 8) {
+      await this.autoSelectTeam();
+    }
 
-    const msg = this.add.text(960, 200, '10 ships generated!', {
-      fontSize: '42px', fill: '#00ff00'
-    }).setDepth(500);
-    setTimeout(() => msg.destroy(), 2000);
+    this.showSceneMessage('10 ships generated!', '#6dffc0', 2000);
 
   } catch (e: any) {
     console.error('generateTenShips error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
-    const errorText = this.add.text(960, 200, `Error: ${errMsg}`, {
-      fontSize: '36px', fill: '#ff4444'
-    }).setDepth(500);
-    setTimeout(() => errorText.destroy(), 4000);
+    this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
   }
 }
 
@@ -1984,33 +1938,13 @@ private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.0
   });
 }
 
-private async cleanupInvalidTeamIds() {
-  if (!this.nftContract || this.team.length === 0) return;
-
-  const validTeam: number[] = [];
-
-  for (const id of this.team) {
-    try {
-      await this.nftContract.read.getUnit([BigInt(id)]);
-      validTeam.push(id);
-    } catch {
-      console.log(`Removing non-existent token from team: ${id}`);
-    }
-  }
-
-  this.team = validTeam;
-  this.clearTeamVisuals();
-
-  if (this.teamCounterText) this.teamCounterText.setText(`TEAM: ${this.team.length}/8`);
-}
-
   public addSingleUnitToTeam(unitId: number): boolean {
-    if (this.team.length >= 8 || this.team.includes(unitId)) return false;
+    if (filledTeamCount(this.team) >= 8 || this.team.includes(unitId)) return false;
 
     const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
     if (freeSlotIndex === -1) return false;
 
-    this.team.push(unitId);
+    this.team[freeSlotIndex] = unitId;
     this.createTeamUnitVisual(unitId, freeSlotIndex);
     this.updateTeamCounter();
 
@@ -2028,6 +1962,7 @@ public equipSingleRelic(relicId: number): boolean {
     if (this.equippedRelics[i] === 0) {
       this.equippedRelics[i] = relicId;
       this.refreshRelics();
+      this.persistEquippedRelics();
 
       // Обновляем equippedRelicIds в открытой CollectionScene
       const collectionScene = this.scene.get('CollectionScene') as any;
@@ -2139,17 +2074,16 @@ private async fetchBattleEventsFromLogs(battleId: string, blockNumber: bigint): 
       this.tooltip = null;
     }
     this.hideTooltip();
+    this.clearSceneMessage();
 
-    this.ownedSprites.forEach(s => s.destroy());
-    this.shopSprites.forEach(s => s.destroy());
+    this.shopSprites.forEach((sprite) => sprite?.destroy());
     this.aiSprites.forEach(s => s.destroy());
-    this.aiTexts.forEach(t => t.destroy());
     this.equippedTexts.forEach(t => t.destroy());
     this.equippedTexts = [];
 
     if (this.playerLevelText) this.playerLevelText.destroy();
     if (this.playerStatsText) this.playerStatsText.destroy();
 
-    console.log('✅ PrepareScene shutdown');
+
   }
 }

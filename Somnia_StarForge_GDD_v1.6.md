@@ -1,14 +1,9 @@
 # Somnia StarForge — Game Design Document v1.6
 
-**Статус:** v1.6.2 — **frontend depth + relic drag завершены** (13.05.2026)  
-**Текущая версия в работе:** v1.6.2 → подготовка к финальному тестированию  
-**v1.6.2 цели выполнены:**
-- Полная система глубин (корабли 8 / слоты 10 / drag 30 / tooltip 100)
-- Hover + drag + double-click на юнитах в команде
-- Полноценный drag + click для equipped relics (свап / unequip)
-- Визуальная полировка PrepareScene + CollectionScene
-
-**Следующий шаг:** доработка BattleScene (частицы, улучшенные эффекты) + финальное тестирование v1.6.2
+**Статус:** v1.6 — audit 15.08.2026  
+**Live:** testnet 50312. Адреса только в `DEPLOYMENT.md`.  
+**Сделано:** Variant 1 events, Shadow Fleet 8, daily 10 + free ship, Collection overlay 0–960, RainbowKit, Last Stand 1 раз, unique team/relics.  
+**Следующий шаг:** ручной прогон шопа/лимитов на новом Game, затем mainnet.
 
 **v1.6 — CollectionScene + Механика реликвий и юнитов текущая цель:**
 - Полностью переработанная CollectionScene с фильтрами, multi-select и instant add (double-click)
@@ -20,9 +15,7 @@
 Все юниты и реликвии теперь отображаются реальными портретами вместо цветных квадратиков. Добавлена лёгкая пульсация для ощущения живости.
 
 ## Актуальные адреса (testnet)
-- **StarForgeUnitNFT**: `0x9D00dB7fb6faF315C9c63971ae34380d5b831a56`
-- **StarForgeGame**: `0x52C428Ec735ef6fEb46334E626600ec31120cC80`
-- **StarForgeRelic**: `0x83930224Ced8cEB6350fC9F41202B8fAA0033173`
+Смотри `DEPLOYMENT.md`. Старые адреса в этом файле недействительны.
 
 ## 1. Обзор и Vision
 Somnia StarForge — полностью on-chain auto-battler (TFT / Auto Chess lite) в сеттинге «Echo of Dreams» Somnia.  
@@ -36,22 +29,23 @@ Somnia StarForge — полностью on-chain auto-battler (TFT / Auto Chess 
 1. **Prepare Phase** — PrepareScene (покупка юнитов, магазин реликвий, drag-and-drop, equipped relics)  
 2. **Battle Phase** — полностью on-chain симуляция в StarForgeBattleLibrary  
 3. **Reward Phase** — минт реликвий, обновление профиля, XP, level-up  
-4. **Collection Phase** — просмотр всей коллекции (добавляется в v1.6)
+4. **Collection Phase** — левая половина Prepare (0–960), 5 колонок, overlay
 
 ## 3. Системы
 **Боевая система (v1.5.6 — завершена)**  
-- Полностью on-chain Speed Queue, 1–2 атаки за раунд, максимум 18 раундов  
-- Crit (6/12/20%), Dodge, Last Stand, faction synergy (+2 ATK при 3+ юнитах одной фракции)  
-- AI scaling + rarity scaling  
-- BattleResult возвращает playerMaxHp / aiMaxHp и полный лог событий  
+- Полностью on-chain Speed Queue, 1–2 атаки за раунд, максимум 22 раунда  
+- Crit, Dodge, Last Stand (один раз на юнит), faction synergy (+2 ATK при 3+ одной фракции)  
+- Shadow Fleet: ИИ всегда 8; пустые слоты игрока = сильные филлеры  
+- События боя: emit `BattleResolved` + `BattleEventEmitted` (не storage)  
+- XP: +25 победа / +10 поражение, порог `level*55+90`  
 
-**Юниты** — ERC-721 StarForgeUnitNFT  
-**Реликвии** — ERC-1155 StarForgeRelic (max 3 equipped)  
-**Профиль игрока** — level, xp, wins, losses, currentAITier, winStreak  
+**Юниты** — ERC-721 StarForgeUnitNFT (soulbound)  
+**Реликвии** — ERC-1155 StarForgeRelic (max 3 equipped, уникальные id)  
+**Профиль игрока** — level, xp, wins, losses, currentAITier. winStreak снят.  
 
 ## 4. Техническая архитектура
-On-chain: Solidity 0.8.27+, UUPS-ready, ReentrancyGuard, Pausable, библиотеки.  
-Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + @somniaforge/sdk + Sequence SDK (gasless в планах).
+On-chain: Solidity 0.8.27+, Ownable + ReentrancyGuard + Pausable, Hardhat. UUPS нет.  
+Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + RainbowKit.
 
 ## 5. Визуал
 UI Asset Generation — Reference Prompt

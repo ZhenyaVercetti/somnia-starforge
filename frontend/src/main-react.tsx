@@ -1,5 +1,4 @@
 // @ts-nocheck
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { WagmiProvider } from 'wagmi';
@@ -7,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { config } from './lib/wagmiConfig';
 import { WalletModal } from './components/WalletModal';
+import WalletManager from './lib/WalletManager';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -14,9 +14,19 @@ const queryClient = new QueryClient();
 
 let root: ReactDOM.Root | null = null;
 
+function unmountModal() {
+  if (!root) {
+    return;
+  }
+  root.unmount();
+  root = null;
+}
+
 export function openWalletModal() {
   const container = document.getElementById('react-root');
-  if (!container) return;
+  if (!container) {
+    return;
+  }
 
   if (!root) {
     root = ReactDOM.createRoot(container);
@@ -27,16 +37,14 @@ export function openWalletModal() {
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider>
-            <WalletModal 
-              onClose={() => {
-                if (root) {
-                  root.unmount();
-                  root = null;
-                }
-                if ((window as any).startGame) {
-                  (window as any).startGame();
-                }
-              }} 
+            <WalletModal
+              onConnected={() => {
+                unmountModal();
+                startGame();
+              }}
+              onDismiss={() => {
+                unmountModal();
+              }}
             />
           </RainbowKitProvider>
         </QueryClientProvider>
@@ -46,20 +54,30 @@ export function openWalletModal() {
 }
 
 export function startGame() {
-  setTimeout(() => {
-    const game = (window as any).game;
-    if (game && game.scene) {
-      // Сохраняем account и publicClient глобально
-      const account = (window as any).account;
-      const publicClient = (window as any).publicClient;
-      
-      game.scene.start('PrepareScene', {
-        account: account || null,
-        publicClient: publicClient || null
-      });
+  const walletManager = WalletManager.getInstance();
+  if (!walletManager.restoreFromWindow() && !walletManager.isConnected()) {
+    console.warn('startGame blocked: wallet is not connected');
+    return;
+  }
+
+  window.setTimeout(() => {
+    const game = window.game;
+    if (!game?.scene) {
+      return;
     }
+
+    if (game.scene.isActive('BootScene') || game.scene.isSleeping('BootScene')) {
+      game.scene.stop('BootScene');
+    }
+
+    game.scene.start('PrepareScene', {
+      account: walletManager.account,
+      publicClient: walletManager.getPublicClient(),
+      walletClient: walletManager.getWalletClient(),
+      walletManager
+    });
   }, 200);
 }
 
-(window as any).openWalletModal = openWalletModal;
-(window as any).startGame = startGame;
+window.openWalletModal = openWalletModal;
+window.startGame = startGame;

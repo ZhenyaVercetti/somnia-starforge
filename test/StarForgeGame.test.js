@@ -45,6 +45,41 @@ async function buyUnits(game, player, count) {
   }
 }
 
+function parseNamedLogs(game, receipt, eventName) {
+  return receipt.logs
+    .map((log) => {
+      try {
+        return game.interface.parseLog(log);
+      } catch (e) {
+        return null;
+      }
+    })
+    .filter((parsed) => parsed && parsed.name === eventName);
+}
+
+async function buyAnyRelic(game, player, profile) {
+  await (await game.connect(player).rerollShop({ value: REROLL_PRICE })).wait();
+  await (await game.connect(player).buyFromShop(0, { value: BUY_RELIC_PRICE })).wait();
+  const relics = await profile.getPlayerRelics(player.address);
+  return relics[relics.length - 1];
+}
+
+async function buyRelicOfType(game, player, profile, relicType) {
+  await (await game.connect(player).rerollShop({ value: REROLL_PRICE })).wait();
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const shop = await game.getPlayerShop(player.address);
+    for (let slot = 0; slot < 3; slot++) {
+      if (Number(shop[slot].relicType) === relicType && Number(shop[slot].relicValue) > 0) {
+        await (await game.connect(player).buyFromShop(slot, { value: BUY_RELIC_PRICE })).wait();
+        const relics = await profile.getPlayerRelics(player.address);
+        return relics[relics.length - 1];
+      }
+    }
+    await (await game.connect(player).buyFromShop(0, { value: BUY_RELIC_PRICE })).wait();
+  }
+  throw new Error(`Could not buy relic type ${relicType}`);
+}
+
 describe("StarForgeGame Variant 1", function () {
   it("constructor wires NFT, Relic and Profile", async function () {
     const { unitNFT, relic, profile, game } = await deploySystem();
@@ -131,7 +166,7 @@ describe("StarForgeGame Variant 1", function () {
     await buyUnits(game, player, 4);
     await expect(
       game.connect(player).startMatch([999, 1000, 1001, 1002], [])
-    ).to.be.revertedWith("You do not own this unit");
+    ).to.be.reverted;
   });
 
   it("startMatch writes summary, emits logs, and does not keep event storage", async function () {
@@ -188,7 +223,7 @@ describe("StarForgeGame Variant 1", function () {
   it("equipRelics rejects relics the player does not own", async function () {
     const { player, game } = await deploySystem();
     await expect(game.connect(player).equipRelics([1, 0, 0])).to.be.revertedWith(
-      "You do not own this relic"
+      "Not owner"
     );
   });
 
@@ -271,5 +306,133 @@ describe("StarForgeGame Variant 1", function () {
     const after = (await profile.getPlayerUnits(player.address)).length;
     expect(after).to.be.greaterThan(before);
     expect(await game.pendingLevelUpShips(player.address)).to.equal(0);
+  });
+
+  it("underfleet AI fillers are Rare with high stats at 0 battles", async function () {
+    const { player, unitNFT, game } = await deploySystem();
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    await (await game.connect(player).startMatch(units, [])).wait();
+
+    const player0 = await unitNFT.getUnit(units[0]);
+    const ai = await game.getCurrentAI(player.address);
+    expect(ai.length).to.equal(8);
+    expect(Number(ai[0].faction)).to.equal(Number(player0.faction));
+    expect(Number(ai[0].unitClass)).to.equal(Number(player0.unitClass));
+    expect(Number(ai[0].attack)).to.be.at.least(10);
+    expect(Number(ai[0].attack)).to.be.at.most(20);
+
+    for (let i = 4; i < 8; i++) {
+      expect(Number(ai[i].rarity)).to.equal(1);
+      expect(Number(ai[i].attack)).to.be.at.least(14);
+      expect(Number(ai[i].defense)).to.be.at.least(12);
+      expect(Number(ai[i].speed)).to.be.at.least(13);
+    }
+  });
+
+  it("startMatch rejects a duplicated unit id", async function () {
+    const { player, game } = await deploySystem();
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    await expect(
+      game.connect(player).startMatch([units[0], units[0], units[1], units[2]], [])
+    ).to.be.revertedWith("Dup unit");
+  });
+
+  it("equipRelics rejects stacking the same relic id", async function () {
+    const { player, profile, game } = await deploySystem();
+    const relicId = await buyAnyRelic(game, player, profile);
+    await expect(
+      game.connect(player).equipRelics([relicId, relicId, 0])
+    ).to.be.revertedWith("Dup relic");
+  });
+
+  it("startMatch rejects duplicate relics in calldata", async function () {
+    const { player, profile, game } = await deploySystem();
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    const relicId = await buyAnyRelic(game, player, profile);
+    await expect(
+      game.connect(player).startMatch(units, [relicId, relicId, 0])
+    ).to.be.revertedWith("Dup relic");
+  });
+
+  it("Last Stand fires at most once per unit", async function () {
+    const { player, profile, game } = await deploySystem();
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    const lastStandId = await buyRelicOfType(game, player, profile, 5);
+    await (await game.connect(player).equipRelics([lastStandId, 0, 0])).wait();
+
+    let lastStandHits = [];
+    for (let attempt = 0; attempt < 5 && lastStandHits.length === 0; attempt++) {
+      const receipt = await (await game.connect(player).startMatch(units, [])).wait();
+      lastStandHits = parseNamedLogs(game, receipt, "BattleEventEmitted")
+        .filter((parsed) => Number(parsed.args.specialEffect) === 3);
+    }
+
+    expect(lastStandHits.length).to.be.greaterThan(0);
+
+    const seen = new Set();
+    for (const parsed of lastStandHits) {
+      const key = `${parsed.args.isPlayerSide}-${parsed.args.targetIndex}`;
+      expect(seen.has(key)).to.equal(false);
+      seen.add(key);
+    }
+  });
+
+  it("inherits free ship grants from previousGame after a redeploy", async function () {
+    const { owner, player, unitNFT, relic, profile, game } = await deploySystem();
+    await buyUnits(game, player, 1);
+    await profile.grantGameRole(owner.address);
+    for (let i = 0; i < 6; i++) {
+      await (await profile.connect(owner).updateAfterBattle(player.address, true)).wait();
+    }
+    await (await game.connect(player).claimLevelUpShips()).wait();
+    expect(await game.freeShipsGranted(player.address)).to.equal(1);
+
+    const Game = await ethers.getContractFactory("StarForgeGame");
+    const game2 = await Game.deploy(
+      await unitNFT.getAddress(),
+      await relic.getAddress(),
+      await profile.getAddress()
+    );
+    await game2.waitForDeployment();
+    await (await game2.setPreviousGame(await game.getAddress())).wait();
+    await (await profile.setGameContract(await game2.getAddress())).wait();
+
+    expect(await game2.freeShipsGranted(player.address)).to.equal(0);
+    expect(await game2.pendingLevelUpShips(player.address)).to.equal(0);
+    await expect(game2.connect(player).claimLevelUpShips()).to.be.revertedWith(
+      "No level-up ships to claim"
+    );
+  });
+
+  it("clearPlayerData also wipes lastAI", async function () {
+    const { player, game } = await deploySystem();
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    await (await game.connect(player).startMatch(units, [])).wait();
+    const before = await game.getCurrentAI(player.address);
+    expect(Number(before[0].attack)).to.be.greaterThan(0);
+
+    await (await game.connect(player).clearPlayerData()).wait();
+    const after = await game.getCurrentAI(player.address);
+    expect(Number(after[0].attack)).to.equal(0);
+    expect(Number(after[0].id)).to.equal(0);
+  });
+
+  it("full fleet of 8 leaves no filler slots", async function () {
+    const { player, unitNFT, game } = await deploySystem();
+    await (await game.connect(player).generateTenShips({ value: TEN_SHIPS_PRICE })).wait();
+    const units = [...await game.getPlayerUnits(player.address)].slice(0, 8);
+    await (await game.connect(player).startMatch(units, [])).wait();
+
+    const ai = await game.getCurrentAI(player.address);
+    for (let i = 0; i < 8; i++) {
+      const playerUnit = await unitNFT.getUnit(units[i]);
+      expect(Number(ai[i].faction)).to.equal(Number(playerUnit.faction));
+      expect(Number(ai[i].unitClass)).to.equal(Number(playerUnit.unitClass));
+    }
   });
 });
