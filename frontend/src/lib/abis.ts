@@ -78,18 +78,6 @@ export const gameAbi = [
   },
   {
     inputs: [{ internalType: 'address', name: 'player', type: 'address' }],
-    name: 'getLastBattleResult',
-    outputs: [
-      { internalType: 'bool', name: '', type: 'bool' },
-      { internalType: 'uint16[]', name: '', type: 'uint16[]' },
-      { internalType: 'uint16[]', name: '', type: 'uint16[]' },
-      { internalType: 'bytes32', name: '', type: 'bytes32' }
-    ],
-    stateMutability: 'view',
-    type: 'function'
-  },
-  {
-    inputs: [{ internalType: 'address', name: 'player', type: 'address' }],
     name: 'getCurrentAI',
     outputs: [{
       components: [

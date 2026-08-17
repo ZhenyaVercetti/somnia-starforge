@@ -42,10 +42,10 @@ Never suggest other developers or agents.
 
 ## Deploy reminders (always)
 When updating StarForgeGame.sol:
-1. Deploy NEW StarForgeGame with ctor `(current NFT, current Relic, current Profile)`
-2. NFT / Relic / Profile: `setGameContract(new Game)`
-3. New Game: `setRelicContract(current Relic)` and `setPreviousGame(old Game)` so free ships do not remint
-4. Profile: revoke `GAME_ROLE` from old Game addresses
+1. Deploy NEW StarForgeGame with ctor `(current NFT, current Relic, current Profile, current Game as previousGame)`
+2. Bind: Relic `setGameContract` → Profile `setGameContract` → revoke `GAME_ROLE` from old Games → NFT `setGameContract` last
+3. `previousGame` is a constructor arg. Do not leave a window with previousGame = 0
+4. Mainnet: `CONFIRM_MAINNET=1`. Do not overwrite testnet `DEPLOYMENT.md`
 
 When updating StarForgeUnitNFT.sol:
 1. Deploy new NFT
@@ -58,12 +58,14 @@ When updating StarForgeRelic.sol:
 
 Always remind current addresses from DEPLOYMENT.md and the new ones after update.
 
-## Current state (15.08.2026)
-- Version: v1.6 / audit session 15.08.2026
-- Live Game (testnet): see DEPLOYMENT.md
-- On-chain: Variant 1 battle events, daily 10 + free ship on level-up, Shadow Fleet always 8
-- Audit 15.08: Last Stand once, unique team/relics, previousGame for free ships, Boot stop, slot-aligned team
-- Frontend: Phaser scenes + RainbowKit. Team persists via prepareSession. Collection = left half overlay. No outer_frame on Prepare/Boot/Battle.
-- Goal: user-test shop limits on the new Game, then mainnet
-- Do not retune shop/limits/AI unless asked
+## Current state (17.08.2026)
+- Version: v1.6.4 / post-audit fixes + Game `0x064f…`
+- Live Game (testnet): `0x064fE7661b1eb52b727e562E652764b94c008383` — see DEPLOYMENT.md
+- previousGame: `0x6DE0834950Ed5f4d13E90A5EA049d43a3Ade9118` (GAME_ROLE снят)
+- On-chain: Variant 1 events, daily 10 + free ship, Shadow Fleet, ctor previousGame, exact payment, multi-hop free ships, EOA-only grind paths, startMatch persists relics
+- Frontend: Phaser + RainbowKit. Fleet slots: empty = `-1`, token 0 is a valid ship. Collection = left half. No outer_frame.
+- Live smoke 17.08: startMatch `0x9b1758bf…` OK. Tests: 41 passing
+- Goal: keep improving on testnet. Shop prices / daily 10 / AI — do not retune unless asked
 - Full context: AUDIT_HANDOFF.md
+- Do not redeploy NFT or Profile without a migration plan (wipes ships / progress)
+- Game bytecode is near the 24 KB cap. New Game logic must stay small or move into the library.

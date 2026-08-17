@@ -1,6 +1,7 @@
-// @ts-nocheck
 import * as Phaser from 'phaser';
 import WalletManager from '../lib/WalletManager';
+import { gameAudio, SFX_MANIFEST } from '../lib/gameAudio';
+import { preloadRelicsAndFrames, preloadShipPortraits } from '../utils/preloadGameAssets';
 
 export default class BootScene extends Phaser.Scene {
   private backgroundLayers: Phaser.GameObjects.Image[] = [];
@@ -17,6 +18,9 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('button_base', 'assets/button_base.png');
     this.load.image('ui_titlebar', 'assets/ui/ui_titlebar.png');
     this.load.image('ui_plate', 'assets/ui/ui_plate.png');
+    preloadShipPortraits(this);
+    preloadRelicsAndFrames(this);
+    SFX_MANIFEST.forEach((item) => this.load.audio(item.key, item.file));
   }
 
   create() {
@@ -67,6 +71,8 @@ export default class BootScene extends Phaser.Scene {
       connectText.setColor('#5ee7ff');
     });
     const openModal = () => {
+      gameAudio.unlock();
+      gameAudio.click();
       if (window.openWalletModal) {
         window.openWalletModal();
       }

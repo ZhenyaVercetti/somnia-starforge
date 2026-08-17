@@ -10,9 +10,10 @@ interface WalletModalProps {
 }
 
 export const WalletModal: React.FC<WalletModalProps> = ({ onConnected, onDismiss }) => {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, isConnecting, isReconnecting } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const busy = isConnecting || isReconnecting;
 
   useEffect(() => {
     if (!isConnected || !address || !publicClient || !walletClient) {
@@ -46,7 +47,21 @@ export const WalletModal: React.FC<WalletModalProps> = ({ onConnected, onDismiss
         justifyContent: 'center',
         zIndex: 99999
       }}
-      onClick={onDismiss}
+      onClick={() => {
+        if (busy) {
+          return;
+        }
+        if (isConnected && address && publicClient && walletClient) {
+          WalletManager.getInstance().setSession({
+            account: address,
+            publicClient,
+            walletClient
+          });
+          onConnected();
+          return;
+        }
+        onDismiss();
+      }}
     >
       <div
         style={{

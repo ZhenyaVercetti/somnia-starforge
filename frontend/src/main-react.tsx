@@ -53,6 +53,32 @@ export function openWalletModal() {
   );
 }
 
+function launchPrepare(walletManager: WalletManager, attemptsLeft: number) {
+  const game = window.game;
+  if (!game?.scene) {
+    if (attemptsLeft <= 0) {
+      return;
+    }
+    window.setTimeout(() => launchPrepare(walletManager, attemptsLeft - 1), 150);
+    return;
+  }
+
+  if (game.scene.isActive('CollectionScene') || game.scene.isSleeping('CollectionScene')) {
+    game.scene.stop('CollectionScene');
+  }
+
+  if (game.scene.isActive('BootScene') || game.scene.isSleeping('BootScene')) {
+    game.scene.stop('BootScene');
+  }
+
+  game.scene.start('PrepareScene', {
+    account: walletManager.account,
+    publicClient: walletManager.getPublicClient(),
+    walletClient: walletManager.getWalletClient(),
+    walletManager
+  });
+}
+
 export function startGame() {
   const walletManager = WalletManager.getInstance();
   if (!walletManager.restoreFromWindow() && !walletManager.isConnected()) {
@@ -60,23 +86,7 @@ export function startGame() {
     return;
   }
 
-  window.setTimeout(() => {
-    const game = window.game;
-    if (!game?.scene) {
-      return;
-    }
-
-    if (game.scene.isActive('BootScene') || game.scene.isSleeping('BootScene')) {
-      game.scene.stop('BootScene');
-    }
-
-    game.scene.start('PrepareScene', {
-      account: walletManager.account,
-      publicClient: walletManager.getPublicClient(),
-      walletClient: walletManager.getWalletClient(),
-      walletManager
-    });
-  }, 200);
+  launchPrepare(walletManager, 20);
 }
 
 window.openWalletModal = openWalletModal;

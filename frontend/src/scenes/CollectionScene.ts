@@ -15,6 +15,11 @@ import {
   shipKey
 } from '../utils/HudChrome';
 import { compactTeamIds } from '../lib/prepareSession';
+import { factionLoreId, loreById } from '../lib/lore';
+import { gameAudio } from '../lib/gameAudio';
+import { beginOrResumeTutorial } from '../utils/MetaHud';
+import { normalizeUnit } from '../lib/unitNormalize';
+import { addButtonEffects } from '../utils/uiFactory';
 
 type CollectionTab = 'units' | 'relics';
 
@@ -101,6 +106,8 @@ export default class CollectionScene extends Phaser.Scene {
   private collectionDragStartY = 0;
   private collectionContentStartY = 0;
   private isScrollDragging = false;
+  private scrollConsumedClick = false;
+  private loadGeneration = 0;
 
   constructor() {
     super({ key: 'CollectionScene' });
@@ -134,6 +141,7 @@ export default class CollectionScene extends Phaser.Scene {
     if (prepare?.input) {
       prepare.input.enabled = false;
     }
+    this.scene.bringToTop();
 
     this.buildChrome();
     this.createTabs();
@@ -154,40 +162,57 @@ export default class CollectionScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.x > this.PANEL_W) {
         this.returnToPrepare();
+        return;
+      }
+      if (
+        pointer.x >= this.GRID_X &&
+        pointer.x <= this.GRID_X + this.GRID_W &&
+        pointer.y >= this.GRID_Y &&
+        pointer.y <= this.GRID_Y + this.GRID_H
+      ) {
+        this.collectionDragStartY = pointer.y;
+        this.collectionContentStartY = this.contentContainer ? this.contentContainer.y : 0;
+        this.scrollConsumedClick = false;
       }
     });
     this.input.keyboard?.on('keydown-ESC', () => this.returnToPrepare());
+    this.input.keyboard?.on('keydown-C', () => this.returnToPrepare());
     this.input.on('wheel', this.onCollectionWheel, this);
     this.input.on('pointermove', this.onCollectionDrag, this);
     this.input.on('pointerup', () => {
+      if (this.isScrollDragging) {
+        this.scrollConsumedClick = true;
+      }
       this.isScrollDragging = false;
     });
 
     void this.loadCollectionData();
+    if (this.account) {
+      this.time.delayedCall(280, () => {
+        if (this.account) {
+          beginOrResumeTutorial(this, this.account, 'CollectionScene');
+        }
+      });
+    }
   }
 
   private buildChrome() {
-    this.darkPanel = this.add.rectangle(this.PANEL_W / 2, 540, this.PANEL_W, 1080, 0x080d16, 0.97)
+    this.darkPanel = this.add.rectangle(this.PANEL_W / 2, 540, this.PANEL_W, 1080, 0x080d16, 1)
       .setDepth(1)
       .setInteractive();
 
-    this.rightVeil = this.add.rectangle(1440, 540, 960, 1080, 0x02040a, 0.45)
-      .setDepth(1)
+    this.rightVeil = this.add.rectangle(1440, 540, 960, 1080, 0x02040a, 0.52)
+      .setDepth(20)
       .setInteractive();
 
     this.add.rectangle(958, 540, 4, 1080, 0x5ee7ff, 0.42).setDepth(24);
     this.add.rectangle(this.PANEL_W / 2, 2, this.PANEL_W, 4, 0xf6e27a, 0.28).setDepth(24);
 
-    if (this.textures.exists('ui_titlebar')) {
-      this.add.image(this.PANEL_W / 2, 40, 'ui_titlebar')
-        .setDisplaySize(920, 64)
-        .setDepth(8)
-        .setAlpha(0.92);
-    } else {
-      this.add.rectangle(this.PANEL_W / 2, 40, 920, 64, 0x101826, 0.9)
-        .setStrokeStyle(1, 0x2ec7d6, 0.35)
-        .setDepth(8);
-    }
+    this.add.rectangle(this.PANEL_W / 2, 40, 912, 56, 0x101826, 0.94)
+      .setStrokeStyle(1, 0x2ec7d6, 0.32)
+      .setDepth(8);
+    this.add.rectangle(this.PANEL_W / 2, 66, 200, 2, 0x5ee7ff, 0.45)
+      .setDepth(9);
 
     this.add.text(48, 40, 'COLLECTION', displayText({
       fontSize: '28px',
@@ -219,8 +244,11 @@ export default class CollectionScene extends Phaser.Scene {
     })).setOrigin(0.5).setDepth(13);
     (this.unitsTabBtn as any).linkedText = this.unitsTabText;
     (this.unitsTabText as any).originalFill = HUD.color.accent;
-    this.addButtonEffects(this.unitsTabBtn);
-    this.unitsTabBtn.on('pointerdown', () => this.switchTab('units'));
+    addButtonEffects(this, this.unitsTabBtn);
+    this.unitsTabBtn.on('pointerdown', () => {
+      gameAudio.click();
+      this.switchTab('units');
+    });
 
     this.relicsTabBtn = this.add.image(388, 112, 'button_base')
       .setDisplaySize(200, 50)
@@ -232,8 +260,11 @@ export default class CollectionScene extends Phaser.Scene {
     })).setOrigin(0.5).setDepth(13);
     (this.relicsTabBtn as any).linkedText = this.relicsTabText;
     (this.relicsTabText as any).originalFill = '#e080ff';
-    this.addButtonEffects(this.relicsTabBtn);
-    this.relicsTabBtn.on('pointerdown', () => this.switchTab('relics'));
+    addButtonEffects(this, this.relicsTabBtn);
+    this.relicsTabBtn.on('pointerdown', () => {
+      gameAudio.click();
+      this.switchTab('relics');
+    });
 
     this.tabUnderline = this.add.rectangle(168, 142, 132, 3, 0x5ee7ff)
       .setOrigin(0.5)
@@ -290,11 +321,15 @@ export default class CollectionScene extends Phaser.Scene {
         { key: 'relicType:5', label: 'Stand' }
       ]];
 
-    rows.forEach((row, rowIndex) => {
+    let y = 164;
+    rows.forEach((row) => {
       let x = 36;
-      const y = 164 + rowIndex * 30;
       row.forEach((chip) => {
         const width = Math.max(58, chip.label.length * 8 + 22);
+        if (x + width > 930) {
+          x = 36;
+          y += 30;
+        }
         const [group, value] = chip.key.split(':');
         const active = this.filters[group] === value;
         const bg = this.add.rectangle(x + width / 2, y, width, 24, active ? 0x16485a : 0x0c1624)
@@ -316,6 +351,7 @@ export default class CollectionScene extends Phaser.Scene {
         this.filterLayer!.add([bg, label]);
         x += width + 6;
       });
+      y += 30;
     });
   }
 
@@ -344,49 +380,32 @@ export default class CollectionScene extends Phaser.Scene {
     this.dockLayer = this.add.container(0, 0).setDepth(18);
   }
 
-  private normalizeUnit(unit: any) {
-    if (!unit) {
-      return { faction: 0, rarity: 0, unitClass: 0, attack: 0, defense: 0, speed: 0 };
-    }
-    if (Array.isArray(unit)) {
-      return {
-        faction: Number(unit[0]),
-        rarity: Number(unit[1]),
-        unitClass: Number(unit[2]),
-        attack: Number(unit[3]),
-        defense: Number(unit[4]),
-        speed: Number(unit[5])
-      };
-    }
-    return {
-      faction: Number(unit.faction),
-      rarity: Number(unit.rarity),
-      unitClass: Number(unit.unitClass),
-      attack: Number(unit.attack),
-      defense: Number(unit.defense),
-      speed: Number(unit.speed)
-    };
-  }
-
   private async loadCollectionData() {
     if (!this.account || !this.gameContract || !this.nftContract || !this.relicContract) {
       this.setEmptyHint('Connect wallet to open the hangar.');
       return;
     }
 
+    const generation = ++this.loadGeneration;
     try {
       const unitIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       const loadedUnits = await Promise.all(
         unitIds.map(async (idBig) => {
           const id = Number(idBig);
           try {
             const raw = await this.nftContract.read.getUnit([idBig]);
-            return { id, unit: this.normalizeUnit(raw) } as UnitItem;
+            return { id, unit: normalizeUnit(raw) } as UnitItem;
           } catch {
             return null;
           }
         })
       );
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.unitsData = loadedUnits.filter(Boolean) as UnitItem[];
 
       const prepare = this.scene.get('PrepareScene') as any;
@@ -415,6 +434,9 @@ export default class CollectionScene extends Phaser.Scene {
           }
         })
       );
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.relicsData = (loadedRelics.filter(Boolean) as RelicItem[])
         .filter((item) => !this.equippedRelicIds.includes(item.id))
         .sort((a, b) => b.relic.value - a.relic.value);
@@ -583,13 +605,17 @@ export default class CollectionScene extends Phaser.Scene {
     let clicks = 0;
     let timer: Phaser.Time.TimerEvent | null = null;
     hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.y < this.GRID_Y || pointer.y > this.GRID_Y + this.GRID_H) {
+        return;
+      }
       this.collectionDragStartY = pointer.y;
       this.collectionContentStartY = this.contentContainer ? this.contentContainer.y : 0;
       this.isScrollDragging = false;
+      this.scrollConsumedClick = false;
       clicks += 1;
       if (clicks === 1) {
         timer = this.time.delayedCall(260, () => {
-          if (!this.isScrollDragging) {
+          if (!this.isScrollDragging && !this.scrollConsumedClick) {
             onSelect();
           }
           clicks = 0;
@@ -599,7 +625,7 @@ export default class CollectionScene extends Phaser.Scene {
       timer?.remove(false);
       timer = null;
       clicks = 0;
-      if (!this.isScrollDragging) {
+      if (!this.isScrollDragging && !this.scrollConsumedClick) {
         onAdd();
       }
     });
@@ -642,9 +668,11 @@ export default class CollectionScene extends Phaser.Scene {
     const slot = this.add.image(0, 0, 'slot_equipped').setDisplaySize(this.CELL, this.CELL);
     const icon = this.add.image(0, -8, relicMeta(item.relic.relicType).key)
       .setDisplaySize(68, 68);
-    const caption = this.add.text(0, this.CELL / 2 + 8, `+${item.relic.value} ${relicMeta(item.relic.relicType).short}`, hudText({
+    const caption = this.add.text(0, this.CELL / 2 + 8, `+${item.relic.value} ${relicMeta(item.relic.relicType).name}`, hudText({
       fontSize: '12px',
-      fill: '#e080ff'
+      fill: '#e080ff',
+      align: 'center',
+      wordWrap: { width: this.CELL + 8 }
     })).setOrigin(0.5);
     const selected = this.selectedRelicIds.includes(item.id);
     const border = this.add.rectangle(0, 0, this.CELL - 6, this.CELL - 6)
@@ -696,11 +724,17 @@ export default class CollectionScene extends Phaser.Scene {
     this.refreshDock();
   }
 
-  private lastSelectedId(): number {
+  private lastSelectedId(): number | null {
     if (this.currentTab === 'units') {
-      return this.selectedUnitIds[this.selectedUnitIds.length - 1] || 0;
+      if (this.selectedUnitIds.length === 0) {
+        return null;
+      }
+      return this.selectedUnitIds[this.selectedUnitIds.length - 1];
     }
-    return this.selectedRelicIds[this.selectedRelicIds.length - 1] || 0;
+    if (this.selectedRelicIds.length === 0) {
+      return null;
+    }
+    return this.selectedRelicIds[this.selectedRelicIds.length - 1];
   }
 
   private refreshInspector() {
@@ -710,7 +744,7 @@ export default class CollectionScene extends Phaser.Scene {
     }
 
     const id = this.lastSelectedId();
-    if (!id) {
+    if (id === null) {
       this.inspectorLayer.add(
         this.add.text(0, 0, 'Select a card\nin the hangar', hudText({
           fontSize: HUD.BODY,
@@ -729,32 +763,40 @@ export default class CollectionScene extends Phaser.Scene {
       const visual = UnitVisualFactory.createUnitWithFrame(
         this,
         0,
-        -210,
+        -188,
         shipKey(item.unit.faction, item.unit.unitClass),
         item.unit.rarity,
-        176
+        148
       );
-      const title = this.add.text(0, -98, `${factionName(item.unit.faction)} ${className(item.unit.unitClass)}`, hudText({
+      const title = this.add.text(0, -86, `${factionName(item.unit.faction)} ${className(item.unit.unitClass)}`, hudText({
         fontSize: '20px',
         fill: HUD.color.text,
         align: 'center',
         wordWrap: { width: 250 }
       })).setOrigin(0.5);
-      const rarity = this.add.text(0, -68, rarityName(item.unit.rarity).toUpperCase(), hudText({
+      const rarity = this.add.text(0, -56, rarityName(item.unit.rarity).toUpperCase(), hudText({
         fontSize: '16px',
         fill: rarityColor(item.unit.rarity)
       })).setOrigin(0.5);
-      const idText = this.add.text(0, -44, `SHIP #${item.id}`, hudText({
+      const idText = this.add.text(0, -32, `SHIP #${item.id}`, hudText({
         fontSize: '14px',
         fill: HUD.color.muted
       })).setOrigin(0.5);
-      this.inspectorLayer.add([visual, title, rarity, idText]);
-      this.addStatBar(-70, 'ATK', item.unit.attack, 0xff6b88);
-      this.addStatBar(-20, 'DEF', item.unit.defense, 0x5ee7ff);
-      this.addStatBar(30, 'SPD', item.unit.speed, 0x5dffb0);
-      this.addInspectorButton(90, 'ADD TO FLEET', HUD.color.warn, () => this.addSingleUnit(item.id));
+      const blurbSource = loreById(factionLoreId(item.unit.faction))?.body || '';
+      const blurb = blurbSource.split('. ')[0] + (blurbSource ? '.' : '');
+      const loreLine = this.add.text(0, 272, blurb, hudText({
+        fontSize: '13px',
+        fill: HUD.color.muted,
+        align: 'center',
+        wordWrap: { width: 248 }
+      })).setOrigin(0.5);
+      this.inspectorLayer.add([visual, title, rarity, idText, loreLine]);
+      this.addStatBar(4, 'ATK', item.unit.attack, 0xff6b88);
+      this.addStatBar(56, 'DEF', item.unit.defense, 0x5ee7ff);
+      this.addStatBar(108, 'SPD', item.unit.speed, 0x5dffb0);
+      this.addInspectorButton(186, 'ADD TO FLEET', HUD.color.warn, () => this.addSingleUnit(item.id));
       this.inspectorLayer.add(
-        this.add.text(0, 138, 'Local only  ·  no wallet', hudText({
+        this.add.text(0, 236, 'Local only  ·  no wallet', hudText({
           fontSize: '14px',
           fill: HUD.color.muted
         })).setOrigin(0.5)
@@ -766,29 +808,29 @@ export default class CollectionScene extends Phaser.Scene {
     if (!item) {
       return;
     }
-    const frame = this.add.image(0, -200, 'slot_equipped').setDisplaySize(160, 160);
-    const icon = this.add.image(0, -200, relicMeta(item.relic.relicType).key)
-      .setDisplaySize(92, 92);
-    const title = this.add.text(0, -96, item.relic.name || relicMeta(item.relic.relicType).name, hudText({
+    const frame = this.add.image(0, -168, 'slot_equipped').setDisplaySize(150, 150);
+    const icon = this.add.image(0, -168, relicMeta(item.relic.relicType).key)
+      .setDisplaySize(86, 86);
+    const title = this.add.text(0, -68, item.relic.name || relicMeta(item.relic.relicType).name, hudText({
       fontSize: '18px',
       fill: '#e080ff',
       align: 'center',
       wordWrap: { width: 250 }
     })).setOrigin(0.5);
-    const value = this.add.text(0, -60, `+${item.relic.value}`, displayText({
+    const value = this.add.text(0, -28, `+${item.relic.value}`, displayText({
       fontSize: '28px',
       fill: HUD.color.gold
     })).setOrigin(0.5);
-    const effect = this.add.text(0, -18, relicEffect(item.relic.relicType), hudText({
+    const effect = this.add.text(0, 16, relicEffect(item.relic.relicType), hudText({
       fontSize: HUD.SMALL,
       fill: HUD.color.text,
       align: 'center',
       wordWrap: { width: 240 }
     })).setOrigin(0.5);
     this.inspectorLayer.add([frame, icon, title, value, effect]);
-    this.addInspectorButton(72, 'EQUIP', HUD.color.accent, () => this.addSingleRelic(item.id));
+    this.addInspectorButton(88, 'EQUIP', HUD.color.accent, () => this.addSingleRelic(item.id));
     this.inspectorLayer.add(
-      this.add.text(0, 118, 'Local slot  ·  no wallet', hudText({
+      this.add.text(0, 136, 'Local slot  ·  no wallet', hudText({
         fontSize: '14px',
         fill: HUD.color.muted,
         align: 'center',
@@ -824,7 +866,7 @@ export default class CollectionScene extends Phaser.Scene {
     })).setOrigin(0.5);
     (btn as any).linkedText = text;
     (text as any).originalFill = color;
-    this.addButtonEffects(btn);
+    addButtonEffects(this, btn);
     btn.on('pointerdown', onClick);
     this.inspectorLayer.add([btn, text]);
   }
@@ -844,7 +886,7 @@ export default class CollectionScene extends Phaser.Scene {
     })).setOrigin(0.5);
     (back as any).linkedText = backText;
     (backText as any).originalFill = '#ffffff';
-    this.addButtonEffects(back);
+    addButtonEffects(this, back);
     back.on('pointerdown', () => this.returnToPrepare());
     this.dockLayer.add([back, backText]);
 
@@ -867,7 +909,7 @@ export default class CollectionScene extends Phaser.Scene {
       })).setOrigin(0.5);
       (action as any).linkedText = actionText;
       (actionText as any).originalFill = isUnits ? HUD.color.warn : HUD.color.accent;
-      this.addButtonEffects(action);
+      addButtonEffects(this, action);
       action.on('pointerdown', () => {
         if (isUnits) {
           void this.addSelectedToTeam();
@@ -932,14 +974,18 @@ export default class CollectionScene extends Phaser.Scene {
     if (prepare && typeof prepare.addMultipleUnitsToTeam === 'function') {
       await prepare.addMultipleUnitsToTeam(ids);
     }
-    this.unitsData = this.unitsData.filter((item) => !ids.includes(item.id));
     this.teamIds = compactTeamIds(prepare?.team || this.teamIds);
-    this.selectedUnitIds = [];
+    this.unitsData = this.unitsData.filter((item) => !this.teamIds.includes(item.id));
+    this.selectedUnitIds = this.selectedUnitIds.filter((id) => !this.teamIds.includes(id));
     this.updateHeaderCount();
     this.refreshGrid();
     this.refreshInspector();
     this.refreshDock();
-    this.showToast('Selected ships moved to fleet.');
+    if (this.teamIds.some((id) => ids.includes(id))) {
+      this.showToast('Selected ships moved to fleet.');
+    } else {
+      this.showToast('No free fleet slots.');
+    }
   }
 
   private activateSelectedRelics() {
@@ -951,17 +997,23 @@ export default class CollectionScene extends Phaser.Scene {
       return;
     }
     const ids = [...this.selectedRelicIds];
-    prepare.addMultipleRelicsToEquipped(ids);
-    this.relicsData = this.relicsData.filter((item) => !ids.includes(item.id));
-    this.equippedRelicIds = Array.isArray(prepare.equippedRelics)
-      ? prepare.equippedRelics.filter((id: number) => id > 0)
-      : this.equippedRelicIds;
-    this.selectedRelicIds = [];
-    this.updateHeaderCount();
-    this.refreshGrid();
-    this.refreshInspector();
-    this.refreshDock();
-    this.showToast('Relics equipped.');
+    void Promise.resolve(prepare.addMultipleRelicsToEquipped(ids)).then((equippedIds: number[]) => {
+      const moved = Array.isArray(equippedIds) ? equippedIds : [];
+      this.relicsData = this.relicsData.filter((item) => !moved.includes(item.id));
+      this.equippedRelicIds = Array.isArray(prepare.equippedRelics)
+        ? prepare.equippedRelics.filter((id: number) => id > 0)
+        : this.equippedRelicIds;
+      this.selectedRelicIds = this.selectedRelicIds.filter((id) => !moved.includes(id));
+      this.updateHeaderCount();
+      this.refreshGrid();
+      this.refreshInspector();
+      this.refreshDock();
+      if (moved.length === 0) {
+        this.showToast('No free relic slot.');
+      } else {
+        this.showToast('Relics equipped.');
+      }
+    });
   }
 
   public applyFiltersAndSort() {
@@ -994,60 +1046,13 @@ export default class CollectionScene extends Phaser.Scene {
     this.scene.stop('CollectionScene');
   }
 
-  private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.06) {
-    const img = obj as Phaser.GameObjects.Image;
-    const originalWidth = img.displayWidth;
-    const originalHeight = img.displayHeight;
-    const hoverWidth = originalWidth * scale;
-    const hoverHeight = originalHeight * scale;
-
-    obj.on('pointerover', () => {
-      this.tweens.add({
-        targets: img,
-        displayWidth: hoverWidth,
-        displayHeight: hoverHeight,
-        duration: 120,
-        ease: 'Sine.easeOut'
-      });
-      const text = (obj as any).linkedText as Phaser.GameObjects.Text;
-      if (text) {
-        text.setFill('#ffff88');
-      }
-    });
-    obj.on('pointerout', () => {
-      this.tweens.add({
-        targets: img,
-        displayWidth: originalWidth,
-        displayHeight: originalHeight,
-        duration: 120,
-        ease: 'Sine.easeOut'
-      });
-      const text = (obj as any).linkedText as Phaser.GameObjects.Text;
-      if (text) {
-        text.setFill((text as any).originalFill || '#ffffff');
-      }
-    });
-    obj.on('pointerdown', () => {
-      this.tweens.add({
-        targets: img,
-        displayWidth: originalWidth * 0.95,
-        displayHeight: originalHeight * 0.95,
-        duration: 60
-      });
-    });
-    obj.on('pointerup', () => {
-      this.tweens.add({
-        targets: img,
-        displayWidth: hoverWidth,
-        displayHeight: hoverHeight,
-        duration: 80
-      });
-    });
-  }
-
   shutdown() {
+    this.loadGeneration += 1;
     this.restorePrepareInput();
     this.input.keyboard?.off('keydown-ESC');
+    this.input.keyboard?.off('keydown-C');
+    this.input.off('pointerdown');
+    this.input.off('pointerup');
     this.input.off('wheel', this.onCollectionWheel, this);
     this.input.off('pointermove', this.onCollectionDrag, this);
     this.cardBorders.clear();

@@ -3,7 +3,7 @@
 import * as Phaser from 'phaser';
 import { getContract, parseEventLogs, encodeFunctionData } from 'viem';
 import type { WalletClient } from 'viem';
-import { PLAYER_PROFILE_ADDRESS, GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS } from '../lib/contractAddresses';
+import { PLAYER_PROFILE_ADDRESS, GAME_ADDRESS, NFT_ADDRESS, RELIC_ADDRESS, CHAIN_ID } from '../lib/contractAddresses';
 import { gameAbi, nftAbi, relicAbi, profileAbi } from '../lib/abis';
 import { somniaTestnet } from '../lib/wagmiConfig';
 import WalletManager from '../lib/WalletManager';
@@ -14,6 +14,7 @@ import {
   hudText,
   displayText,
   gridFirstCenter,
+  plateWell,
   relicMeta,
   relicEffect,
   factionName,
@@ -29,8 +30,27 @@ import {
   compactTeamIds,
   filledTeamCount,
   alignTeamToSlots,
-  alignRelicSlots
+  alignRelicSlots,
+  isFilledSlot,
+  EMPTY_TEAM_SLOT
 } from '../lib/prepareSession';
+import { LORE_LOG, loreByIndex, loreIndexForContext } from '../lib/lore';
+import { gameAudio } from '../lib/gameAudio';
+import { normalizeUnit, type NormalizedUnit } from '../lib/unitNormalize';
+import { addButtonEffects } from '../utils/uiFactory';
+import { preloadRelicsAndFrames, preloadShipPortraits } from '../utils/preloadGameAssets';
+import {
+  evaluateAchievements,
+  unlockAchievement,
+  type AchievementDef
+} from '../lib/achievements';
+import {
+  addMetaButtons,
+  attachAudioUnlock,
+  beginOrResumeTutorial,
+  showAchievementPanel,
+  showAchievementToasts
+} from '../utils/MetaHud';
 
 
 export default class PrepareScene extends Phaser.Scene {
@@ -62,7 +82,7 @@ async init(data?: any) {
   }
 
   if (data?.addUnits && Array.isArray(data.addUnits)) {
-    setTimeout(() => this.addMultipleUnitsToTeam(data.addUnits), 350);
+    this.pendingAddUnits = data.addUnits.map((id: unknown) => Number(id)).filter((id: number) => isFilledSlot(id));
   }
 
   if (data?.lastBattleResult && typeof data.lastBattleResult.won === 'boolean') {
@@ -108,9 +128,18 @@ async init(data?: any) {
   private pendingShipsText: Phaser.GameObjects.Text | null = null;
   private teamReady = false;
   private matchBusy = false;
+  private txBusy = false;
+  private unitCache = new Map<number, NormalizedUnit>();
+  private pendingAddUnits: number[] = [];
   private busyOverlay: Phaser.GameObjects.Container | null = null;
   private levelProgressBar: Phaser.GameObjects.Rectangle | null = null;
   private pendingLastResult: { won: boolean; playerAlive?: number; aiAlive?: number } | null = null;
+  private lastProfile = { level: 0, wins: 0, losses: 0, relics: 0 };
+  private loreIndex = 0;
+  private loreTitleText: Phaser.GameObjects.Text | null = null;
+  private loreBodyText: Phaser.GameObjects.Text | null = null;
+  private lorePageText: Phaser.GameObjects.Text | null = null;
+  private loreUserPicked = false;
 
   constructor() {
     super({ key: 'PrepareScene' });
@@ -165,12 +194,43 @@ private showSceneMessage(text: string, color = '#ff7b8a', duration = 2800) {
     align: 'center'
   })).setOrigin(0.5).setDepth(971);
   this.sceneMessage = { panel, text: msg };
+  if (color === '#ff7b8a' || color === '#ff4444') {
+    gameAudio.error();
+  }
   this.time.delayedCall(duration, () => {
     if (this.sceneMessage && this.sceneMessage.text === msg) {
       this.clearSceneMessage();
     }
   });
   return msg;
+}
+
+private flashMedals(unlocked: AchievementDef[]): void {
+  showAchievementToasts(this, unlocked);
+}
+
+private noteProgress(): void {
+  if (!this.account) {
+    return;
+  }
+  this.flashMedals(evaluateAchievements(this.account, {
+    level: this.lastProfile.level,
+    wins: this.lastProfile.wins,
+    losses: this.lastProfile.losses,
+    units: this.playerUnitIds.length,
+    relics: this.lastProfile.relics,
+    fleet: filledTeamCount(this.team)
+  }));
+}
+
+private noteMedal(id: Parameters<typeof unlockAchievement>[1]): void {
+  if (!this.account) {
+    return;
+  }
+  const unlocked = unlockAchievement(this.account, id);
+  if (unlocked) {
+    this.flashMedals([unlocked]);
+  }
 }
 
 private reloadOpenCollection() {
@@ -226,6 +286,14 @@ private async sendGameTransaction(
       this.showSceneMessage('Connect wallet first');
     }
     throw new Error('Contract or wallet not ready');
+  }
+
+  const chainId = Number(walletClient.chain?.id ?? this.walletManager.chainId);
+  if (chainId !== CHAIN_ID) {
+    if (!options.silent) {
+      this.showSceneMessage('Switch to Somnia Testnet (50312)');
+    }
+    throw new Error('Wrong chain');
   }
 
   try {
@@ -291,29 +359,9 @@ private async sendGameTransaction(
     this.load.image('ui_plate', 'assets/ui/ui_plate.png');
     this.load.image('ui_result', 'assets/ui/ui_result.png');
 
-    this.load.image('emperial_fighter', 'assets/units/portraits/emperial_fighter.png');
-    this.load.image('emperial_cruiser', 'assets/units/portraits/emperial_cruiser.png');
-    this.load.image('emperial_dreadnought', 'assets/units/portraits/emperial_dreadnought.png');
-    this.load.image('emperial_droneswarm', 'assets/units/portraits/emperial_droneswarm.png');
-    this.load.image('voidborn_fighter', 'assets/units/portraits/voidborn_fighter.png');
-    this.load.image('voidborn_cruiser', 'assets/units/portraits/voidborn_cruiser.png');
-    this.load.image('voidborn_dreadnought', 'assets/units/portraits/voidborn_dreadnought.png');
-    this.load.image('voidborn_droneswarm', 'assets/units/portraits/voidborn_droneswarm.png');
-    this.load.image('mechanoid_fighter', 'assets/units/portraits/mechanoid_fighter.png');
-    this.load.image('mechanoid_cruiser', 'assets/units/portraits/mechanoid_cruiser.png');
-    this.load.image('mechanoid_dreadnought', 'assets/units/portraits/mechanoid_dreadnought.png');
-    this.load.image('mechanoid_droneswarm', 'assets/units/portraits/mechanoid_droneswarm.png');
-
-    this.load.image('quantum_strike', 'assets/relics/quantum_strike.png');
-    this.load.image('void_shield', 'assets/relics/void_shield.png');
-    this.load.image('nebula_dash', 'assets/relics/nebula_dash.png');
-    this.load.image('echo_core', 'assets/relics/echo_core.png');
-    this.load.image('flux_overload', 'assets/relics/flux_overload.png');
-    this.load.image('last_stand', 'assets/relics/last_stand.png');
-
-    this.load.image('legendary_frame', 'assets/frames/legendary.png');
-    this.load.image('rare_frame', 'assets/frames/rare.png');
-    this.load.image('common_frame', 'assets/frames/common.png');
+    this.load.image('logo', 'assets/background/logo.png');
+    preloadShipPortraits(this);
+    preloadRelicsAndFrames(this);
   }
 
 create() {
@@ -325,9 +373,11 @@ create() {
   this.teamOperationLock = false;
   this.teamReady = false;
   this.matchBusy = false;
+  this.txBusy = false;
   this.hideBusyOverlay();
 
   this.addGameUI();
+  attachAudioUnlock(this);
 
   if (!this.isWalletReady) {
     const veil = this.add.rectangle(960, 540, 1920, 1080, 0x02040a, 0.62).setDepth(400);
@@ -351,18 +401,29 @@ create() {
   }
 
   this.initEquippedState();
-  this.updatePlayerProfile();
   this.loadOwnedUnits().then(async () => {
     await this.restoreSavedTeam();
     this.teamReady = true;
     this.updateTeamCounter();
+    if (this.pendingAddUnits.length > 0) {
+      const extra = this.pendingAddUnits;
+      this.pendingAddUnits = [];
+      await this.addMultipleUnitsToTeam(extra);
+    }
+    await this.updatePlayerProfile();
   });
   this.loadPlayerShop();
   this.loadCurrentAI();
-  this.updatePlayerProfile();
 
-  this.input.topOnly = false;
+  this.input.topOnly = true;
   this.bindPrepareHotkeys();
+  if (this.account) {
+    this.time.delayedCall(500, () => {
+      if (this.account) {
+        beginOrResumeTutorial(this, this.account, 'PrepareScene');
+      }
+    });
+  }
 
   if (this.pendingLastResult) {
     const won = this.pendingLastResult.won;
@@ -377,28 +438,15 @@ create() {
   }
 }
 
-private normalizeUnit(unit: any) {
-  if (!unit) {
-    return { faction: 0, rarity: 0, unitClass: 0, attack: 0, defense: 0, speed: 0 };
+private async getCachedUnit(tokenId: number): Promise<NormalizedUnit> {
+  const cached = this.unitCache.get(tokenId);
+  if (cached) {
+    return cached;
   }
-  if (Array.isArray(unit)) {
-    return {
-      faction: Number(unit[0]),
-      rarity: Number(unit[1]),
-      unitClass: Number(unit[2]),
-      attack: Number(unit[3]),
-      defense: Number(unit[4]),
-      speed: Number(unit[5])
-    };
-  }
-  return {
-    faction: Number(unit.faction),
-    rarity: Number(unit.rarity),
-    unitClass: Number(unit.unitClass),
-    attack: Number(unit.attack),
-    defense: Number(unit.defense),
-    speed: Number(unit.speed)
-  };
+  const rawUnit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
+  const unit = normalizeUnit(rawUnit);
+  this.unitCache.set(tokenId, unit);
+  return unit;
 }
 
 private safeBigIntToNumber(value: bigint | number | undefined): number {
@@ -419,7 +467,7 @@ private async loadOwnedUnits() {
     const ownedIds: bigint[] = await this.gameContract.read.getPlayerUnits([this.account]);
     this.playerUnitIds = ownedIds.map(id => Number(id));
 
-    this.team = this.team.map((id) => (id > 0 && this.playerUnitIds.includes(id) ? id : 0));
+    this.team = this.team.map((id) => (isFilledSlot(id) && this.playerUnitIds.includes(id) ? id : EMPTY_TEAM_SLOT));
     if (this.teamReady) {
       this.updateTeamCounter();
     } else if (this.teamCounterText) {
@@ -446,7 +494,6 @@ private async loadPlayerShop() {
     const shopData: any[] = await this.gameContract.read.getPlayerShop([this.account]);
     const relicPrice = await this.readPayablePrice('buyRelicShopPrice', 8000000000000000n);
     const priceLabel = `${Number(relicPrice) / 1e18} ETH`;
-    // price is shown on the card tooltip only
 
     this.shopContainer = this.add.container(0, 0).setDepth(11);
 
@@ -470,20 +517,15 @@ private async loadPlayerShop() {
       this.shopContainer.add(slotImage);
 
       let tooltipText = filled
-        ? `${meta.name}\n+${item.relicValue} ${this.getRelicEffectDescription(item.relicType)}\nBuy ${priceLabel}`
+        ? `${meta.name}\n+${item.relicValue} ${relicEffect(item.relicType)}\nBuy ${priceLabel}`
         : 'Empty. Reroll to fill the shop.';
 
       if (filled) {
         const sprite = this.add.sprite(x, y - 6, meta.key)
-          .setInteractive({ useHandCursor: true })
           .setDisplaySize(70, 70)
           .setDepth(11);
-        (sprite as any).shopSlot = i;
         this.shopContainer.add(sprite);
         this.shopSprites.push(sprite);
-        sprite.on('pointerover', () => this.showTooltip(x + 120, y - 36, tooltipText));
-        sprite.on('pointerout', () => this.hideTooltip());
-        sprite.on('pointerdown', () => this.buyFromShopSlot(i));
       }
 
       const caption = this.add.text(
@@ -513,6 +555,9 @@ private async loadPlayerShop() {
       slotImage.on('pointerout', () => this.hideTooltip());
       if (filled) {
         slotImage.on('pointerdown', () => this.buyFromShopSlot(i));
+      } else {
+        slotImage.setInteractive({ useHandCursor: true });
+        slotImage.on('pointerdown', () => this.rerollShop());
       }
 
     }
@@ -524,8 +569,16 @@ private async loadPlayerShop() {
 
 
 
-  private async refreshRelics() {
-    await this.loadEquippedRelics();
+  private beginWalletTx(): boolean {
+    if (this.txBusy || this.matchBusy) {
+      return false;
+    }
+    this.txBusy = true;
+    return true;
+  }
+
+  private endWalletTx(): void {
+    this.txBusy = false;
   }
 
   private persistEquippedRelics() {
@@ -533,6 +586,9 @@ private async loadPlayerShop() {
       return;
     }
     savePrepareSession(this.account, { relics: this.equippedRelics });
+    if (this.equippedRelics.some((id) => id > 0)) {
+      this.noteMedal('relic_slotted');
+    }
   }
 
   private async initEquippedState() {
@@ -554,7 +610,7 @@ private async loadPlayerShop() {
         // Keep the local loadout if the ownership read fails.
       }
       this.equippedRelics = alignRelicSlots(nextRelics);
-      await this.refreshRelics();
+      await this.loadEquippedRelics();
     } catch (e) {
       console.error('initEquippedState error', e);
     }
@@ -612,7 +668,7 @@ private async loadEquippedRelics() {
 
       sprite.on('pointerover', () => {
         this.showTooltip(slot.x + 70, slot.y - 50,
-          `${relicData.name || meta.name}\n+${relicData.value} ${this.getRelicEffectDescription(relicData.relicType)}\nClick to unequip · drag to swap`);
+          `${relicData.name || meta.name}\n+${relicData.value} ${relicEffect(relicData.relicType)}\nClick to unequip · drag to swap`);
       });
       sprite.on('pointerout', () => this.hideTooltip());
 
@@ -656,7 +712,7 @@ private async loadEquippedRelics() {
             const temp = this.equippedRelics[i];
             this.equippedRelics[i] = this.equippedRelics[s];
             this.equippedRelics[s] = temp;
-            await this.refreshRelics();
+            await this.loadEquippedRelics();
             this.persistEquippedRelics();
             droppedOnAnotherSlot = true;
             break;
@@ -680,7 +736,7 @@ private async loadEquippedRelics() {
   private async equipRelic(relicId: number, slotIndex: number) {
     if (slotIndex < 0 || slotIndex > 2) return;
     this.equippedRelics[slotIndex] = relicId;
-    await this.refreshRelics();
+    await this.loadEquippedRelics();
     this.persistEquippedRelics();
   }
 
@@ -690,7 +746,7 @@ private async loadEquippedRelics() {
     if (relicId === 0) return;
 
     this.equippedRelics[slotIndex] = 0;
-    await this.refreshRelics();
+    await this.loadEquippedRelics();
     this.persistEquippedRelics();
 
     const collectionScene = this.scene.get('CollectionScene') as any;
@@ -700,10 +756,6 @@ private async loadEquippedRelics() {
       }
     }
   }
-
-private getRelicEffectDescription(relicType: number): string {
-  return relicEffect(relicType);
-}
 
 private async loadCurrentAI() {
   if (!this.account || !this.gameContract) {
@@ -734,21 +786,18 @@ private async loadCurrentAI() {
     if (this.aiTitleText) {
       this.aiTitleText.setText(empty ? 'ENEMY FLEET' : 'LAST ENEMY FLEET');
     }
+    this.seedLoreIfNeeded(!empty);
 
     if (empty) {
-      const placeholder = this.add.text(
-        PREPARE_LAYOUT.rightX,
-        520,
-        'Shadow Fleet waits\nfor the first battle\n\nAlways 8 ships.\nEmpty player slots\nbecome strong fillers.',
-        hudText({
-          fontSize: HUD.SMALL,
-          fill: HUD.color.muted,
-          align: 'center'
-        })
-      ).setOrigin(0.5).setDepth(20);
-      this.aiSprites.push(placeholder as any);
+      this.setEnemySlotsVisible(false);
+      this.showEnemyFleetCard(
+        'SHADOW FLEET',
+        'Waiting for the first battle.'
+      );
       return;
     }
+
+    this.setEnemySlotsVisible(true);
 
     for (let i = 0; i < 8; i++) {
       const slot = this.aiGridSlots[i];
@@ -780,11 +829,133 @@ private async loadCurrentAI() {
 
   } catch (e) {
     console.error('loadCurrentAI error:', e);
-    const errorText = this.add.text(PREPARE_LAYOUT.rightX, 520, 'FAILED TO LOAD\nENEMY TEAM', {
-      fontSize: '18px', color: '#ff4444', align: 'center'
-    }).setOrigin(0.5).setDepth(20);
-    this.aiSprites.push(errorText as any);
+    this.setEnemySlotsVisible(false);
+    this.showEnemyFleetCard('ENEMY FLEET', 'Could not load the last enemy team.', true);
   }
+}
+
+private setEnemySlotsVisible(visible: boolean) {
+  this.aiGridSlots.forEach((slot) => {
+    slot.setVisible(visible);
+    slot.setAlpha(visible ? 1 : 0);
+    if (visible) {
+      slot.setInteractive();
+    } else {
+      slot.disableInteractive();
+    }
+  });
+}
+
+private addLorePanel() {
+  const L = PREPARE_LAYOUT;
+  const x = L.rightX;
+  const y = L.loreY;
+  const plateW = 500;
+  const plateH = 360;
+  // extra.top pushes every line off the slanted top bevel.
+  const well = plateWell(x, y, plateW, plateH, { left: 12, right: 12, top: 18, bottom: 12 });
+
+  this.add.image(x, y, 'ui_plate')
+    .setDisplaySize(plateW, plateH)
+    .setAlpha(0.95)
+    .setDepth(11);
+  const hit = this.add.rectangle(
+    (well.left + well.right) / 2,
+    (well.top + well.bottom) / 2,
+    well.width,
+    well.height,
+    0x080d16,
+    0.01
+  )
+    .setInteractive({ useHandCursor: true })
+    .setDepth(14);
+
+  this.add.text(well.left, well.top, 'ECHO LOG', displayText({
+    fontSize: '16px',
+    fill: HUD.color.gold
+  })).setOrigin(0, 0).setDepth(13);
+  this.lorePageText = this.add.text(well.right, well.top, '', hudText({
+    fontSize: '13px',
+    fill: HUD.color.muted
+  })).setOrigin(1, 0).setDepth(13);
+  this.loreTitleText = this.add.text(well.left, well.top + 26, '', displayText({
+    fontSize: '17px',
+    fill: HUD.color.accent
+  })).setOrigin(0, 0).setDepth(13);
+  this.loreBodyText = this.add.text(well.left, well.top + 52, '', hudText({
+    fontSize: '15px',
+    fill: HUD.color.text,
+    align: 'left',
+    wordWrap: { width: well.width },
+    lineSpacing: 4
+  })).setOrigin(0, 0).setDepth(13);
+  this.add.text(well.right, well.bottom, 'CLICK  ·  NEXT', hudText({
+    fontSize: '12px',
+    fill: HUD.color.muted
+  })).setOrigin(1, 1).setDepth(13);
+
+  hit.on('pointerdown', () => {
+    this.loreUserPicked = true;
+    this.loreIndex = (this.loreIndex + 1) % LORE_LOG.length;
+    this.paintLore(true);
+  });
+
+  this.seedLoreIfNeeded();
+}
+
+private seedLoreIfNeeded(hasLastEnemy?: boolean) {
+  if (this.loreUserPicked || !this.loreTitleText) {
+    return;
+  }
+  this.loreIndex = loreIndexForContext({
+    hasLastEnemy,
+    level: this.lastProfile.level,
+    wins: this.lastProfile.wins
+  });
+  this.paintLore(false);
+}
+
+private paintLore(animate: boolean) {
+  const entry = loreByIndex(this.loreIndex);
+  this.loreTitleText?.setText(entry.title);
+  this.loreBodyText?.setText(entry.body);
+  this.lorePageText?.setText(`${this.loreIndex + 1} / ${LORE_LOG.length}`);
+  if (animate && this.loreBodyText && this.loreTitleText) {
+    this.loreTitleText.setAlpha(0.25);
+    this.loreBodyText.setAlpha(0.25);
+    this.tweens.add({
+      targets: [this.loreTitleText, this.loreBodyText],
+      alpha: 1,
+      duration: 180
+    });
+  }
+}
+
+private showEnemyFleetCard(title: string, body: string, isError = false) {
+  const L = PREPARE_LAYOUT;
+  const x = L.rightX;
+  const y = L.aiTopY + 68;
+
+  const plate = this.add.image(x, y, 'ui_plate')
+    .setDisplaySize(440, 210)
+    .setAlpha(0.94)
+    .setDepth(18);
+  const panel = this.add.rectangle(x, y, 400, 176, 0x080d16, 0.62)
+    .setStrokeStyle(1, isError ? 0xff6b88 : 0x2ec7d6, 0.4)
+    .setDepth(19);
+  const heading = this.add.text(x, y - 52, title, displayText({
+    fontSize: '22px',
+    fill: isError ? HUD.color.bad : HUD.color.gold
+  })).setOrigin(0.5).setDepth(20);
+  const text = this.add.text(x, y + 18, body, hudText({
+    fontSize: '18px',
+    fill: HUD.color.text,
+    align: 'center',
+    wordWrap: { width: 350 },
+    lineSpacing: 8
+  })).setOrigin(0.5).setDepth(20);
+
+  this.aiSprites.push(plate as any, panel as any, heading as any, text as any);
 }
 
 
@@ -851,7 +1022,7 @@ private async autoSelectTeam() {
     }
     if (ownedIds.length === 0) {
       this.equippedRelics = [0, 0, 0];
-      await this.refreshRelics();
+      await this.loadEquippedRelics();
       this.persistEquippedRelics();
       return;
     }
@@ -886,14 +1057,14 @@ private async autoSelectTeam() {
     }
 
     this.equippedRelics = [picked[0] || 0, picked[1] || 0, picked[2] || 0];
-    await this.refreshRelics();
+    await this.loadEquippedRelics();
     this.persistEquippedRelics();
     await this.reloadOpenCollection();
   }
 
   private async clearEquippedRelics() {
     this.equippedRelics = [0, 0, 0];
-    await this.refreshRelics();
+    await this.loadEquippedRelics();
     this.persistEquippedRelics();
     await this.reloadOpenCollection();
   }
@@ -945,6 +1116,17 @@ private async updatePlayerProfile() {
     const xp = Number(profile.xp ?? 0);
     const wins = Number(profile.wins ?? 0);
     const losses = Number(profile.losses ?? 0);
+    this.lastProfile.level = level;
+    this.lastProfile.wins = wins;
+    this.lastProfile.losses = losses;
+    try {
+      const ownedRelics: bigint[] = await this.gameContract.read.getPlayerRelics([this.account]);
+      this.lastProfile.relics = ownedRelics.length;
+    } catch {
+      this.lastProfile.relics = this.equippedRelics.filter((id) => id > 0).length;
+    }
+    this.noteProgress();
+    this.seedLoreIfNeeded();
 
     if (this.playerLevelText) {
       this.playerLevelText.setText(`LVL ${level}`);
@@ -1017,21 +1199,12 @@ private showTooltip(x: number, y: number, text: string) {
     if (this.tooltip) this.tooltip.setVisible(false);
   }
 
-  private getFactionName(faction: number): string {
-    return factionName(faction);
-  }
-
-  private getRarityName(rarity: number): string {
-    return rarityName(rarity);
-  }
-
-  private getClassName(unitClass: number): string {
-    return className(unitClass);
-  }
-
 private async buyUnit() {
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     this.showSceneMessage('Connect wallet first');
+    return;
+  }
+  if (!this.beginWalletTx()) {
     return;
   }
 
@@ -1041,21 +1214,27 @@ private async buyUnit() {
     this.showSceneMessage('Buying ship...', '#ffe566', 8000);
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
     await this.loadOwnedUnits();
+    await this.loadPlayerShop();
     await this.updatePlayerProfile();
     await this.reloadOpenCollection();
-    this.showSceneMessage('Unit purchased on-chain!', '#6dffc0', 2200);
+    gameAudio.buy();
+    this.noteProgress();
+    this.showSceneMessage('Unit purchased!', '#6dffc0', 2200);
   } catch (e: any) {
     console.error('buyUnit error:', e);
     const errMsg = e.shortMessage || e.message || 'Unknown error';
     this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
+  } finally {
+    this.endWalletTx();
   }
 }
 
 private async buyFromShopSlot(slot: number) {
-
-
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     this.showSceneMessage('Connect wallet first');
+    return;
+  }
+  if (!this.beginWalletTx()) {
     return;
   }
 
@@ -1067,26 +1246,29 @@ private async buyFromShopSlot(slot: number) {
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
     await this.loadPlayerShop();
-    await this.loadCurrentAI();
     await this.loadOwnedUnits();
     await this.updatePlayerProfile();
-
     await this.reloadOpenCollection();
 
+    gameAudio.buy();
+    this.noteMedal('shopkeep');
+    this.noteMedal('relic_hunter');
     this.showSceneMessage('Artifact purchased!', '#6dffc0', 1800);
-
   } catch (e: any) {
     console.error('buyFromShopSlot error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
     this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
+  } finally {
+    this.endWalletTx();
   }
 }
 
-
 private async rerollShop() {
-
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     this.showSceneMessage('Connect wallet first');
+    return;
+  }
+  if (!this.beginWalletTx()) {
     return;
   }
 
@@ -1097,8 +1279,6 @@ private async rerollShop() {
 
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
-    await new Promise(resolve => setTimeout(resolve, 400));
-
     if (this.shopContainer) {
       this.shopContainer.destroy(true);
       this.shopContainer = null;
@@ -1107,15 +1287,17 @@ private async rerollShop() {
     this.shopTexts = [];
 
     await this.loadPlayerShop();
-    await this.loadCurrentAI();
     await this.updatePlayerProfile();
 
+    gameAudio.buy();
+    this.noteMedal('shopkeep');
     this.showSceneMessage('Shop rerolled — new artifacts', '#6dffc0', 1800);
-
   } catch (e: any) {
     console.error('rerollShop error:', e);
     const errMsg = e.shortMessage || e.message || 'Reroll error';
     this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
+  } finally {
+    this.endWalletTx();
   }
 }
 
@@ -1164,8 +1346,11 @@ private addHudButton(
     fontSize, fill: color
   })).setOrigin(0.5).setDepth(13);
   (base as any).linkedText = text;
-  base.on('pointerdown', onClick);
-  this.addButtonEffects(base);
+  base.on('pointerdown', () => {
+    gameAudio.click();
+    onClick();
+  });
+  addButtonEffects(this, base);
   return base;
 }
 
@@ -1254,7 +1439,7 @@ private addGameUI() {
       .setDisplaySize(HUD.TEAM, HUD.TEAM)
       .setDepth(10);
     this.gridSlots.push(slot);
-    this.addButtonEffects(slot);
+    addButtonEffects(this, slot);
     this.startEmptySlotPulse(slot);
     slot.on('pointerover', () => {
       this.showTooltip(slot.x + 80, slot.y - 56, 'Open collection to assign a ship');
@@ -1284,7 +1469,9 @@ private addGameUI() {
     fontSize: '15px',
     fill: HUD.color.muted
   })).setOrigin(0.5).setDepth(12);
-  this.addHudButton(centerX, L.startY, 'START BATTLE', HUD.color.text, () => this.startBattle(), 'start');
+  this.addHudButton(centerX, L.startY, 'START BATTLE', HUD.color.text, () => {
+    this.startBattle();
+  }, 'start');
 
   this.equippedSlotRects = [];
   const relicStartX = gridFirstCenter(centerX, 3, HUD.RELIC, L.teamGap);
@@ -1295,6 +1482,20 @@ private addGameUI() {
       .setDepth(10);
     this.equippedSlotRects.push(slot);
   }
+
+  addMetaButtons(this, {
+    account: this.account,
+    onHelp: () => {
+      if (this.account) {
+        beginOrResumeTutorial(this, this.account, 'PrepareScene', true);
+      }
+    },
+    onMedals: () => {
+      if (this.account) {
+        showAchievementPanel(this, this.account);
+      }
+    }
+  });
   this.addHudButton(centerX - 168, L.autoY, 'AUTO', HUD.color.good, () => this.autoSelectTeam());
   this.addHudButton(centerX + 168, L.autoY, 'CLEAR', HUD.color.bad, () => this.clearLoadout());
 
@@ -1312,13 +1513,15 @@ private addGameUI() {
       .setDisplaySize(96, 96)
       .setDepth(10);
     this.aiGridSlots.push(slot);
-    this.addButtonEffects(slot);
+    addButtonEffects(this, slot);
   }
+
+  this.addLorePanel();
 }
 
 
 private async startBattle() {
-  if (this.matchBusy) {
+  if (this.matchBusy || this.txBusy) {
     return;
   }
 
@@ -1333,17 +1536,13 @@ private async startBattle() {
   }
 
   if (filledTeamCount(this.team) !== 8) {
-    const missing = 8 - filledTeamCount(this.team);
-    this.showSceneMessage(
-      `Need 8 ships. Empty slots become strong AI (${missing} empty). Use AUTO SELECT.`,
-      '#ff7b8a',
-      3600
-    );
+    this.showSceneMessage('Fill all 8 fleet slots.', HUD.color.warn, 2800);
     return;
   }
 
   this.matchBusy = true;
-  this.showBusyOverlay('RESOLVING BATTLE ON-CHAIN...');
+  gameAudio.startMatch();
+  this.showBusyOverlay('ENTERING BATTLE...');
 
   try {
     const hash = await this.sendGameTransaction(
@@ -1358,7 +1557,7 @@ private async startBattle() {
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
     if (receipt.status !== 'success') {
-      throw new Error('Transaction failed on-chain');
+      throw new Error('Battle failed');
     }
 
     let parsed = this.parseBattleFromReceipt(receipt);
@@ -1381,7 +1580,7 @@ private async startBattle() {
     }
 
     if (parsed.playerMaxHp.length === 0 || parsed.aiMaxHp.length === 0) {
-      throw new Error('Battle HP data not received from blockchain');
+      throw new Error('Battle data is missing');
     }
 
     if (!parsed.events || parsed.events.length === 0) {
@@ -1395,53 +1594,40 @@ private async startBattle() {
     const events: any[] = parsed.events;
 
     const playerUnitsData: any[] = [];
-    for (const id of compactTeamIds(this.team)) {
-      try {
-        const rawUnit = await this.nftContract.read.getUnit([BigInt(id)]);
-        const unit = this.normalizeUnit(rawUnit);
-        playerUnitsData.push({
-          faction: unit.faction,
-          unitClass: unit.unitClass,
-          rarity: unit.rarity
-        });
-      } catch (e) {
-        console.error('Failed to load player unit', id, e);
-        throw new Error('Failed to load player units from blockchain');
+    for (let slot = 0; slot < 8; slot++) {
+      const id = this.team[slot];
+      if (!isFilledSlot(id)) {
+        continue;
       }
+      const occupant = this.teamSlotOccupants[slot] as { unit?: NormalizedUnit } | null;
+      const unit = occupant?.unit || await this.getCachedUnit(id);
+      playerUnitsData.push({
+        faction: unit.faction,
+        unitClass: unit.unitClass,
+        rarity: unit.rarity
+      });
     }
 
-    let aiUnitsData: any[] = [];
-    let attempts = 0;
-    const maxAttempts = 6;
-
-    while (attempts < maxAttempts) {
-      attempts++;
-      try {
-        const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
-        if (aiData && Array.isArray(aiData) && aiData.length === 8) {
-          for (const u of aiData) {
-            if (!u.isRelic) {
-              aiUnitsData.push({
-                faction: Number(u.faction ?? 0),
-                unitClass: Number(u.unitClass ?? 0),
-                rarity: Number(u.rarity ?? 0)
-              });
-            }
-          }
-          break;
+    const aiData: any[] = await this.gameContract.read.getCurrentAI([this.account]);
+    const aiUnitsData: any[] = [];
+    if (Array.isArray(aiData)) {
+      for (const u of aiData) {
+        if (!u?.isRelic) {
+          aiUnitsData.push({
+            faction: Number(u.faction ?? 0),
+            unitClass: Number(u.unitClass ?? 0),
+            rarity: Number(u.rarity ?? 0)
+          });
         }
-      } catch (e) {
-        console.warn(`getCurrentAI attempt ${attempts} failed:`, e);
       }
-      await new Promise(resolve => setTimeout(resolve, 800));
     }
 
     if (aiUnitsData.length < 4) {
-      throw new Error('AI team data not received from blockchain');
+      throw new Error('Enemy fleet data is missing');
     }
 
     if (playerUnitsData.length < 4 || aiUnitsData.length < 4) {
-      throw new Error('Battle data incomplete on blockchain');
+      throw new Error('Battle data is incomplete');
     }
 
     this.teamReady = true;
@@ -1456,14 +1642,14 @@ private async startBattle() {
       playerUnitsData: playerUnitsData,
       aiUnitsData: aiUnitsData,
       battleId: battleId,
-      savedTeam: compactTeamIds(this.team)
+      savedTeam: [...this.team]
     });
 
   } catch (e: any) {
     console.error('startBattle error:', e);
     this.hideBusyOverlay();
     this.matchBusy = false;
-    const errMsg = e.shortMessage || e.message || 'Unknown blockchain error';
+    const errMsg = e.shortMessage || e.message || 'Battle failed';
     this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4500);
   }
 }
@@ -1473,13 +1659,19 @@ private bindPrepareHotkeys() {
   this.input.keyboard?.off('keydown-ENTER');
   this.input.keyboard?.off('keydown-C');
   this.input.keyboard?.on('keydown-ENTER', () => {
-    if (this.scene.isActive('CollectionScene') || this.matchBusy) {
+    if (this.scene.isActive('CollectionScene') || this.matchBusy || this.txBusy) {
       return;
     }
     void this.startBattle();
   });
   this.input.keyboard?.on('keydown-C', () => {
     this.openCollectionScene();
+  });
+  this.input.keyboard?.off('keydown-H');
+  this.input.keyboard?.on('keydown-H', () => {
+    if (this.account) {
+      beginOrResumeTutorial(this, this.account, 'PrepareScene', true);
+    }
   });
 }
 
@@ -1491,6 +1683,8 @@ private openCollectionScene() {
 
   const equippedIds = this.equippedRelics.filter(id => id > 0);
 
+  this.noteMedal('hangar_open');
+  this.input.enabled = false;
   this.scene.launch('CollectionScene', {
     walletManager: this.walletManager,
     gameContract: this.gameContract,
@@ -1502,6 +1696,7 @@ private openCollectionScene() {
     equippedRelicIds: equippedIds,
     teamIds: compactTeamIds(this.team)
   });
+  this.scene.bringToTop('CollectionScene');
 }
 
   public async addMultipleUnitsToTeam(newIds: number[]) {
@@ -1509,32 +1704,15 @@ private openCollectionScene() {
     this.teamOperationLock = true;
 
     try {
-      const remaining = 8 - filledTeamCount(this.team);
       const actuallyAdded: number[] = [];
-
-      if (newIds.length > remaining) {
-        this.clearTeam(true);
-        const toAdd = newIds.slice(0, 8);
-        for (const id of toAdd) {
-          if (!this.team.includes(id)) {
-            const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
-            if (freeSlotIndex !== -1) {
-              this.team[freeSlotIndex] = id;
-              await this.createTeamUnitVisual(id, freeSlotIndex);
-              actuallyAdded.push(id);
-            }
-          }
-        }
-      } else {
-        for (const id of newIds) {
-          if (filledTeamCount(this.team) >= 8) break;
-          if (!this.team.includes(id)) {
-            const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
-            if (freeSlotIndex !== -1) {
-              this.team[freeSlotIndex] = id;
-              await this.createTeamUnitVisual(id, freeSlotIndex);
-              actuallyAdded.push(id);
-            }
+      for (const id of newIds) {
+        if (filledTeamCount(this.team) >= 8) break;
+        if (!this.team.includes(id)) {
+          const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
+          if (freeSlotIndex !== -1) {
+            this.team[freeSlotIndex] = id;
+            await this.createTeamUnitVisual(id, freeSlotIndex);
+            actuallyAdded.push(id);
           }
         }
       }
@@ -1546,38 +1724,49 @@ private openCollectionScene() {
         collectionScene.unitsData = collectionScene.unitsData.filter((u: any) => !actuallyAdded.includes(u.id));
         if (typeof collectionScene.refreshGrid === 'function') collectionScene.refreshGrid();
       }
+      return actuallyAdded;
     } finally {
       this.teamOperationLock = false;
     }
   }
 
-public async addMultipleRelicsToEquipped(newRelicIds: number[]) {
-  if (!newRelicIds || newRelicIds.length === 0 || newRelicIds.length > 3) return;
-
-  let equippedCopy = [...this.equippedRelics];
-  let idx = 0;
-
-  for (let i = 0; i < equippedCopy.length && idx < newRelicIds.length; i++) {
-    if (equippedCopy[i] === 0) equippedCopy[i] = newRelicIds[idx++];
+public async addMultipleRelicsToEquipped(newRelicIds: number[]): Promise<number[]> {
+  if (!newRelicIds || newRelicIds.length === 0) {
+    return [];
   }
 
-  for (let i = 0; idx < newRelicIds.length && i < equippedCopy.length; i++) {
-    equippedCopy[i] = newRelicIds[idx++];
+  const equippedCopy = [...this.equippedRelics];
+  const added: number[] = [];
+  for (const relicId of newRelicIds) {
+    if (!(relicId > 0) || equippedCopy.includes(relicId)) {
+      continue;
+    }
+    const empty = equippedCopy.findIndex((id) => id === 0);
+    if (empty === -1) {
+      break;
+    }
+    equippedCopy[empty] = relicId;
+    added.push(relicId);
+  }
+
+  if (added.length === 0) {
+    this.showSceneMessage('No free relic slot.', HUD.color.warn, 1800);
+    return [];
   }
 
   this.equippedRelics = equippedCopy;
-  await this.refreshRelics();
+  await this.loadEquippedRelics();
   this.persistEquippedRelics();
 
-  this.showSceneMessage(`Relics equipped (${newRelicIds.length})`, HUD.color.good, 1800);
+  this.showSceneMessage(`Relics equipped (${added.length})`, HUD.color.good, 1800);
+  return added;
 }
 
 private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   if (!this.nftContract || !this.gridSlots[slotIndex]) return;
 
   try {
-    const rawUnit = await this.nftContract.read.getUnit([BigInt(tokenId)]);
-    const unit = this.normalizeUnit(rawUnit);
+    const unit = await this.getCachedUnit(tokenId);
 
     const slot = this.gridSlots[slotIndex];
     const textureKey = shipKey(unit.faction, unit.unitClass);
@@ -1605,7 +1794,9 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     (container as any).unit = unit;
     (container as any).teamSlotIndex = slotIndex;
 
-    ship.setInteractive().setDepth(8);
+    ship.setDepth(8);
+    container.setSize(HUD.TEAM, HUD.TEAM);
+    container.setInteractive(new Phaser.Geom.Rectangle(-HUD.TEAM / 2, -HUD.TEAM / 2, HUD.TEAM, HUD.TEAM), Phaser.Geom.Rectangle.Contains);
     container.setDepth(8);
 
     this.teamSlotOccupants[slotIndex] = container;
@@ -1626,35 +1817,36 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     const originalWidth = slot.displayWidth;
     const originalHeight = slot.displayHeight;
 
-    ship.on('pointerover', () => {
+    container.on('pointerover', () => {
       const tooltipText = `${factionName(unit.faction)} ${rarityName(unit.rarity)} ${className(unit.unitClass)}\nATK ${unit.attack}  DEF ${unit.defense}  SPD ${unit.speed}`;
       this.showTooltip(slot.x + 80, slot.y - 65, tooltipText);
     });
 
-    ship.on('pointerout', () => this.hideTooltip());
+    container.on('pointerout', () => this.hideTooltip());
 
-    ship.on('pointerdown', () => {
+    container.on('pointerdown', () => {
       const now = Date.now();
-      if (now - this.lastClickTime < 300) {
+      const previous = Number((container as any).lastClickAt || 0);
+      if (previous > 0 && now - previous < 300) {
         this.removeFromTeam(slotIndex);
       }
-      this.lastClickTime = now;
+      (container as any).lastClickAt = now;
     });
 
-    this.input.setDraggable(ship);
+    this.input.setDraggable(container);
 
-    ship.on('dragstart', () => {
+    container.on('dragstart', () => {
       container.setDepth(30);
       ship.setDisplaySize(shipDisplay * 1.08, shipDisplay * 1.08);
       slot.setDisplaySize(originalWidth, originalHeight);
     });
 
-    ship.on('drag', (_: any, dragX: number, dragY: number) => {
+    container.on('drag', (_: unknown, dragX: number, dragY: number) => {
       container.x = dragX;
       container.y = dragY;
     });
 
-    ship.on('dragend', () => {
+    container.on('dragend', () => {
       container.setDepth(8);
       ship.setDisplaySize(shipDisplay, shipDisplay);
 
@@ -1697,13 +1889,9 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
 
   } catch (e) {
     console.error(`createTeamUnitVisual error for ${tokenId}:`, e);
-    this.team[slotIndex] = 0;
+    this.team[slotIndex] = EMPTY_TEAM_SLOT;
     this.teamSlotOccupants[slotIndex] = null;
-    const slot = this.gridSlots[slotIndex];
-    if (slot) {
-      slot.setInteractive();
-      this.startEmptySlotPulse(slot);
-    }
+    this.armEmptyTeamSlot(slotIndex);
     if (this.teamCounterText) this.teamCounterText.setText(`YOUR FLEET  ${filledTeamCount(this.team)}/8`);
   }
 }
@@ -1713,17 +1901,15 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     if (!occupant) return;
 
     const tokenId = (occupant as any).tokenId;
+    const unit = (occupant as any).unit || null;
 
-    this.team[slotIndex] = 0;
-    occupant.destroy();
+    this.team[slotIndex] = EMPTY_TEAM_SLOT;
+    if (typeof (occupant as any).destroy === 'function') {
+      occupant.destroy();
+    }
     this.teamSlotOccupants[slotIndex] = null;
     this.updateTeamCounter();
-
-    const teamSlot = this.gridSlots[slotIndex];
-    if (teamSlot) {
-      teamSlot.setInteractive();
-      this.startEmptySlotPulse(teamSlot);
-    }
+    this.armEmptyTeamSlot(slotIndex);
 
     const collectionScene = this.scene.get('CollectionScene') as any;
     if (collectionScene && collectionScene.scene.isActive()) {
@@ -1731,7 +1917,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       if (!alreadyExists) {
         collectionScene.unitsData.push({
           id: tokenId,
-          unit: (occupant as any).unit || null,
+          unit,
           inTeam: false
         });
         if (typeof collectionScene.applyFiltersAndSort === 'function') {
@@ -1744,23 +1930,34 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   }
 
   private clearTeamVisuals() {
-    this.teamSlotOccupants.forEach(occupant => {
-      if (occupant) occupant.destroy();
+    this.teamSlotOccupants.forEach((occupant) => {
+      if (occupant && typeof (occupant as any).destroy === 'function') {
+        occupant.destroy();
+      }
     });
     this.teamSlotOccupants = new Array(8).fill(null);
   }
 
+  private armEmptyTeamSlot(slotIndex: number) {
+    const slot = this.gridSlots[slotIndex];
+    this.teamSlotOccupants[slotIndex] = null;
+    if (!slot) {
+      return;
+    }
+    slot.setInteractive({ useHandCursor: true });
+    this.startEmptySlotPulse(slot);
+  }
+
   private async rebuildTeamVisuals() {
     for (let i = 0; i < this.team.length; i++) {
-      if (this.team[i]) {
+      if (isFilledSlot(this.team[i])) {
         await this.createTeamUnitVisual(this.team[i], i);
+      } else {
+        this.team[i] = EMPTY_TEAM_SLOT;
+        this.armEmptyTeamSlot(i);
       }
     }
     this.updateTeamCounter();
-  }
-
-  private getShipKey(faction: number, unitClass: number): string {
-    return shipKey(faction, unitClass);
   }
 
   private updateTeamCounter() {
@@ -1771,6 +1968,9 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
     }
     this.refreshFleetHint();
     this.saveCurrentTeam();
+    if (count === 8) {
+      this.noteProgress();
+    }
   }
 
   private saveCurrentTeam() {
@@ -1778,7 +1978,7 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       return;
     }
     savePrepareSession(this.account, {
-      team: compactTeamIds(this.team),
+      team: [...this.team],
       relics: this.equippedRelics
     });
   }
@@ -1788,14 +1988,15 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       return;
     }
     const saved = loadPrepareSession(this.account);
-    if (!saved || saved.team.length === 0) {
+    if (!saved || filledTeamCount(saved.team) === 0) {
       return;
     }
-    const valid = saved.team.filter((id) => this.playerUnitIds.includes(id)).slice(0, 8);
-    if (valid.length === 0) {
+    const raw = Array.isArray(saved.team) ? saved.team : [];
+    const slots = raw.length === 8 ? raw.map((id) => Number(id)) : alignTeamToSlots(raw);
+    this.team = slots.map((id) => (isFilledSlot(id) && this.playerUnitIds.includes(id) ? id : EMPTY_TEAM_SLOT));
+    if (filledTeamCount(this.team) === 0) {
       return;
     }
-    this.team = alignTeamToSlots(valid);
     await this.rebuildTeamVisuals();
   }
 
@@ -1809,12 +2010,12 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
       return;
     }
     if (this.playerUnitIds.length === 0) {
-      this.fleetHintText.setText('Generate 10, then AUTO');
+      this.fleetHintText.setText('Buy or generate ships, then fill 8 slots');
       this.fleetHintText.setColor(HUD.color.warn);
       return;
     }
     if (count < 8) {
-      this.fleetHintText.setText(`${8 - count} empty — AI fills them`);
+      this.fleetHintText.setText(`Fill all 8 slots  ·  ${count}/8`);
       this.fleetHintText.setColor(HUD.color.warn);
       return;
     }
@@ -1824,6 +2025,9 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   private async claimLevelUpShips() {
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     this.showSceneMessage('Connect wallet first');
+    return;
+  }
+  if (!this.beginWalletTx()) {
     return;
   }
   try {
@@ -1842,6 +2046,8 @@ private async createTeamUnitVisual(tokenId: number, slotIndex: number) {
   } catch (e: any) {
     const errMsg = e.shortMessage || e.message || 'Claim failed';
     this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
+  } finally {
+    this.endWalletTx();
   }
 }
 
@@ -1849,6 +2055,9 @@ private async generateTenShips() {
 
   if (!this.isWalletReady || !this.gameContract || !this.account || !this.publicClient) {
     this.showSceneMessage('Connect wallet first');
+    return;
+  }
+  if (!this.beginWalletTx()) {
     return;
   }
 
@@ -1860,92 +2069,37 @@ private async generateTenShips() {
     await this.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
 
     await this.loadOwnedUnits();
+    await this.loadPlayerShop();
     await this.updatePlayerProfile();
     await this.reloadOpenCollection();
     if (filledTeamCount(this.team) === 0 && this.playerUnitIds.length >= 8) {
       await this.autoSelectTeam();
     }
 
+    gameAudio.buy();
+    this.noteMedal('ten_forged');
+    this.noteProgress();
     this.showSceneMessage('10 ships generated!', '#6dffc0', 2000);
 
   } catch (e: any) {
     console.error('generateTenShips error:', e);
     const errMsg = e.shortMessage || e.message || 'Error';
     this.showSceneMessage(`Error: ${errMsg}`, '#ff4444', 4000);
+  } finally {
+    this.endWalletTx();
   }
 }
 
-private addButtonEffects(obj: Phaser.GameObjects.GameObject, scale: number = 1.08) {
-  const img = obj as Phaser.GameObjects.Image;
-  const originalWidth = img.displayWidth;
-  const originalHeight = img.displayHeight;
-
-  const hoverWidth = originalWidth * scale;
-  const hoverHeight = originalHeight * scale;
-
-  obj.on('pointerover', () => {
-    this.tweens.add({
-      targets: img,
-      displayWidth: hoverWidth,
-      displayHeight: hoverHeight,
-      duration: 120,
-      ease: 'Sine.easeOut'
-    });
-
-    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
-    if (text) {
-      if (!(text as any).originalFill) {
-        (text as any).originalFill = text.style.color;
-      }
-      text.setFill('#ffff88');
-      // scale текста убрали — теперь не съезжает
-    }
-  });
-
-  obj.on('pointerout', () => {
-    this.tweens.add({
-      targets: img,
-      displayWidth: originalWidth,
-      displayHeight: originalHeight,
-      duration: 120,
-      ease: 'Sine.easeOut'
-    });
-
-    const text = (obj as any).linkedText as Phaser.GameObjects.Text;
-    if (text) {
-      text.setFill((text as any).originalFill || '#ffffff');
-    }
-  });
-
-  obj.on('pointerdown', () => {
-    this.tweens.add({
-      targets: img,
-      displayWidth: originalWidth * 0.95,
-      displayHeight: originalHeight * 0.95,
-      duration: 60,
-      ease: 'Sine.easeOut'
-    });
-  });
-
-  obj.on('pointerup', () => {
-    this.tweens.add({
-      targets: img,
-      displayWidth: hoverWidth,
-      displayHeight: hoverHeight,
-      duration: 80,
-      ease: 'Sine.easeOut'
-    });
-  });
-}
-
   public addSingleUnitToTeam(unitId: number): boolean {
+    if (!isFilledSlot(unitId)) return false;
     if (filledTeamCount(this.team) >= 8 || this.team.includes(unitId)) return false;
 
     const freeSlotIndex = this.teamSlotOccupants.findIndex(slot => slot === null);
     if (freeSlotIndex === -1) return false;
 
     this.team[freeSlotIndex] = unitId;
-    this.createTeamUnitVisual(unitId, freeSlotIndex);
+    this.teamSlotOccupants[freeSlotIndex] = { tokenId: unitId } as any;
+    void this.createTeamUnitVisual(unitId, freeSlotIndex);
     this.updateTeamCounter();
 
     const collectionScene = this.scene.get('CollectionScene') as any;
@@ -1961,7 +2115,7 @@ public equipSingleRelic(relicId: number): boolean {
   for (let i = 0; i < 3; i++) {
     if (this.equippedRelics[i] === 0) {
       this.equippedRelics[i] = relicId;
-      this.refreshRelics();
+      this.loadEquippedRelics();
       this.persistEquippedRelics();
 
       // Обновляем equippedRelicIds в открытой CollectionScene

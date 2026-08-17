@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract StarForgePlayerProfile is Ownable, AccessControl {
+contract StarForgePlayerProfile is AccessControl {
     bytes32 public constant GAME_ROLE = keccak256("GAME_ROLE");
 
     struct PlayerProfile {
@@ -31,13 +30,14 @@ contract StarForgePlayerProfile is Ownable, AccessControl {
     event UnitAdded(address indexed player, uint256 tokenId);
     event RelicAdded(address indexed player, uint256 relicId);
 
-    constructor() Ownable() {
+    constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     uint256 public constant DAILY_BUY_LIMIT = 10;
 
     function setGameContract(address gameContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(gameContract != address(0), "Zero game");
         _grantRole(GAME_ROLE, gameContract);
     }
 
@@ -156,6 +156,7 @@ contract StarForgePlayerProfile is Ownable, AccessControl {
     // ==================== ADMIN ====================
 
     function grantGameRole(address gameContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(gameContract != address(0), "Zero game");
         _grantRole(GAME_ROLE, gameContract);
     }
 }

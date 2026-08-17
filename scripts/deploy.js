@@ -16,42 +16,29 @@
  *   (only after SOMNIA_MAINNET_RPC and mainnet addresses are set)
  *
  * After a successful Game deploy the same deployer (must be owner / DEFAULT_ADMIN)
- * automatically binds the live contracts:
- *   1. StarForgeUnitNFT.setGameContract(newGame)
- *   2. StarForgeRelic.setGameContract(newGame)
- *   3. StarForgePlayerProfile.setGameContract(newGame)
- *   4. new StarForgeGame.setRelicContract(currentRelic)
+ * automatically binds the live contracts. NFT is switched last so a failed bind
+ * does not leave minting pointed at a half-linked Game:
+ *   1. StarForgeRelic.setGameContract(newGame)
+ *   2. StarForgePlayerProfile.setGameContract(newGame)
+ *   3. revoke GAME_ROLE from previous Game addresses
+ *   4. StarForgeUnitNFT.setGameContract(newGame)
+ *
+ * previousGame is passed in the Game constructor (CURRENT_GAME_ADDRESS).
+ * Mainnet never overwrites DEPLOYMENT.md or frontend addresses.
  */
 
 const fs = require("fs");
 const path = require("path");
 const hre = require("hardhat");
+const { PREVIOUS_GAMES } = require("./lib/previousGames");
 
 // DEPLOYMENT.md — single source of truth for current testnet addresses.
 const TESTNET_DEFAULTS = {
   unitNFT: "0x9c8784d47dA7fc4772EE617dC3A49c506A6481A1",
   relic: "0x619e19df1975A8D289545834aAff3FEEf1b84909",
   playerProfile: "0x2C8976ECc9e9bDf939745ee61b1aD858607563d9",
-  currentGame: "0x2087baAb3Ee7456E6B3100A58BAc7144662ea3fF"
+  currentGame: "0x064fE7661b1eb52b727e562E652764b94c008383"
 };
-
-const PREVIOUS_GAMES = [
-  "0x05bcfA66B38259ea33B6986C1f04F028f0129a9F",
-  "0x4628FC45cb2f28A198A4ebF1491791b2E12D92DA",
-  "0x6107dCb032ef91350e139563fDE7776E4ccd0fab",
-  "0xcc51dbf77d96b477485122BA2F6Ee6beBBA21B88",
-  "0xDA71D142CD494E2527e676667E62F1f3644448B0",
-  "0xB0768AE07a84F8172424ED331c80525D1B4564de",
-  "0x438736261D0620C66c20cF415e45Ca346c14F124",
-  "0x03a87273e545be3cE10DD0bdAc137E2646a002E7",
-  "0x6Ee9412b22763c28ddBFA972A30daA8aF258e807",
-  "0xD7216Ea7371B7CD75db7b644136261720CE76c48",
-  "0x666508a2CB4c5c9DE44C83724bD44338E1E80ED7",
-  "0x992F0E1C91fb2899BE882DfC50269d650007301C",
-  "0xe24D45FEc2635d556d10f86902A58FcDf8795355",
-  "0x227cF27Ec12c1cCBfE536f10AE1f765DEfA8cb8a",
-  "0x2087baAb3Ee7456E6B3100A58BAc7144662ea3fF"
-];
 
 function requirePrivateKey() {
   const raw = process.env.PRIVATE_KEY;
@@ -77,6 +64,26 @@ function resolveAddress(label, envValue, testnetDefault) {
 
   if (!hre.ethers.isAddress(value) || value === hre.ethers.ZeroAddress) {
     throw new Error(`${label} is not a valid non-zero address: ${value}`);
+  }
+
+  return hre.ethers.getAddress(value.toLowerCase());
+}
+
+function resolvePreviousGame(envValue, testnetDefault) {
+  const networkName = hre.network.name;
+  let value = envValue && envValue.trim() !== "" ? envValue.trim() : "";
+
+  if (!value) {
+    if (networkName === "somniaMainnet") {
+      throw new Error(
+        "CURRENT_GAME_ADDRESS is required on somniaMainnet. Use the zero address for the first Game on this chain."
+      );
+    }
+    value = testnetDefault;
+  }
+
+  if (!hre.ethers.isAddress(value)) {
+    throw new Error(`CURRENT_GAME_ADDRESS is not a valid address: ${value}`);
   }
 
   return hre.ethers.getAddress(value.toLowerCase());
@@ -116,20 +123,42 @@ async function sendOwnerCall(label, contract, method, args) {
   }
 }
 
-async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, playerProfile, currentGame) {
-  const completed = [];
-
+async function requireDeployerControls(deployer, unitNFT, relic, playerProfile) {
   const nftContract = await hre.ethers.getContractAt("StarForgeUnitNFT", unitNFT, deployer);
-  completed.push(
-    await sendOwnerCall(
-      `StarForgeUnitNFT.setGameContract(${newGame})`,
-      nftContract,
-      "setGameContract",
-      [newGame]
-    )
+  const relicContract = await hre.ethers.getContractAt("StarForgeRelic", relic, deployer);
+  const profileContract = await hre.ethers.getContractAt(
+    "StarForgePlayerProfile",
+    playerProfile,
+    deployer
   );
 
-  const relicContract = await hre.ethers.getContractAt("StarForgeRelic", relic, deployer);
+  const nftOwner = await nftContract.owner();
+  const relicOwner = await relicContract.owner();
+  const DEFAULT_ADMIN_ROLE = hre.ethers.ZeroHash;
+  const isProfileAdmin = await profileContract.hasRole(DEFAULT_ADMIN_ROLE, deployer.address);
+
+  if (nftOwner.toLowerCase() !== deployer.address.toLowerCase()) {
+    throw new Error(`Deployer is not owner of UnitNFT. owner=${nftOwner}`);
+  }
+  if (relicOwner.toLowerCase() !== deployer.address.toLowerCase()) {
+    throw new Error(`Deployer is not owner of Relic. owner=${relicOwner}`);
+  }
+  if (!isProfileAdmin) {
+    throw new Error("Deployer does not have DEFAULT_ADMIN_ROLE on PlayerProfile.");
+  }
+
+  return { nftContract, relicContract, profileContract };
+}
+
+async function bindLiveContracts(deployer, newGame, unitNFT, relic, playerProfile, currentGame) {
+  const completed = [];
+  const { nftContract, relicContract, profileContract } = await requireDeployerControls(
+    deployer,
+    unitNFT,
+    relic,
+    playerProfile
+  );
+
   completed.push(
     await sendOwnerCall(
       `StarForgeRelic.setGameContract(${newGame})`,
@@ -139,11 +168,6 @@ async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, player
     )
   );
 
-  const profileContract = await hre.ethers.getContractAt(
-    "StarForgePlayerProfile",
-    playerProfile,
-    deployer
-  );
   completed.push(
     await sendOwnerCall(
       `StarForgePlayerProfile.setGameContract(${newGame})`,
@@ -153,29 +177,12 @@ async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, player
     )
   );
 
-  completed.push(
-    await sendOwnerCall(
-      `StarForgeGame.setRelicContract(${relic})`,
-      game.connect(deployer),
-      "setRelicContract",
-      [relic]
-    )
-  );
-
-  if (currentGame && currentGame.toLowerCase() !== newGame.toLowerCase()) {
-    completed.push(
-      await sendOwnerCall(
-        `StarForgeGame.setPreviousGame(${currentGame})`,
-        game.connect(deployer),
-        "setPreviousGame",
-        [currentGame]
-      )
-    );
-  }
-
   const GAME_ROLE = hre.ethers.id("GAME_ROLE");
-  for (const oldGame of PREVIOUS_GAMES) {
-    const checksummed = hre.ethers.getAddress(oldGame.toLowerCase());
+  const revokeTargets = new Set(PREVIOUS_GAMES.map((addr) => hre.ethers.getAddress(addr.toLowerCase())));
+  if (currentGame) {
+    revokeTargets.add(hre.ethers.getAddress(currentGame.toLowerCase()));
+  }
+  for (const checksummed of revokeTargets) {
     if (checksummed.toLowerCase() === newGame.toLowerCase()) {
       continue;
     }
@@ -192,6 +199,15 @@ async function bindLiveContracts(deployer, newGame, game, unitNFT, relic, player
       )
     );
   }
+
+  completed.push(
+    await sendOwnerCall(
+      `StarForgeUnitNFT.setGameContract(${newGame})`,
+      nftContract,
+      "setGameContract",
+      [newGame]
+    )
+  );
 
   return completed;
 }
@@ -213,13 +229,10 @@ function printLinkSummary(newGame, unitNFT, relic, playerProfile, currentGame, c
     console.log(`      ${step.hash}`);
   }
   console.log("");
-  console.log("Address files updated:");
-  console.log("  - DEPLOYMENT.md");
-  console.log("  - frontend/src/lib/contractAddresses.ts");
   console.log("============================================================");
 }
 
-function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile) {
+function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile, previousGame) {
   const today = new Date();
   const months = [
     "января", "февраля", "марта", "апреля", "мая", "июня",
@@ -244,7 +257,7 @@ Testnet: Chain ID **50312**, RPC \`https://dream-rpc.somnia.network\`
 
 ## Предыдущий Game
 
-- \`${TESTNET_DEFAULTS.currentGame}\` — снят с NFT/Relic/Profile GAME_ROLE
+- \`${previousGame}\` — снят с NFT/Relic/Profile GAME_ROLE
 
 ## Порядок деплоя и связывания контрактов
 
@@ -254,6 +267,7 @@ Testnet: Chain ID **50312**, RPC \`https://dream-rpc.somnia.network\`
    - \`_unitNFT\` = \`${unitNFT}\`
    - \`_relic\` = \`${relic}\`
    - \`_playerProfile\` = \`${playerProfile}\`
+   - \`_previousGame\` = \`${previousGame}\`
 
 2. После деплоя выполняем:
 
@@ -261,14 +275,14 @@ Testnet: Chain ID **50312**, RPC \`https://dream-rpc.somnia.network\`
 StarForgeUnitNFT.setGameContract(${newGame})
 StarForgeRelic.setGameContract(${newGame})
 StarForgePlayerProfile.setGameContract(${newGame})
-StarForgeGame.setPreviousGame(${TESTNET_DEFAULTS.currentGame})
+StarForgeGame constructor previousGame = ${previousGame}
 \`\`\`
 `;
 
   fs.writeFileSync(path.join(__dirname, "..", "DEPLOYMENT.md"), deployment, "utf8");
 
   const addresses = `// frontend/src/lib/contractAddresses.ts
-// ЕДИНСТВЕННОЕ МЕСТО ДЛЯ АДРЕСОВ КОНТРАКТОВ (testnet)
+// Single source of testnet contract addresses.
 
 export const GAME_ADDRESS = '${newGame}' as const;
 export const NFT_ADDRESS = '${unitNFT}' as const;
@@ -310,6 +324,9 @@ async function main() {
     if (!rpc || rpc.includes("REPLACE_WITH_SOMNIA_MAINNET_RPC")) {
       throw new Error("Set SOMNIA_MAINNET_RPC in .env before deploying to somniaMainnet.");
     }
+    if (process.env.CONFIRM_MAINNET !== "1") {
+      throw new Error("Refusing somniaMainnet deploy. Set CONFIRM_MAINNET=1 in .env to continue.");
+    }
   }
 
   const [deployer] = await hre.ethers.getSigners();
@@ -332,15 +349,26 @@ async function main() {
     process.env.PLAYER_PROFILE_ADDRESS,
     TESTNET_DEFAULTS.playerProfile
   );
+  const currentGame = resolvePreviousGame(
+    process.env.CURRENT_GAME_ADDRESS,
+    TESTNET_DEFAULTS.currentGame
+  );
 
   console.log(`Deployer:         ${deployer.address}`);
   console.log(`UnitNFT:          ${unitNFT}`);
   console.log(`Relic:            ${relic}`);
   console.log(`PlayerProfile:    ${playerProfile}`);
+  console.log(`Previous Game:    ${currentGame}`);
 
   await requireOnChainContract("UNIT_NFT_ADDRESS", unitNFT);
   await requireOnChainContract("RELIC_ADDRESS", relic);
   await requireOnChainContract("PLAYER_PROFILE_ADDRESS", playerProfile);
+  if (currentGame === hre.ethers.ZeroAddress) {
+    console.log("previousGame = 0 (first Game on this chain)");
+  } else {
+    await requireOnChainContract("CURRENT_GAME_ADDRESS", currentGame);
+  }
+  await requireDeployerControls(deployer, unitNFT, relic, playerProfile);
 
   const balance = await hre.ethers.provider.getBalance(deployer.address);
   console.log(`Deployer balance: ${hre.ethers.formatEther(balance)} native`);
@@ -352,7 +380,7 @@ async function main() {
   console.log("Deploying StarForgeGame...");
 
   const Game = await hre.ethers.getContractFactory("StarForgeGame");
-  const game = await Game.deploy(unitNFT, relic, playerProfile);
+  const game = await Game.deploy(unitNFT, relic, playerProfile, currentGame);
   const deployTx = game.deploymentTransaction();
 
   console.log(`Deploy tx: ${deployTx ? deployTx.hash : "(unknown)"}`);
@@ -366,28 +394,37 @@ async function main() {
   console.log(`StarForgeUnitNFT:        ${unitNFT}`);
   console.log(`StarForgeRelic:          ${relic}`);
   console.log(`StarForgePlayerProfile:  ${playerProfile}`);
-  console.log(`StarForgeGame (old):     ${TESTNET_DEFAULTS.currentGame}`);
+  console.log(`StarForgeGame (old):     ${currentGame}`);
 
   console.log("");
   console.log("Binding live contracts (deployer must be owner / DEFAULT_ADMIN)...");
   const completed = await bindLiveContracts(
     deployer,
     newGame,
-    game,
     unitNFT,
     relic,
     playerProfile,
-    TESTNET_DEFAULTS.currentGame
+    currentGame
   );
 
-  writeDeploymentFiles(newGame, unitNFT, relic, playerProfile);
+  if (networkName === "somniaMainnet") {
+    console.log("");
+    console.log("Mainnet: DEPLOYMENT.md and frontend addresses were NOT overwritten.");
+    console.log("Update a separate mainnet address file by hand.");
+  } else {
+    writeDeploymentFiles(newGame, unitNFT, relic, playerProfile, currentGame);
+    console.log("");
+    console.log("Address files updated:");
+    console.log("  - DEPLOYMENT.md");
+    console.log("  - frontend/src/lib/contractAddresses.ts");
+  }
 
   printLinkSummary(
     newGame,
     unitNFT,
     relic,
     playerProfile,
-    TESTNET_DEFAULTS.currentGame,
+    currentGame,
     completed
   );
 }

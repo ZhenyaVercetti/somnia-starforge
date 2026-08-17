@@ -1,0 +1,7 @@
+Kenney.nl — Creative Commons CC0
+Combat: Sci-Fi Sounds (laserLarge, lowFrequency_explosion, forceField)
+https://kenney.nl/assets/sci-fi-sounds
+UI: Interface Sounds (click, confirmation, error, select)
+https://kenney.nl/assets/interface-sounds
+
+laserSmall, explosionCrunch, door and engine loops were not used.

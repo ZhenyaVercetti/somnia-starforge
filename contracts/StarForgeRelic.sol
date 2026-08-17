@@ -39,6 +39,7 @@ contract StarForgeRelic is ERC1155, Ownable {
     constructor() ERC1155("") Ownable() {}
 
     function setGameContract(address _gameContract) external onlyOwner {
+        require(_gameContract != address(0), "Zero game");
         gameContract = _gameContract;
     }
 

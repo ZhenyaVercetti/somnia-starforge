@@ -58,20 +58,20 @@ async function runMatch(game, signer, units) {
   const resolved = logs.filter((item) => item.name === "BattleResolved");
   const events = logs.filter((item) => item.name === "BattleEventEmitted");
   const grants = logs.filter((item) => item.name === "LevelUpShipsGranted");
-  const result = await game.getLastBattleResult(signer.address);
+  const summary = await game.getLastBattleSummary(signer.address);
   if (resolved.length !== 1) {
     throw new Error(`BattleResolved count=${resolved.length}`);
   }
   if (events.length === 0) {
     throw new Error("No BattleEventEmitted");
   }
-  if (result[3] !== resolved[0].args.battleId) {
+  if (summary.battleId !== resolved[0].args.battleId) {
     throw new Error("battleId mismatch");
   }
   console.log(
-    `  startMatch ${tx.hash} gas=${receipt.gasUsed} won=${result[0]} events=${events.length} grants=${grants.length}`
+    `  startMatch ${tx.hash} gas=${receipt.gasUsed} won=${summary.playerWon} events=${events.length} grants=${grants.length}`
   );
-  return { receipt, result, events, grants };
+  return { receipt, result: summary, events, grants };
 }
 
 async function main() {
@@ -168,7 +168,7 @@ async function main() {
   console.log("");
   console.log("CYCLE CHECKS");
   console.log(`  units=${state.units.length} remainingBuys=${state.remaining} level=${state.profile.level}`);
-  console.log(`  lastBattleId=${(await game.getLastBattleResult(signer.address))[3]}`);
+  console.log(`  lastBattleId=${(await game.getLastBattleSummary(signer.address)).battleId}`);
   console.log("CYCLE OK");
 }
 

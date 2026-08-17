@@ -37,6 +37,10 @@ class WalletManager {
     this.account = session.account;
     this.publicClient = session.publicClient;
     this.walletClient = session.walletClient;
+    const chain = Number(session.walletClient.chain?.id);
+    if (Number.isFinite(chain) && chain > 0) {
+      this.chainId = chain;
+    }
     window.account = session.account;
     window.publicClient = session.publicClient;
     window.walletClient = session.walletClient;

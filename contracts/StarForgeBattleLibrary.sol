@@ -83,18 +83,16 @@ struct BattleEvent {
             return (0, "DODGE");
         }
 
-        uint16 baseDmg = uint16(atk) * (110 + uint16(seed % 35)) / (uint16(def) + 18);
-        if (baseDmg < 2) baseDmg = 2 + (atk / 3);
+        uint256 baseDmg = uint256(atk) * (110 + (seed % 35)) / (uint256(def) + 18);
+        if (baseDmg < 2) baseDmg = 2 + uint256(atk) / 3;
 
-        uint16 variance = uint16((seed >> 8) % 37);
-        uint16 dmg = baseDmg * (82 + variance) / 100;
-
-        if (critChance > 0 && critSeed < uint16(critChance) * 28 / 10) {
-            dmg = dmg * 13 / 10;   // +30% вместо +50%
+        uint256 dmg = baseDmg * (82 + ((seed >> 8) % 37)) / 100;
+        if (critChance > 0 && critSeed < uint256(critChance) * 28 / 10) {
+            dmg = dmg * 13 / 10;
             effect = "CRIT";
         }
-
-        return (dmg, effect);
+        if (dmg > type(uint16).max) dmg = type(uint16).max;
+        return (uint16(dmg), effect);
     }
 
     function _simulateBattle(
@@ -179,7 +177,7 @@ struct BattleEvent {
         }
         for (uint256 i = 0; i < team.length; i++) {
             if (factionCount[uint8(team[i].faction)] >= 3) {
-                team[i].attack += 2;
+                team[i].attack = _satAdd8(team[i].attack, 2);
             }
         }
     }
@@ -337,7 +335,8 @@ struct BattleEvent {
                     team[j].maxHp = team[j].hp;
                 } else if (r.relicType == StarForgeRelic.RelicType.CRIT_CHANCE) {
                     team[j].critChance = _satAdd8(team[j].critChance, value);
-                } else if (r.relicType == StarForgeRelic.RelicType.LAST_STAND && scalePercent >= 50) {
+                } else if (r.relicType == StarForgeRelic.RelicType.LAST_STAND && scalePercent >= 100) {
+                    // Player fleet only. AI relic-mirror must not grant Last Stand to all 8 enemies.
                     team[j].hasLastStand = true;
                 }
             }
@@ -428,33 +427,40 @@ struct BattleEvent {
         }
 
 
+        CombatUnit memory defender = defenders[targetIdx];
+
         (uint16 damageDealt, string memory effect) = _calculateDamage(
             attackers[attackerIdx].attack,
-            defenders[targetIdx].defense,
+            defender.defense,
             attackers[attackerIdx].critChance,
-            defenders[targetIdx].dodgeChance,
+            defender.dodgeChance,
             seed >> (eventIdx * 3)
         );
 
-        if (damageDealt > defenders[targetIdx].hp) damageDealt = defenders[targetIdx].hp;
+        if (damageDealt > defender.hp) {
+            damageDealt = defender.hp;
+        }
 
         bool lastStandTriggered = false;
-        if (
-            defenders[targetIdx].hasLastStand &&
-            defenders[targetIdx].hp <= damageDealt &&
-            defenders[targetIdx].hp > 0
-        ) {
-            // Consume Last Stand once. A second lethal hit must be able to kill the unit.
-            damageDealt = defenders[targetIdx].hp - 1;
-            defenders[targetIdx].hp = 1;
-            defenders[targetIdx].hasLastStand = false;
+        // Last Stand saves a killing blow only when HP is still above 1.
+        // A unit already at 1 HP always dies, so a stuck flag cannot loop 1→1 forever.
+        if (defender.hasLastStand && damageDealt >= defender.hp && defender.hp > 1) {
+            damageDealt = defender.hp - 1;
+            defender.hp = 1;
+            defender.hasLastStand = false;
             lastStandTriggered = true;
             effect = "Last Stand";
         } else {
-            defenders[targetIdx].hp -= damageDealt;
+            defender.hp -= damageDealt;
+            if (defender.hp == 0) {
+                defender.hasLastStand = false;
+            }
         }
 
-        if (lastStandTriggered) effect = "Last Stand";
+        defenders[targetIdx] = defender;
+        if (lastStandTriggered) {
+            effect = "Last Stand";
+        }
 
 events[eventIdx] = BattleEvent({
     isPlayerSide: isPlayerSide,

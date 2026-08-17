@@ -64,7 +64,7 @@ export const PREPARE_LAYOUT = {
   leftBtnY0: 470,
   leftBtnStep: 80,
 
-  autoY: 872,
+  autoY: 888,
   fleetTitleY: 176,
   teamTopY: 316,
   teamGap: 36,
@@ -75,8 +75,44 @@ export const PREPARE_LAYOUT = {
   aiTopY: 316,
   aiGap: 20,
 
+  loreTitleY: 618,
+  loreY: 824,
+
   startY: 1008
 };
+
+/**
+ * Inner glass of ui_plate as a fraction of displaySize.
+ * Measured from the PNG (692x496): transparent margin is tiny,
+ * the thick chamfered bezel eats most of the leftover.
+ */
+export const UI_PLATE_WELL = {
+  left: 0.114,
+  right: 0.108,
+  top: 0.188,
+  bottom: 0.177
+} as const;
+
+export function plateWell(
+  cx: number,
+  cy: number,
+  displayW: number,
+  displayH: number,
+  extra: { left?: number; right?: number; top?: number; bottom?: number } = {}
+) {
+  const left = cx - displayW / 2 + displayW * UI_PLATE_WELL.left + (extra.left ?? 0);
+  const right = cx + displayW / 2 - displayW * UI_PLATE_WELL.right - (extra.right ?? 0);
+  const top = cy - displayH / 2 + displayH * UI_PLATE_WELL.top + (extra.top ?? 0);
+  const bottom = cy + displayH / 2 - displayH * UI_PLATE_WELL.bottom - (extra.bottom ?? 0);
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    width: right - left,
+    height: bottom - top
+  };
+}
 
 export function hudText(overrides: Record<string, unknown> = {}) {
   return {

@@ -15,9 +15,10 @@
 - void.somi
 
 ### 1. Техническая готовность (v1.6 должен быть полностью закрыт)
-- [x] Variant 1 lastBattleEvents + anti-abuse + Shadow Fleet — на testnet (`0x227c…`)
-- [x] Prepare/Collection UX: аудит 15.08 закрыл Boot overlay, team[] слоты, наложения hint/AUTO, скролл коллекции
-- [ ] Ручной прогон на Game `0x2087…` (кошелёк → 8 кораблей → бой → коллекция)
+- [x] Variant 1 lastBattleEvents + anti-abuse + Shadow Fleet — на testnet
+- [x] Prepare/Collection UX: аудит 15.08 + cleanup 16.08
+- [x] Live Game `0x064f…` (17.08): EOA grind guard, persist relics, verify-live + smoke startMatch
+- [ ] Ручной прогон в браузере на Game `0x064f…` (кошелёк → 8 кораблей → бой → коллекция)
 - [ ] v1.6 полностью реализован и протестирован на testnet
 - [ ] Все контракты используют проверенные паттерны
 - [ ] Проведена gas-оптимизация (Variant 1 сделан; lastAI storage — по желанию)

@@ -7,6 +7,7 @@
 
 const hre = require("hardhat");
 const { readFrontendAddresses } = require("./lib/liveAddresses");
+const { PREVIOUS_GAMES } = require("./lib/previousGames");
 
 const GAME_ROLE = hre.ethers.id("GAME_ROLE");
 
@@ -47,14 +48,20 @@ async function main() {
   const nftGame = await nft.gameContract();
   const relicGame = await relic.gameContract();
   const hasRole = await profile.hasRole(GAME_ROLE, live.game);
+  const previousGame = await game.previousGame();
+  const buyUnitPrice = await game.buyUnitPrice();
+  const rerollPrice = await game.rerollPrice();
+  const relicPrice = await game.buyRelicShopPrice();
 
   console.log("");
   console.log(`  Game.unitNFT              ${wiredNft}`);
   console.log(`  Game.relicContract        ${wiredRelic}`);
   console.log(`  Game.playerProfile        ${wiredProfile}`);
+  console.log(`  Game.previousGame         ${previousGame}`);
   console.log(`  NFT.gameContract          ${nftGame}`);
   console.log(`  Relic.gameContract        ${relicGame}`);
   console.log(`  Profile GAME_ROLE(Game)   ${hasRole}`);
+  console.log(`  Prices                    unit=${hre.ethers.formatEther(buyUnitPrice)} reroll=${hre.ethers.formatEther(rerollPrice)} relic=${hre.ethers.formatEther(relicPrice)}`);
 
   const nftMatch = wiredNft.toLowerCase() === live.nft.toLowerCase();
   const relicMatch = wiredRelic.toLowerCase() === live.relic.toLowerCase();
@@ -64,6 +71,27 @@ async function main() {
 
   if (!nftMatch || !relicMatch || !profileMatch || !nftPoints || !relicPoints || !hasRole) {
     throw new Error("Live contracts are not fully bound to the frontend Game address");
+  }
+  if (previousGame.toLowerCase() === live.game.toLowerCase()) {
+    throw new Error("previousGame must not be the live Game");
+  }
+  if (previousGame !== hre.ethers.ZeroAddress) {
+    const prevCode = await hre.ethers.provider.getCode(previousGame);
+    if (!prevCode || prevCode === "0x") {
+      throw new Error("previousGame has no bytecode");
+    }
+  }
+
+  for (const old of PREVIOUS_GAMES) {
+    const checksummed = hre.ethers.getAddress(old.toLowerCase());
+    if (checksummed.toLowerCase() === live.game.toLowerCase()) {
+      continue;
+    }
+    const leftover = await profile.hasRole(GAME_ROLE, checksummed);
+    console.log(`  Old GAME_ROLE ${checksummed}  ${leftover ? "STILL SET" : "revoked"}`);
+    if (leftover) {
+      throw new Error(`Old Game ${checksummed} still has GAME_ROLE`);
+    }
   }
 
   console.log("");

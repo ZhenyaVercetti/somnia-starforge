@@ -5,6 +5,11 @@
 
 import Phaser from 'phaser';
 import { HUD, displayText, hudText, shipKey, rarityName, className } from '../utils/HudChrome';
+import { gameAudio } from '../lib/gameAudio';
+import { unlockAchievement } from '../lib/achievements';
+import { beginOrResumeTutorial, showAchievementToasts } from '../utils/MetaHud';
+import { CombatVfx, classLunge, preloadCombatFx } from '../utils/combatVfx';
+import { preloadDestroyedShips, preloadShipPortraits } from '../utils/preloadGameAssets';
 
 interface BattleEvent {
   round: number;
@@ -32,9 +37,12 @@ interface Combatant {
   faction: number;
   unitClass: number;
   rarity: number;
+  isPlayer: boolean;
   alive: boolean;
   lastStandLit: boolean;
   idleTween: Phaser.Tweens.Tween | null;
+  maxHp: number;
+  currentHp: number;
 }
 
 const FACTION_ENGINE: Record<number, { tint: number; tintAlt: number; glow: number }> = {
@@ -65,6 +73,7 @@ export default class BattleScene extends Phaser.Scene {
   private logContainer: Phaser.GameObjects.Container | null = null;
   private logTitle: Phaser.GameObjects.Text | null = null;
   private logPanel: Phaser.GameObjects.Rectangle | null = null;
+  private logPlate: Phaser.GameObjects.Image | null = null;
   private battleSpeedMultiplier = 1;
   private playbackTimeScale = PLAYBACK_SCALE_NORMAL;
   private skipActive = false;
@@ -79,10 +88,8 @@ export default class BattleScene extends Phaser.Scene {
   private backgroundLayers: Phaser.GameObjects.Image[] = [];
   private cameraDriftTween: Phaser.Tweens.Tween | null = null;
 
-  private hitEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private plasmaEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private debrisEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
-  private muzzleEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private critEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private victoryEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
@@ -93,6 +100,7 @@ export default class BattleScene extends Phaser.Scene {
   private skipBtnText: Phaser.GameObjects.Text | null = null;
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
   private savedTeam: number[] = [];
+  private vfx: CombatVfx | null = null;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -135,6 +143,7 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('energy_ring', 'assets/effects/energy_ring.png');
     this.load.image('engine_blob', 'assets/effects/engine_blob.png');
     this.load.image('shield_glow', 'assets/effects/shield_glow.png');
+    preloadCombatFx(this);
     this.load.spritesheet('spark_sheet', 'assets/effects/spark_sheet.png', {
       frameWidth: 64,
       frameHeight: 64
@@ -147,35 +156,8 @@ export default class BattleScene extends Phaser.Scene {
       );
     }
 
-    this.load.image('emperial_cruiser', 'assets/units/portraits/emperial_cruiser.png');
-    this.load.image('emperial_dreadnought', 'assets/units/portraits/emperial_dreadnought.png');
-    this.load.image('emperial_droneswarm', 'assets/units/portraits/emperial_droneswarm.png');
-    this.load.image('emperial_fighter', 'assets/units/portraits/emperial_fighter.png');
-
-    this.load.image('mechanoid_cruiser', 'assets/units/portraits/mechanoid_cruiser.png');
-    this.load.image('mechanoid_dreadnought', 'assets/units/portraits/mechanoid_dreadnought.png');
-    this.load.image('mechanoid_droneswarm', 'assets/units/portraits/mechanoid_droneswarm.png');
-    this.load.image('mechanoid_fighter', 'assets/units/portraits/mechanoid_fighter.png');
-
-    this.load.image('voidborn_cruiser', 'assets/units/portraits/voidborn_cruiser.png');
-    this.load.image('voidborn_dreadnought', 'assets/units/portraits/voidborn_dreadnought.png');
-    this.load.image('voidborn_droneswarm', 'assets/units/portraits/voidborn_droneswarm.png');
-    this.load.image('voidborn_fighter', 'assets/units/portraits/voidborn_fighter.png');
-
-    this.load.image('emperial_fighter_destroyed', 'assets/units/destroyed/emperial_fighter_destroyed.png');
-    this.load.image('emperial_cruiser_destroyed', 'assets/units/destroyed/emperial_cruiser_destroyed.png');
-    this.load.image('emperial_dreadnought_destroyed', 'assets/units/destroyed/emperial_dreadnought_destroyed.png');
-    this.load.image('emperial_droneswarm_destroyed', 'assets/units/destroyed/emperial_droneswarm_destroyed.png');
-
-    this.load.image('voidborn_fighter_destroyed', 'assets/units/destroyed/voidborn_fighter_destroyed.png');
-    this.load.image('voidborn_cruiser_destroyed', 'assets/units/destroyed/voidborn_cruiser_destroyed.png');
-    this.load.image('voidborn_dreadnought_destroyed', 'assets/units/destroyed/voidborn_dreadnought_destroyed.png');
-    this.load.image('voidborn_droneswarm_destroyed', 'assets/units/destroyed/voidborn_droneswarm_destroyed.png');
-
-    this.load.image('mechanoid_fighter_destroyed', 'assets/units/destroyed/mechanoid_fighter_destroyed.png');
-    this.load.image('mechanoid_cruiser_destroyed', 'assets/units/destroyed/mechanoid_cruiser_destroyed.png');
-    this.load.image('mechanoid_dreadnought_destroyed', 'assets/units/destroyed/mechanoid_dreadnought_destroyed.png');
-    this.load.image('mechanoid_droneswarm_destroyed', 'assets/units/destroyed/mechanoid_droneswarm_destroyed.png');
+    preloadShipPortraits(this);
+    preloadDestroyedShips(this);
   }
 
   create() {
@@ -185,6 +167,8 @@ export default class BattleScene extends Phaser.Scene {
     this.createParallaxBackground();
     this.createArenaPlatform();
     this.createSharedEmitters();
+    this.vfx = new CombatVfx(this);
+    this.vfx.boot();
     this.createCinematicOverlay();
     this.createSpeedButton();
     this.createSkipButton();
@@ -194,6 +178,11 @@ export default class BattleScene extends Phaser.Scene {
     this.setupTeams();
     this.setupBattleLog();
     this.setupBattleChrome();
+    gameAudio.unlock();
+    const account = window.account as string | undefined;
+    if (account) {
+      this.time.delayedCall(600, () => beginOrResumeTutorial(this, account, 'BattleScene'));
+    }
 
     if (this.battleEvents.length === 0) {
       this.showEmptyState();
@@ -206,8 +195,8 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, _delta: number) {
-    this.refreshCombatantDepths(this.playerUnits);
-    this.refreshCombatantDepths(this.aiUnits);
+    this.syncCombatantAttachments(this.playerUnits);
+    this.syncCombatantAttachments(this.aiUnits);
   }
 
   // ---------------------------------------------------------------------------
@@ -262,20 +251,6 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private createSharedEmitters() {
-    this.hitEmitter = this.add.particles(0, 0, 'spark_sheet', {
-      frame: [0, 1, 2, 3],
-      lifespan: { min: 180, max: 360 },
-      speed: { min: 70, max: 240 },
-      scale: { start: 0.42, end: 0.08 },
-      alpha: { start: 0.95, end: 0 },
-      rotate: { min: 0, max: 360 },
-      blendMode: 'ADD',
-      emitting: false,
-      frequency: -1,
-      quantity: 1
-    });
-    this.hitEmitter.setDepth(460);
-
     this.plasmaEmitter = this.add.particles(0, 0, 'engine_blob', {
       lifespan: { min: 280, max: 620 },
       speed: { min: 20, max: 110 },
@@ -303,19 +278,6 @@ export default class BattleScene extends Phaser.Scene {
       quantity: 1
     });
     this.debrisEmitter.setDepth(448);
-
-    this.muzzleEmitter = this.add.particles(0, 0, 'spark_sheet', {
-      frame: [0, 1, 2, 3],
-      lifespan: { min: 80, max: 180 },
-      speed: { min: 20, max: 90 },
-      scale: { start: 0.28, end: 0.04 },
-      alpha: { start: 1, end: 0 },
-      blendMode: 'ADD',
-      emitting: false,
-      frequency: -1,
-      quantity: 1
-    });
-    this.muzzleEmitter.setDepth(470);
 
     this.critEmitter = this.add.particles(0, 0, 'spark_sheet', {
       frame: [0, 1, 2, 3],
@@ -558,7 +520,7 @@ export default class BattleScene extends Phaser.Scene {
       this.playerUnits.push(this.spawnCombatant(pos.x, pos.y, pos.scale, unit, this.playerMaxHp[i] || 100, true));
     }
 
-    const aiCount = Math.min(8, Math.max(this.aiUnitsData.length || 8, this.aiMaxHp.length || 8, 8));
+    const aiCount = Math.min(8, this.aiUnitsData.length, this.aiMaxHp.length);
     for (let i = 0; i < aiCount; i++) {
       const unit = this.aiUnitsData[i] || { faction: 1, unitClass: 0 };
       const pos = this.slotPosition(false, i);
@@ -599,7 +561,7 @@ export default class BattleScene extends Phaser.Scene {
   ): Combatant {
     const faction = Number(unit.faction ?? 0);
     const unitClass = Number(unit.unitClass ?? 0);
-    const key = this.getShipKey(faction, unitClass);
+    const key = shipKey(faction, unitClass);
     const palette = FACTION_ENGINE[faction] || FACTION_ENGINE[0];
 
     const shadow = this.add.sprite(x + 9, y + 20, key)
@@ -630,8 +592,7 @@ export default class BattleScene extends Phaser.Scene {
     const hpFill = this.add.rectangle(x, barY, 56, 6, isPlayer ? 0x5dffb0 : 0xff6b7d)
       .setDepth(y + 35)
       .setAlpha(1);
-    (hpFill as any).maxHp = maxHp;
-    (hpFill as any).currentHp = maxHp;
+
 
     const idleTween = this.tweens.add({
       targets: ship,
@@ -665,22 +626,84 @@ export default class BattleScene extends Phaser.Scene {
       faction,
       unitClass,
       rarity: Number(unit.rarity ?? 0),
+      isPlayer,
       alive: true,
       lastStandLit: false,
-      idleTween
+      idleTween,
+      maxHp,
+      currentHp: maxHp
     };
   }
 
-  private refreshCombatantDepths(units: Combatant[]) {
+  private syncCombatantAttachments(units: Combatant[]) {
     for (const unit of units) {
       if (!unit.ship || !unit.ship.active) continue;
+      const x = unit.ship.x;
       const y = unit.ship.y;
       unit.ship.setDepth(y + 12);
+      unit.shadow.setPosition(x + 9, y + 20);
+      unit.shadow.setAngle(unit.ship.angle);
+      unit.shadow.setFlipX(unit.ship.flipX);
       unit.shadow.setDepth(y - 6);
+      unit.hpBg.setPosition(x, y - 42);
+      unit.hpFill.setPosition(x, y - 42);
       unit.hpBg.setDepth(y + 34);
       unit.hpFill.setDepth(y + 35);
       unit.engine.setDepth(y - 1);
     }
+  }
+
+  // Art faces left. flipX = nose to the right. Extra angle is a bank toward the target.
+  private faceToward(unit: Combatant, tx: number, ty: number) {
+    if (!unit.alive || !unit.ship?.active) return;
+    const dx = tx - unit.ship.x;
+    const dy = ty - unit.ship.y;
+    const faceRight = dx >= 0;
+    unit.ship.setFlipX(faceRight);
+    unit.shadow.setFlipX(faceRight);
+    const pitch = Phaser.Math.Clamp(
+      Math.atan2(dy, Math.max(48, Math.abs(dx))),
+      -0.28,
+      0.28
+    );
+    const deg = Phaser.Math.RadToDeg(faceRight ? pitch : -pitch);
+    this.tweens.add({
+      targets: unit.ship,
+      angle: deg,
+      duration: 90 * this.battleSpeedMultiplier,
+      ease: 'Sine.easeOut'
+    });
+    this.syncEngine(unit, faceRight);
+  }
+
+  private restFacing(unit: Combatant) {
+    if (!unit.ship?.active) return;
+    const faceRight = unit.isPlayer;
+    unit.ship.setFlipX(faceRight);
+    unit.shadow.setFlipX(faceRight);
+    this.tweens.add({
+      targets: unit.ship,
+      angle: 0,
+      duration: 200 * this.battleSpeedMultiplier,
+      ease: 'Sine.easeInOut'
+    });
+    this.syncEngine(unit, faceRight);
+  }
+
+  private syncEngine(unit: Combatant, faceRight: boolean) {
+    const ox = faceRight ? -22 : 22;
+    unit.engine.startFollow(unit.ship, ox, 10);
+  }
+
+  private noseOf(unit: Combatant) {
+    const faceRight = unit.ship.flipX;
+    const rot = unit.ship.rotation;
+    const sx = faceRight ? 1 : -1;
+    const len = 28;
+    return {
+      x: unit.ship.x + Math.cos(rot) * sx * len,
+      y: unit.ship.y + Math.sin(rot) * sx * len
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -702,7 +725,13 @@ export default class BattleScene extends Phaser.Scene {
 
     const kill = Number(event.remainingHp) <= 0;
     const extra = kill ? 420 : (event.specialEffect === 'CRIT' ? 180 : 0);
-    const delay = (1480 + extra) * this.battleSpeedMultiplier;
+    const attacker = (event.isPlayerSide ? this.playerUnits : this.aiUnits)[event.attackerIndex];
+    const chargePad = attacker && attacker.unitClass === 2 ? 260 : attacker && attacker.unitClass === 1 ? 80 : 0;
+    const delay = (1480 + extra + chargePad) * this.battleSpeedMultiplier;
+    if (!this.skipActive && this.currentEventIndex < this.battleEvents.length) {
+      this.delay(delay * 0.34, () => this.fireAmbientTracers());
+      this.delay(delay * 0.7, () => this.fireAmbientTracers());
+    }
     this.delay(delay, () => this.processNextEvent());
   }
 
@@ -720,176 +749,192 @@ export default class BattleScene extends Phaser.Scene {
     const isCrit = effect === 'CRIT';
     const isDodge = effect === 'DODGE';
     const isLastStand = effect === 'Last Stand';
-    const lunge = isPlayer ? 28 : -28;
+    const lunge = classLunge(attacker.unitClass);
+
+    this.faceToward(attacker, target.ship.x, target.ship.y);
+    this.faceToward(target, attacker.ship.x, attacker.ship.y);
+    this.vfx?.markTarget(target.ship.x, target.ship.y, attacker.faction);
 
     const startX = attacker.ship.x;
     const startY = attacker.ship.y;
     const startScale = attacker.ship.scaleX;
+    const aim = Phaser.Math.Angle.Between(startX, startY, target.ship.x, target.ship.y);
 
     this.tweens.add({
       targets: attacker.ship,
-      x: startX + lunge,
-      y: startY - 7,
+      x: startX + Math.cos(aim) * lunge,
+      y: startY + Math.sin(aim) * lunge,
       scaleX: startScale * 1.08,
       scaleY: startScale * 1.08,
       duration: 95 * speed,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        this.spawnMuzzleFlash(attacker, isPlayer);
-        this.fireLaser(attacker.ship, target.ship, isPlayer, isCrit, () => {
-          if (isDodge) {
-            this.playDodge(target);
-            this.spawnFloatingText(target.ship.x, target.ship.y - 58, 'DODGE', '#7ad7ff', 34);
-          } else {
-            this.playHitStop(isCrit ? 70 : 48);
-            this.impactCamera(dmg, isCrit, Number(event.remainingHp) <= 0);
-            this.playImpact(target, dmg, isCrit);
-            this.updateHealthBar(target, event.remainingHp);
-            if (dmg > 0) {
-              this.spawnDamageNumber(target.ship.x, target.ship.y - 58, dmg, isCrit);
+        this.fireWeapon(attacker, target.ship.x, target.ship.y, {
+          crit: isCrit,
+          onHit: () => {
+            if (isDodge) {
+              gameAudio.dodge();
+              this.playDodge(target);
+              this.spawnFloatingText(target.ship.x, target.ship.y - 58, 'DODGE', '#7ad7ff', 34);
+            } else {
+              this.playHitStop(isCrit ? 70 : 48);
+              this.impactCamera(dmg, isCrit, Number(event.remainingHp) <= 0);
+              this.playImpact(target, dmg, isCrit, attacker.unitClass);
+              this.updateHealthBar(target, event.remainingHp);
+              if (dmg > 0) {
+                if (isPlayer && Number(event.remainingHp) > 0 && !isLastStand) {
+                  gameAudio.hit(isCrit);
+                }
+                this.spawnDamageNumber(target.ship.x, target.ship.y - 58, dmg, isCrit);
+              }
+              if (isLastStand && event.remainingHp > 0) {
+                gameAudio.lastStand();
+                this.playLastStand(target);
+                const account = window.account as string | undefined;
+                if (account) {
+                  const medal = unlockAchievement(account, 'last_stand');
+                  if (medal) {
+                    showAchievementToasts(this, [medal]);
+                  }
+                }
+              }
+              if (event.remainingHp <= 0) {
+                gameAudio.explode();
+                this.killCombatant(target);
+              }
             }
-            if (isLastStand && event.remainingHp > 0) {
-              this.playLastStand(target);
-            }
-            if (event.remainingHp <= 0) {
-              this.killCombatant(target);
+
+            this.pushLogLine(event, dmg, effect);
+
+            this.tweens.add({
+              targets: attacker.ship,
+              x: attacker.homeX,
+              y: attacker.homeY,
+              scaleX: attacker.baseScale,
+              scaleY: attacker.baseScale,
+              duration: 170 * speed,
+              ease: 'Sine.easeOut',
+              onComplete: () => this.delay(420 * speed, () => this.restFacing(attacker))
+            });
+            if (target.alive) {
+              this.delay(560 * speed, () => this.restFacing(target));
             }
           }
-
-          this.pushLogLine(event, dmg, effect);
-
-          this.tweens.add({
-            targets: attacker.ship,
-            x: attacker.homeX,
-            y: attacker.homeY,
-            scaleX: attacker.baseScale,
-            scaleY: attacker.baseScale,
-            duration: 170 * speed,
-            ease: 'Sine.easeOut'
-          });
         });
+        this.fireCosmeticSupport(attacker, target, isPlayer);
       }
     });
   }
 
-  private fireLaser(
-    from: Phaser.GameObjects.Sprite,
-    to: Phaser.GameObjects.Sprite,
-    isPlayer: boolean,
-    isCrit: boolean,
-    onHit: () => void
+  private fireWeapon(
+    attacker: Combatant,
+    aimX: number,
+    aimY: number,
+    opts: { crit?: boolean; cosmetic?: boolean; onHit?: () => void } = {}
   ) {
-    const speed = this.battleSpeedMultiplier;
-    const key = isPlayer ? 'laser_blue' : 'laser_red';
-    const angle = Phaser.Math.Angle.Between(from.x, from.y, to.x, to.y);
-    const dist = Phaser.Math.Distance.Between(from.x, from.y, to.x, to.y);
+    if (!attacker.alive || !attacker.ship?.active) {
+      opts.onHit?.();
+      return;
+    }
+    const nose = this.noseOf(attacker);
+    if (!opts.cosmetic) {
+      this.tweens.add({
+        targets: attacker.ship,
+        tint: FACTION_ENGINE[attacker.faction]?.glow ?? 0xffffff,
+        duration: 70,
+        yoyo: true,
+        onComplete: () => attacker.ship.clearTint()
+      });
+    }
+    if (!this.vfx) {
+      opts.onHit?.();
+      return;
+    }
+    this.vfx.shot({
+      unitClass: attacker.unitClass,
+      faction: attacker.faction,
+      fromX: nose.x,
+      fromY: nose.y,
+      toX: aimX,
+      toY: aimY,
+      cosmetic: opts.cosmetic,
+      crit: opts.crit,
+      onHit: opts.onHit
+    });
+  }
 
-    const beam = this.add.image(from.x, from.y, key)
-      .setOrigin(0, 0.5)
-      .setRotation(angle)
-      .setDisplaySize(8, isCrit ? 22 : 14)
-      .setAlpha(0.95)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(440);
+  private fireCosmeticSupport(attacker: Combatant, target: Combatant, isPlayer: boolean) {
+    if (this.skipActive || !this.isPlaying) return;
+    const allies = (isPlayer ? this.playerUnits : this.aiUnits).filter(
+      (unit) => unit.alive && unit !== attacker
+    );
+    const foes = (isPlayer ? this.aiUnits : this.playerUnits).filter((unit) => unit.alive);
+    if (foes.length === 0) return;
 
-    const glow = this.add.image(from.x, from.y, key)
-      .setOrigin(0, 0.5)
-      .setRotation(angle)
-      .setDisplaySize(8, isCrit ? 40 : 26)
-      .setAlpha(0.35)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(439);
-
-    this.tweens.add({
-      targets: [beam, glow],
-      displayWidth: dist,
-      duration: 78 * speed,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        onHit();
-        this.tweens.add({
-          targets: [beam, glow],
-          alpha: 0,
-          displayHeight: 4,
-          duration: 90 * speed,
-          onComplete: () => {
-            beam.destroy();
-            glow.destroy();
-          }
+    const support = this.pickSome(allies, 1);
+    support.forEach((unit) => {
+      this.delay(90, () => {
+        if (!unit.alive || !this.isPlaying) return;
+        const foe = Math.random() < 0.7 && target.alive
+          ? target
+          : this.pickSome(foes.filter((item) => item.alive), 1)[0];
+        if (!foe?.alive) return;
+        this.faceToward(unit, foe.ship.x, foe.ship.y);
+        this.fireWeapon(unit, foe.ship.x, foe.ship.y, { cosmetic: true });
+        this.delay(480, () => {
+          if (unit.alive) this.restFacing(unit);
         });
-      }
+      });
+    });
+
+    if (target.alive && Math.random() < 0.4) {
+      this.delay(160, () => {
+        if (!target.alive || !attacker.alive || !this.isPlaying) return;
+        this.faceToward(target, attacker.ship.x, attacker.ship.y);
+        this.fireWeapon(target, attacker.ship.x, attacker.ship.y, { cosmetic: true });
+      });
+    }
+  }
+
+  private fireAmbientTracers() {
+    if (this.skipActive || !this.isPlaying) return;
+    const players = this.playerUnits.filter((unit) => unit.alive);
+    const enemies = this.aiUnits.filter((unit) => unit.alive);
+    if (players.length === 0 || enemies.length === 0) return;
+    const fromPlayer = Math.random() < 0.5;
+    const from = this.pickSome(fromPlayer ? players : enemies, 1)[0];
+    const to = this.pickSome(fromPlayer ? enemies : players, 1)[0];
+    if (!from || !to) return;
+    this.faceToward(from, to.ship.x, to.ship.y);
+    this.fireWeapon(from, to.ship.x, to.ship.y, { cosmetic: true });
+    this.delay(380, () => {
+      if (from.alive) this.restFacing(from);
     });
   }
 
-  private spawnMuzzleFlash(attacker: Combatant, isPlayer: boolean) {
-    const palette = FACTION_ENGINE[attacker.faction] || FACTION_ENGINE[0];
-    const noseX = attacker.ship.x + (isPlayer ? 26 : -26);
-    const noseY = attacker.ship.y - 2;
-    if (this.muzzleEmitter) {
-      this.muzzleEmitter.setParticleTint(palette.tint);
-      this.muzzleEmitter.explode(8, noseX, noseY);
+  private pickSome<T>(list: T[], n: number): T[] {
+    const copy = list.slice();
+    const out: T[] = [];
+    while (copy.length > 0 && out.length < n) {
+      const index = Math.floor(Math.random() * copy.length);
+      out.push(copy.splice(index, 1)[0]);
     }
-
-    const flash = this.add.image(noseX, noseY, 'muzzle_flash')
-      .setScale(0.42)
-      .setTint(palette.glow)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setRotation(isPlayer ? 0 : Math.PI)
-      .setDepth(471);
-    this.tweens.add({
-      targets: flash,
-      scale: 0.85,
-      alpha: 0,
-      duration: 130 * this.battleSpeedMultiplier,
-      onComplete: () => flash.destroy()
-    });
+    return out;
   }
 
-  private playImpact(target: Combatant, damage: number, isCrit: boolean) {
-    const palette = FACTION_ENGINE[target.faction] || FACTION_ENGINE[0];
-    const x = target.ship.x;
-    const y = target.ship.y;
-
-    if (this.hitEmitter) {
-      this.hitEmitter.setParticleTint(isCrit ? 0xfff1a0 : 0xffffff);
-      this.hitEmitter.explode(isCrit ? 18 : 10, x, y);
-    }
-
-    const spark = this.add.sprite(x, y, 'spark_sheet', 0)
-      .setScale(isCrit ? 1.15 : 0.85)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(461);
-    spark.play('spark_flash');
-    spark.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spark.destroy());
-    if (this.plasmaEmitter) {
-      this.plasmaEmitter.setParticleTint(isCrit ? 0xffe27a : palette.glow);
-      this.plasmaEmitter.explode(isCrit ? 16 : 8, x, y);
-    }
-
+  private playImpact(target: Combatant, damage: number, isCrit: boolean, attackerClass = 0) {
+    const knock = attackerClass === 2 ? 14 : attackerClass === 1 ? 9 : attackerClass === 3 ? 5 : 7;
     this.tweens.add({
       targets: target.ship,
-      x: target.ship.x + (Math.random() * 10 - 5),
-      y: target.ship.y - 4,
+      x: target.ship.x + (Math.random() * knock - knock / 2),
+      y: target.ship.y - (attackerClass === 2 ? 7 : 4),
       duration: 50 * this.battleSpeedMultiplier,
       yoyo: true,
       ease: 'Sine.easeOut'
     });
-
     if (isCrit) {
-      this.playCritBurst(x, y);
+      this.playCritBurst(target.ship.x, target.ship.y);
     }
-
-    const flash = this.add.rectangle(x, y, 70, 70, isCrit ? 0xfff3a1 : 0xffffff, 0.18)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(450);
-    this.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scale: 1.8,
-      duration: 160 * this.battleSpeedMultiplier,
-      onComplete: () => flash.destroy()
-    });
-
     void damage;
   }
 
@@ -1063,9 +1108,9 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private updateHealthBar(target: Combatant, remainingHp: number) {
-    const maxHp = (target.hpFill as any).maxHp || 100;
+    const maxHp = target.maxHp || 100;
     const hp = Math.max(0, Number(remainingHp));
-    (target.hpFill as any).currentHp = hp;
+    target.currentHp = hp;
     const percent = Math.max(0, Math.min(1, hp / maxHp));
 
     target.hpBg.setAlpha(0.9);
@@ -1118,6 +1163,9 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private playHitStop(ms: number) {
+    if (this.skipActive) {
+      return;
+    }
     this.time.timeScale = 0.22;
     this.tweens.timeScale = 0.22;
     this.delay(ms, () => {
@@ -1151,26 +1199,27 @@ export default class BattleScene extends Phaser.Scene {
     this.fullBattleLog = [];
     this.battleLogTexts.forEach((entry) => entry.destroy());
     this.battleLogTexts = [];
+    this.logPlate?.destroy();
     this.logPanel?.destroy();
     this.logTitle?.destroy();
     this.logContainer?.destroy();
 
-    this.add.image(960, 1000, 'ui_plate')
-      .setDisplaySize(1080, 150)
-      .setAlpha(0.72)
+    this.logPlate = this.add.image(960, 1008, 'ui_plate')
+      .setDisplaySize(1180, 168)
+      .setAlpha(0.82)
       .setDepth(878)
       .setScrollFactor(0);
-    this.logPanel = this.add.rectangle(960, 1006, 1040, 128, 0x080d16, 0.42)
-      .setStrokeStyle(1, 0x1f3a4d, 0.7)
+    this.logPanel = this.add.rectangle(960, 1012, 1120, 136, 0x080d16, 0.5)
+      .setStrokeStyle(1, 0x1f3a4d, 0.75)
       .setDepth(879)
       .setScrollFactor(0);
-    this.logTitle = this.add.text(960, 932, 'COMBAT LOG', displayText({
-      fontSize: '14px',
+    this.logTitle = this.add.text(430, 938, 'COMBAT LOG', displayText({
+      fontSize: '15px',
       color: HUD.color.gold,
       stroke: '#1a1020',
       strokeThickness: 3
-    })).setOrigin(0.5).setDepth(881).setScrollFactor(0);
-    this.logContainer = this.add.container(960, 948).setDepth(880).setScrollFactor(0);
+    })).setOrigin(0, 0.5).setDepth(881).setScrollFactor(0);
+    this.logContainer = this.add.container(430, 956).setDepth(880).setScrollFactor(0);
   }
 
   private setupBattleChrome() {
@@ -1253,29 +1302,26 @@ export default class BattleScene extends Phaser.Scene {
       suffix = `${suffix}  ·  DESTROYED`;
     }
 
-    const line = `R${event.round}  ${side}  ${attackerName} → ${targetName}  ${suffix}`;
+    const line = `R${event.round}   ${side}   ${attackerName}  →  ${targetName}     ${suffix}`;
     this.addToLog(line, color);
   }
 
   private addToLog(text: string, color = '#d0d0ff') {
     this.fullBattleLog.push(text);
-    const logText = this.add.text(0, -10, text, hudText({
-      fontSize: '16px',
+    const logText = this.add.text(0, -8, text, hudText({
+      fontSize: '18px',
       color,
       stroke: '#0a0612',
-      strokeThickness: 3,
-      wordWrap: { width: 980 },
-      align: 'center'
-    })).setOrigin(0.5, 0).setDepth(882).setAlpha(0).setScale(1.06);
+      strokeThickness: 3
+    })).setOrigin(0, 0).setDepth(882).setAlpha(0);
 
     this.battleLogTexts.unshift(logText);
     this.logContainer?.add(logText);
     this.battleLogTexts.forEach((entry, index) => {
       this.tweens.add({
         targets: entry,
-        y: index * 20,
-        alpha: index === 0 ? 1 : Math.max(0.32, 1 - index * 0.13),
-        scale: 1,
+        y: index * 22,
+        alpha: index === 0 ? 1 : Math.max(0.28, 1 - index * 0.16),
         duration: 160,
         ease: 'Cubic.easeOut'
       });
@@ -1302,7 +1348,7 @@ export default class BattleScene extends Phaser.Scene {
       fontSize: '32px',
       color: HUD.color.bad
     })).setOrigin(0.5).setDepth(920);
-    this.add.text(960, 494, 'The match receipt had no events.', hudText({
+    this.add.text(960, 494, 'The fight never began.', hudText({
       fontSize: HUD.BODY,
       color: HUD.color.muted
     })).setOrigin(0.5).setDepth(920);
@@ -1327,6 +1373,7 @@ export default class BattleScene extends Phaser.Scene {
     this.tweens.timeScale = 1;
 
     const hudFade = [
+      this.logPlate,
       this.logPanel,
       this.logTitle,
       this.logContainer,
@@ -1377,6 +1424,21 @@ export default class BattleScene extends Phaser.Scene {
       this.victoryEmitter.start();
     }
 
+    if (this.playerWon) {
+      gameAudio.victory();
+    } else {
+      gameAudio.defeat();
+    }
+    const account = window.account as string | undefined;
+    if (account) {
+      const unlocked = [
+        unlockAchievement(account, 'first_battle'),
+        this.playerWon ? unlockAchievement(account, 'first_blood') : null
+      ].filter(Boolean);
+      if (unlocked.length > 0) {
+        showAchievementToasts(this, unlocked as any);
+      }
+    }
     const title = this.playerWon ? 'VICTORY' : 'DEFEAT';
     const color = this.playerWon ? '#5dffb0' : '#ff4d6d';
     const playerAlive = this.playerUnits.filter((unit) => unit.alive).length;
@@ -1400,16 +1462,16 @@ export default class BattleScene extends Phaser.Scene {
     const veil = this.add.rectangle(960, 540, 1920, 1080, 0x050010, 0)
       .setDepth(930)
       .setScrollFactor(0);
-    this.tweens.add({ targets: veil, alpha: 0.48, duration: 500 });
+    this.tweens.add({ targets: veil, alpha: 0.52, duration: 500 });
 
-    const plate = this.add.image(960, 220, 'ui_result')
-      .setDisplaySize(920, 340)
+    const plate = this.add.image(960, 248, 'ui_result')
+      .setDisplaySize(1040, 400)
       .setAlpha(0)
       .setDepth(934)
       .setScrollFactor(0);
-    this.tweens.add({ targets: plate, alpha: 0.96, duration: 360 });
+    this.tweens.add({ targets: plate, alpha: 0.97, duration: 360 });
 
-    const result = this.add.text(960, 160, title, displayText({
+    const result = this.add.text(960, 148, title, displayText({
       fontSize: '72px',
       color,
       stroke: '#120818',
@@ -1424,34 +1486,64 @@ export default class BattleScene extends Phaser.Scene {
       ease: 'Back.easeOut'
     });
 
-    const subtitleText = this.add.text(960, 228, subtitle, hudText({
-      fontSize: '26px',
+    const subtitleText = this.add.text(960, 214, subtitle, hudText({
+      fontSize: '24px',
       color: '#d8e6f4',
       stroke: '#120818',
       strokeThickness: 3
     })).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0);
 
-    const statsText = this.add.text(960, 274, statsLine, hudText({
-      fontSize: '22px',
-      color: HUD.color.gold,
-      stroke: '#120818',
-      strokeThickness: 3
+    const chipSpecs = [
+      { label: 'YOUR FLEET', value: `${playerAlive}/${playerTotal}` },
+      { label: 'ENEMY', value: `${aiAlive}/${aiTotal}` },
+      { label: 'ROUNDS', value: `${lastRound}` },
+      { label: 'KILLS', value: `${playerKills}–${aiKills}` }
+    ];
+    const chipWidth = 200;
+    const chipGap = 18;
+    const chipsWidth = chipSpecs.length * chipWidth + (chipSpecs.length - 1) * chipGap;
+    const chipStart = 960 - chipsWidth / 2 + chipWidth / 2;
+    const chips: Phaser.GameObjects.GameObject[] = [];
+    chipSpecs.forEach((chip, index) => {
+      const x = chipStart + index * (chipWidth + chipGap);
+      const bg = this.add.rectangle(x, 268, chipWidth, 52, 0x0c1420, 0.78)
+        .setStrokeStyle(1, 0x2ec7d6, 0.28)
+        .setDepth(940)
+        .setScrollFactor(0)
+        .setAlpha(0);
+      const caption = this.add.text(x, 256, chip.label, hudText({
+        fontSize: '13px',
+        color: HUD.color.muted
+      })).setOrigin(0.5).setDepth(941).setScrollFactor(0).setAlpha(0);
+      const value = this.add.text(x, 278, chip.value, displayText({
+        fontSize: '20px',
+        color: HUD.color.gold
+      })).setOrigin(0.5).setDepth(941).setScrollFactor(0).setAlpha(0);
+      chips.push(bg, caption, value);
+    });
+
+    const recap = this.fullBattleLog.slice(-2).join('\n') || statsLine;
+    const recapText = this.add.text(960, 318, recap, hudText({
+      fontSize: '16px',
+      color: '#9bb0c4',
+      align: 'center',
+      wordWrap: { width: 860 }
     })).setOrigin(0.5).setDepth(940).setScrollFactor(0).setAlpha(0);
 
     this.tweens.add({
-      targets: [subtitleText, statsText],
+      targets: [subtitleText, recapText, ...chips],
       alpha: 1,
       duration: 360,
       delay: 180
     });
 
-    const btn = this.add.image(960, 348, 'button_base')
+    const btn = this.add.image(960, 378, 'button_base')
       .setDisplaySize(280, 64)
       .setInteractive({ useHandCursor: true })
       .setDepth(941)
       .setScrollFactor(0)
       .setAlpha(0);
-    const btnText = this.add.text(960, 348, 'GO BACK', hudText({
+    const btnText = this.add.text(960, 378, 'GO BACK', hudText({
       fontSize: '22px',
       color: '#ffffff'
     })).setOrigin(0.5).setDepth(942).setScrollFactor(0).setAlpha(0);
@@ -1490,10 +1582,6 @@ export default class BattleScene extends Phaser.Scene {
   // Lookups
   // ---------------------------------------------------------------------------
 
-  private getShipKey(faction: number, unitClass: number): string {
-    return shipKey(faction, unitClass);
-  }
-
   private getDestroyedShipKey(faction?: number, unitClass?: number): string | null {
     if (faction === undefined || unitClass === undefined) return null;
     const map: Record<string, string> = {
@@ -1522,7 +1610,8 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private delay(ms: number, fn: () => void, scaleWithBattle = true) {
-    const wait = scaleWithBattle ? ms : ms;
+    const scale = Math.max(0.001, this.time.timeScale || 1);
+    const wait = scaleWithBattle ? ms : ms * scale;
     const timer = this.time.delayedCall(wait, fn);
     this.pendingTimers.push(timer);
     return timer;
@@ -1546,22 +1635,20 @@ export default class BattleScene extends Phaser.Scene {
     this.time.removeAllEvents();
     this.pendingTimers.forEach((timer) => timer.remove(false));
     this.pendingTimers = [];
+    this.vfx?.destroy();
+    this.vfx = null;
 
     this.destroyCombatants(this.playerUnits);
     this.destroyCombatants(this.aiUnits);
     this.playerUnits = [];
     this.aiUnits = [];
 
-    this.hitEmitter?.destroy();
     this.plasmaEmitter?.destroy();
     this.debrisEmitter?.destroy();
-    this.muzzleEmitter?.destroy();
     this.critEmitter?.destroy();
     this.victoryEmitter?.destroy();
-    this.hitEmitter = null;
     this.plasmaEmitter = null;
     this.debrisEmitter = null;
-    this.muzzleEmitter = null;
     this.critEmitter = null;
     this.victoryEmitter = null;
 
@@ -1573,6 +1660,8 @@ export default class BattleScene extends Phaser.Scene {
     this.logTitle = null;
     this.logPanel?.destroy();
     this.logPanel = null;
+    this.logPlate?.destroy();
+    this.logPlate = null;
     this.roundHud?.destroy();
     this.roundHud = null;
     this.sideLabelPlayer?.destroy();

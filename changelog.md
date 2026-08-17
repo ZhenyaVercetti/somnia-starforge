@@ -1,5 +1,64 @@
 # Changelog — Somnia StarForge
 
+## 17.08.2026 — v1.6.4 post-audit + Game `0x064f…`
+
+### Live
+- StarForgeGame `0x064fE7661b1eb52b727e562E652764b94c008383`
+- previousGame `0x6DE0834950Ed5f4d13E90A5EA049d43a3Ade9118` (GAME_ROLE снят)
+- NFT / Relic / Profile без смены адресов
+- Profile Ownable на live снят (`renounceOwnership`, owner = 0). Админ — `DEFAULT_ADMIN`
+- verify-live OK (все старые GAME_ROLE revoked). Smoke startMatch `0x9b1758bf…`, 10 events
+- Тесты: 41 passing
+
+### Контракты
+- `buyUnit` / `generateTenShips` / `buyFromShop` / `startMatch` — только EOA (`NotEOA`)
+- `startMatch` пишет экип реликвий в `equippedRelics`
+- NFT source: tokenURI = on-chain SVG; новые деплои стартуют id с 1. Live NFT не передеплоили
+- Profile source: только AccessControl, `setGameContract(0)` ревертит
+- deploy.js: `previousGame = 0` разрешён для первого Game на сети
+- verify-live проверяет revoke со всех адресов в `scripts/lib/previousGames.js`
+- Game у потолка 24 КБ — новый код только маленький или в library
+
+### Frontend
+- Пустой слот флота = `-1`. Token 0 — валидный корабль. Сессия `slotFormat: 2`
+- Drag в пустой слот возвращает пульс и клик в коллекцию
+- Double-click снятие — по слоту, не по сцене
+- ADD из ангара резервирует слот (нет гонки)
+- Skip не включает hit-stop; delay без масштаба боя — реальное время
+- Туториал: карточка на Prepare не кроет START; в Collection остаётся в 0–960
+- Скролл коллекции не выделяет карту; клики за маской глушатся; C закрывает ангар
+- EQUIP не затирает занятые слоты реликвий
+- Пустой слот магазина кликается → reroll
+- Лог боя: 6 строк. `WalletManager.chainId` из сессии кошелька
+
+## 16.08.2026 — pre-audit cleanup + новый Game
+
+### Live
+- StarForgeGame `0xdFc7e27F2ABbA61Ea8aB65e3C6bC1454c8060aAd`
+- previousGame `0x0F6BC3846c64743aCC109C489366fDc26658A324` (GAME_ROLE снят)
+- NFT / Relic / Profile без смены адресов
+- verify-live OK. Smoke: startMatch, 9 events, pending free ships = 0
+- Тесты: 34 passing
+
+### Контракты
+- `previousGame` в конструкторе; сеттеры требуют код на адресе
+- Free ships: обход цепочки previousGame до 8 хопов
+- Синергия saturate; урон в uint256
+- `msg.value == price`; withdraw через `call`
+- NFT/Relic запрещают `setGameContract(0)`
+- Удалены `buyUnitShopPrice` и `getLastBattleResult`
+- deploy.js: owner check до bind, NFT last, mainnet не трёт DEPLOYMENT.md
+
+### Frontend
+- Один клик в шопе = одна покупка; `txBusy` на payable
+- Кошелёк не рвёт startGame; retry Phaser
+- Флот: нет wipe при мультиадде; drag контейнера; сессия 8 слотов
+- Кэш getUnit; без лишних getCurrentAI / setTimeout
+- Collection generation token
+- Общие normalizeUnit / addButtonEffects / preload
+- Удалён battleWeapons.ts
+- Проверка chain 50312 перед tx
+
 ## 15.08.2026 — третий блок
 
 - Скрипты testnet читают адрес из `contractAddresses.ts`. `verify-live` зелёный на `0x2087…`.

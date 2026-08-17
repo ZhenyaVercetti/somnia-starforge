@@ -34,10 +34,9 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
 
     uint256 public buyUnitPrice = 0.01 ether;
     uint256 public rerollPrice = 0.005 ether;
-    uint256 public buyUnitShopPrice = 0.01 ether;
     uint256 public buyRelicShopPrice = 0.008 ether;
 
-    event PricesUpdated(uint256 buyUnit, uint256 reroll, uint256 buyUnitShop, uint256 buyRelicShop);
+    event PricesUpdated(uint256 buyUnit, uint256 reroll, uint256 buyRelicShop);
     event BattleResolved(bytes32 indexed battleId, address indexed player, bool playerWon, uint16[] playerMaxHp, uint16[] aiMaxHp);
     event BattleEventEmitted(bytes32 indexed battleId, uint8 round, bool isPlayerSide, uint8 attackerIndex, uint8 targetIndex, uint16 damage, uint16 remainingHp, uint8 specialEffect);
     event RelicsEquipped(address indexed player, uint256[3] relics);
@@ -69,43 +68,42 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     constructor(
         address _unitNFT,
         address _relic,
-        address _playerProfile
+        address _playerProfile,
+        address _previousGame
     ) Ownable() {
-        unitNFT = StarForgeUnitNFT(_unitNFT);
-        relicContract = StarForgeRelic(_relic);
-        playerProfileContract = StarForgePlayerProfile(_playerProfile);
+        unitNFT = StarForgeUnitNFT(_live(_unitNFT));
+        relicContract = StarForgeRelic(_live(_relic));
+        playerProfileContract = StarForgePlayerProfile(_live(_playerProfile));
+        _setPrevious(_previousGame);
     }
 
     // ==================== ADMIN ====================
 
     function setUnitNFT(address _unitNFT) external onlyOwner {
-        unitNFT = StarForgeUnitNFT(_unitNFT);
+        unitNFT = StarForgeUnitNFT(_live(_unitNFT));
     }
 
     function setRelicContract(address _relic) external onlyOwner {
-        relicContract = StarForgeRelic(_relic);
+        relicContract = StarForgeRelic(_live(_relic));
     }
 
     function setPlayerProfileContract(address _playerProfile) external onlyOwner {
-        playerProfileContract = StarForgePlayerProfile(_playerProfile);
+        playerProfileContract = StarForgePlayerProfile(_live(_playerProfile));
     }
 
     function setPreviousGame(address _previousGame) external onlyOwner {
-        require(_previousGame != address(this), "Self");
-        previousGame = _previousGame;
+        _setPrevious(_previousGame);
     }
 
     function setPrices(
         uint256 _buyUnitPrice,
         uint256 _rerollPrice,
-        uint256 _buyUnitShopPrice,
         uint256 _buyRelicShopPrice
     ) external onlyOwner {
         buyUnitPrice = _buyUnitPrice;
         rerollPrice = _rerollPrice;
-        buyUnitShopPrice = _buyUnitShopPrice;
         buyRelicShopPrice = _buyRelicShopPrice;
-        emit PricesUpdated(_buyUnitPrice, _rerollPrice, _buyUnitShopPrice, _buyRelicShopPrice);
+        emit PricesUpdated(_buyUnitPrice, _rerollPrice, _buyRelicShopPrice);
     }
 
     function pause() external onlyOwner {
@@ -119,24 +117,33 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     function withdraw() external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
         require(balance > 0, "No funds to withdraw");
-        payable(owner()).transfer(balance);
+        (bool ok, ) = payable(owner()).call{value: balance}("");
+        require(ok, "Withdraw failed");
+    }
+
+    error NotEOA();
+
+    function _requireEOA() internal view {
+        if (tx.origin != msg.sender) revert NotEOA();
     }
 
     // ==================== ECONOMY ====================
 
     function buyUnit() external payable whenNotPaused nonReentrant {
+        _requireEOA();
         playerProfileContract.createProfile(msg.sender);
         require(_remainingPaidBuys(msg.sender) > 0, "Daily buy limit reached");
-        require(msg.value >= buyUnitPrice, "Insufficient payment");
+        _requireExact(buyUnitPrice);
 
         _mintRandomUnit(msg.sender, 0);
         playerProfileContract.useBuy(msg.sender);
     }
 
     function generateTenShips() external payable whenNotPaused nonReentrant {
+        _requireEOA();
         playerProfileContract.createProfile(msg.sender);
         require(_remainingPaidBuys(msg.sender) >= DAILY_PAID_BUY_LIMIT, "Not enough daily buys remaining");
-        require(msg.value >= buyUnitPrice * DAILY_PAID_BUY_LIMIT, "Insufficient payment for 10 ships");
+        _requireExact(buyUnitPrice * DAILY_PAID_BUY_LIMIT);
 
         for (uint256 i = 0; i < DAILY_PAID_BUY_LIMIT; i++) {
             _mintRandomUnit(msg.sender, i);
@@ -148,7 +155,7 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         playerProfileContract.createProfile(msg.sender);
         
         require(playerProfileContract.canReroll(msg.sender), "Daily reroll limit reached (2 per day)");
-        require(msg.value >= rerollPrice, "Insufficient payment");
+        _requireExact(rerollPrice);
 
         for (uint256 i = 0; i < 3; i++) {
             uint256 slotSeed = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender, i)));
@@ -159,13 +166,14 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     function buyFromShop(uint256 slot) external payable whenNotPaused nonReentrant {
+        _requireEOA();
         playerProfileContract.createProfile(msg.sender);
         require(slot < 3, "Invalid slot");
 
         ShopItem memory item = playerShop[msg.sender][slot];
         require(item.isRelic && item.relicValue > 0, "Empty slot");
 
-        require(msg.value >= buyRelicShopPrice, "Insufficient payment for relic");
+        _requireExact(buyRelicShopPrice);
 
         uint256 realId = relicContract.mintRelic(
             msg.sender,
@@ -196,10 +204,12 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     // ==================== BATTLE ====================
 
     function startMatch(uint256[] calldata team, uint256[] calldata equipped) external whenNotPaused nonReentrant {
+        _requireEOA();
         playerProfileContract.createProfile(msg.sender);
         require(team.length >= 4 && team.length <= 8, "Invalid team size");
         _requireOwnedUniqueTeam(team);
         uint256[] memory activeEquipped = _resolveEquipped(equipped);
+        equippedRelics[msg.sender] = [activeEquipped[0], activeEquipped[1], activeEquipped[2]];
 
         StarForgePlayerProfile.PlayerProfile memory profileData = playerProfileContract.getProfile(msg.sender);
         uint16 playerLevel = profileData.level;
@@ -280,21 +290,6 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
         return lastBattleSummary[player];
     }
 
-    function getLastBattleResult(address player) external view returns (
-        bool,
-        uint16[] memory,
-        uint16[] memory,
-        bytes32
-    ) {
-        BattleSummary memory summary = lastBattleSummary[player];
-        return (
-            summary.playerWon,
-            summary.playerFinalHp,
-            summary.aiFinalHp,
-            summary.battleId
-        );
-    }
-
     function getCurrentAI(address player) external view returns (ShopItem[8] memory) {
         return lastAI[player];
     }
@@ -337,6 +332,23 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ==================== INTERNAL ====================
+
+    function _live(address target) internal view returns (address) {
+        require(target != address(0) && target.code.length > 0, "Bad addr");
+        return target;
+    }
+
+    function _setPrevious(address _previousGame) internal {
+        require(_previousGame != address(this), "Self");
+        if (_previousGame != address(0)) {
+            require(_previousGame.code.length > 0, "No code");
+        }
+        previousGame = _previousGame;
+    }
+
+    function _requireExact(uint256 price) internal view {
+        require(msg.value == price, "Wrong payment");
+    }
 
     function _getWeightedRarity(uint256 seed) internal pure returns (uint8) {
         uint256 roll = seed % 100;
@@ -477,11 +489,15 @@ contract StarForgeGame is Ownable, ReentrancyGuard, Pausable {
     }
 
     function _grantedFreeShips(address player) internal view returns (uint16) {
-        uint16 local = freeShipsGranted[player];
-        if (local > 0 || previousGame == address(0)) {
-            return local;
+        uint16 granted = freeShipsGranted[player];
+        address cursor = previousGame;
+        for (uint256 i = 0; granted == 0 && cursor != address(0) && i < 8; i++) {
+            granted = StarForgeGame(cursor).freeShipsGranted(player);
+            if (granted == 0) {
+                cursor = StarForgeGame(cursor).previousGame();
+            }
         }
-        return StarForgeGame(previousGame).freeShipsGranted(player);
+        return granted;
     }
 
     function _requireOwnedUniqueTeam(uint256[] calldata team) internal view {

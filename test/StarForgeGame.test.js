@@ -8,6 +8,18 @@ const TEN_SHIPS_PRICE = ethers.parseEther("0.1");
 
 const GAME_ROLE = ethers.id("GAME_ROLE");
 
+async function deployGame(unitNFT, relic, profile, previousGame = ethers.ZeroAddress) {
+  const Game = await ethers.getContractFactory("StarForgeGame");
+  const game = await Game.deploy(
+    await unitNFT.getAddress(),
+    await relic.getAddress(),
+    await profile.getAddress(),
+    previousGame
+  );
+  await game.waitForDeployment();
+  return game;
+}
+
 async function deploySystem() {
   const [owner, player, stranger] = await ethers.getSigners();
 
@@ -23,13 +35,7 @@ async function deploySystem() {
   const profile = await Profile.deploy();
   await profile.waitForDeployment();
 
-  const Game = await ethers.getContractFactory("StarForgeGame");
-  const game = await Game.deploy(
-    await unitNFT.getAddress(),
-    await relic.getAddress(),
-    await profile.getAddress()
-  );
-  await game.waitForDeployment();
+  const game = await deployGame(unitNFT, relic, profile);
 
   const gameAddress = await game.getAddress();
   await (await unitNFT.setGameContract(gameAddress)).wait();
@@ -86,13 +92,29 @@ describe("StarForgeGame Variant 1", function () {
     expect(await game.unitNFT()).to.equal(await unitNFT.getAddress());
     expect(await game.relicContract()).to.equal(await relic.getAddress());
     expect(await game.playerProfileContract()).to.equal(await profile.getAddress());
+    expect(await game.previousGame()).to.equal(ethers.ZeroAddress);
+  });
+
+  it("constructor stores previousGame and rejects an EOA previous address", async function () {
+    const { owner, unitNFT, relic, profile, game } = await deploySystem();
+    const game2 = await deployGame(unitNFT, relic, profile, await game.getAddress());
+    expect(await game2.previousGame()).to.equal(await game.getAddress());
+    const Game = await ethers.getContractFactory("StarForgeGame");
+    await expect(
+      Game.deploy(
+        await unitNFT.getAddress(),
+        await relic.getAddress(),
+        await profile.getAddress(),
+        owner.address
+      )
+    ).to.be.revertedWith("No code");
   });
 
   it("does not expose packed battle event storage", async function () {
     const { game } = await deploySystem();
     expect(game.interface.hasFunction("getPackedBattleEvents(address)")).to.equal(false);
     expect(game.interface.hasFunction("lastBattleEventsPacked(address)")).to.equal(false);
-    expect(game.interface.hasFunction("getLastBattleResult(address)")).to.equal(true);
+    expect(game.interface.hasFunction("getLastBattleSummary(address)")).to.equal(true);
   });
 
   it("buyUnit mints a soulbound ship and records it on the profile", async function () {
@@ -116,7 +138,7 @@ describe("StarForgeGame Variant 1", function () {
     const { player, game } = await deploySystem();
     await expect(
       game.connect(player).buyUnit({ value: ethers.parseEther("0.001") })
-    ).to.be.revertedWith("Insufficient payment");
+    ).to.be.revertedWith("Wrong payment");
   });
 
   it("enforces daily buy limit of 10 at level 1", async function () {
@@ -206,10 +228,6 @@ describe("StarForgeGame Variant 1", function () {
     expect(summary.playerFinalHp.length).to.equal(4);
     expect(summary.aiFinalHp.length).to.equal(8);
     expect(summary.timestamp).to.be.greaterThan(0n);
-
-    const result = await game.getLastBattleResult(player.address);
-    expect(result.length).to.equal(4);
-    expect(result[3]).to.equal(summary.battleId);
 
     const playerProfile = await profile.getProfile(player.address);
     expect(playerProfile.level).to.be.greaterThan(0);
@@ -365,10 +383,11 @@ describe("StarForgeGame Variant 1", function () {
     await (await game.connect(player).equipRelics([lastStandId, 0, 0])).wait();
 
     let lastStandHits = [];
-    for (let attempt = 0; attempt < 5 && lastStandHits.length === 0; attempt++) {
+    let allHits = [];
+    for (let attempt = 0; attempt < 24 && lastStandHits.length === 0; attempt++) {
       const receipt = await (await game.connect(player).startMatch(units, [])).wait();
-      lastStandHits = parseNamedLogs(game, receipt, "BattleEventEmitted")
-        .filter((parsed) => Number(parsed.args.specialEffect) === 3);
+      allHits = parseNamedLogs(game, receipt, "BattleEventEmitted");
+      lastStandHits = allHits.filter((parsed) => Number(parsed.args.specialEffect) === 3);
     }
 
     expect(lastStandHits.length).to.be.greaterThan(0);
@@ -378,6 +397,18 @@ describe("StarForgeGame Variant 1", function () {
       const key = `${parsed.args.isPlayerSide}-${parsed.args.targetIndex}`;
       expect(seen.has(key)).to.equal(false);
       seen.add(key);
+      // AI relic-mirror must not grant Last Stand. Player relic → only AI-attack events.
+      expect(parsed.args.isPlayerSide).to.equal(false);
+    }
+
+    for (const parsed of lastStandHits) {
+      const lsIndex = allHits.indexOf(parsed);
+      const later = allHits.slice(lsIndex + 1).filter((event) =>
+        event.args.isPlayerSide === parsed.args.isPlayerSide &&
+        Number(event.args.targetIndex) === Number(parsed.args.targetIndex)
+      );
+      const laterLastStand = later.filter((event) => Number(event.args.specialEffect) === 3);
+      expect(laterLastStand.length).to.equal(0);
     }
   });
 
@@ -391,16 +422,10 @@ describe("StarForgeGame Variant 1", function () {
     await (await game.connect(player).claimLevelUpShips()).wait();
     expect(await game.freeShipsGranted(player.address)).to.equal(1);
 
-    const Game = await ethers.getContractFactory("StarForgeGame");
-    const game2 = await Game.deploy(
-      await unitNFT.getAddress(),
-      await relic.getAddress(),
-      await profile.getAddress()
-    );
-    await game2.waitForDeployment();
-    await (await game2.setPreviousGame(await game.getAddress())).wait();
+    const game2 = await deployGame(unitNFT, relic, profile, await game.getAddress());
     await (await profile.setGameContract(await game2.getAddress())).wait();
 
+    expect(await game2.previousGame()).to.equal(await game.getAddress());
     expect(await game2.freeShipsGranted(player.address)).to.equal(0);
     expect(await game2.pendingLevelUpShips(player.address)).to.equal(0);
     await expect(game2.connect(player).claimLevelUpShips()).to.be.revertedWith(
@@ -434,5 +459,163 @@ describe("StarForgeGame Variant 1", function () {
       expect(Number(ai[i].faction)).to.equal(Number(playerUnit.faction));
       expect(Number(ai[i].unitClass)).to.equal(Number(playerUnit.unitClass));
     }
+  });
+
+  it("does not remint free ships across a two-hop previousGame chain", async function () {
+    const { owner, player, unitNFT, relic, profile, game } = await deploySystem();
+    await buyUnits(game, player, 1);
+    await profile.grantGameRole(owner.address);
+    for (let i = 0; i < 6; i++) {
+      await (await profile.connect(owner).updateAfterBattle(player.address, true)).wait();
+    }
+    await (await game.connect(player).claimLevelUpShips()).wait();
+    expect(await game.freeShipsGranted(player.address)).to.equal(1);
+
+    const game2 = await deployGame(unitNFT, relic, profile, await game.getAddress());
+    const game3 = await deployGame(unitNFT, relic, profile, await game2.getAddress());
+    await (await profile.setGameContract(await game3.getAddress())).wait();
+
+    expect(await game3.pendingLevelUpShips(player.address)).to.equal(0);
+    await expect(game3.connect(player).claimLevelUpShips()).to.be.revertedWith(
+      "No level-up ships to claim"
+    );
+  });
+
+  it("inherits unclaimed pending ships from previousGame without reminting extras", async function () {
+    const { owner, player, unitNFT, relic, profile, game } = await deploySystem();
+    await buyUnits(game, player, 1);
+    await profile.grantGameRole(owner.address);
+    for (let i = 0; i < 6; i++) {
+      await (await profile.connect(owner).updateAfterBattle(player.address, true)).wait();
+    }
+    expect(await game.pendingLevelUpShips(player.address)).to.equal(1);
+
+    const game2 = await deployGame(unitNFT, relic, profile, await game.getAddress());
+    await (await unitNFT.setGameContract(await game2.getAddress())).wait();
+    await (await relic.setGameContract(await game2.getAddress())).wait();
+    await (await profile.setGameContract(await game2.getAddress())).wait();
+
+    expect(await game2.pendingLevelUpShips(player.address)).to.equal(1);
+    await expect(game2.connect(player).claimLevelUpShips()).to.emit(game2, "LevelUpShipsGranted");
+    expect(await game2.freeShipsGranted(player.address)).to.equal(1);
+    expect(await game2.pendingLevelUpShips(player.address)).to.equal(0);
+  });
+
+  it("pauses economy and battle entry", async function () {
+    const { owner, player, game } = await deploySystem();
+    await (await game.connect(owner).pause()).wait();
+    await expect(
+      game.connect(player).buyUnit({ value: BUY_UNIT_PRICE })
+    ).to.be.revertedWith("Pausable: paused");
+    await (await game.connect(owner).unpause()).wait();
+    await expect(game.connect(player).buyUnit({ value: BUY_UNIT_PRICE })).to.emit(
+      await ethers.getContractAt("StarForgeUnitNFT", await game.unitNFT()),
+      "UnitMinted"
+    );
+  });
+
+  it("lets the owner withdraw collected payments", async function () {
+    const { owner, player, game } = await deploySystem();
+    await buyUnits(game, player, 1);
+    const before = await ethers.provider.getBalance(owner.address);
+    const tx = await game.connect(owner).withdraw();
+    const receipt = await tx.wait();
+    const gas = receipt.gasUsed * receipt.gasPrice;
+    const after = await ethers.provider.getBalance(owner.address);
+    expect(after + gas - before).to.equal(BUY_UNIT_PRICE);
+  });
+
+  it("rejects overpay on buyUnit", async function () {
+    const { player, game } = await deploySystem();
+    await expect(
+      game.connect(player).buyUnit({ value: BUY_UNIT_PRICE + 1n })
+    ).to.be.revertedWith("Wrong payment");
+  });
+
+  it("rejects stranger admin calls", async function () {
+    const { stranger, game, unitNFT } = await deploySystem();
+    await expect(
+      game.connect(stranger).setPrices(1, 1, 1)
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(
+      game.connect(stranger).pause()
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(
+      unitNFT.connect(stranger).setGameContract(stranger.address)
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(
+      unitNFT.connect(stranger).ownerMint(stranger.address, 0, 0, 0, 10, 10, 10)
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
+
+  it("rejects setGameContract(0) on NFT and Relic", async function () {
+    const { owner, unitNFT, relic } = await deploySystem();
+    await expect(
+      unitNFT.connect(owner).setGameContract(ethers.ZeroAddress)
+    ).to.be.revertedWith("Zero game");
+    await expect(
+      relic.connect(owner).setGameContract(ethers.ZeroAddress)
+    ).to.be.revertedWith("Zero game");
+  });
+
+  it("rejects contract callers on buyUnit and startMatch", async function () {
+    const { player, game } = await deploySystem();
+    const Caller = await ethers.getContractFactory("EoaGuardCaller");
+    const caller = await Caller.deploy(await game.getAddress());
+    await caller.waitForDeployment();
+
+    await expect(
+      caller.connect(player).buy({ value: BUY_UNIT_PRICE })
+    ).to.be.revertedWithCustomError(game, "NotEOA");
+
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    await expect(caller.connect(player).fight(units)).to.be.revertedWithCustomError(game, "NotEOA");
+  });
+
+  it("tokenURI embeds an on-chain svg image", async function () {
+    const { player, unitNFT, game } = await deploySystem();
+    await (await game.connect(player).buyUnit({ value: BUY_UNIT_PRICE })).wait();
+    const units = await game.getPlayerUnits(player.address);
+    const uri = await unitNFT.tokenURI(units[0]);
+    expect(uri.startsWith("data:application/json;base64,")).to.equal(true);
+    const json = JSON.parse(Buffer.from(uri.split(",")[1], "base64").toString("utf8"));
+    expect(json.image.startsWith("data:image/svg+xml;base64,")).to.equal(true);
+    const svg = Buffer.from(json.image.split(",")[1], "base64").toString("utf8");
+    expect(svg.includes("<svg")).to.equal(true);
+    expect(json.image.includes("your-cdn.com")).to.equal(false);
+  });
+
+  it("rejects setGameContract(0) on Profile", async function () {
+    const { profile } = await deploySystem();
+    await expect(profile.setGameContract(ethers.ZeroAddress)).to.be.revertedWith("Zero game");
+  });
+
+  it("startMatch persists equipped relics to storage", async function () {
+    const { player, profile, game } = await deploySystem();
+    await buyUnits(game, player, 4);
+    const units = [...await game.getPlayerUnits(player.address)];
+    const relicId = await buyAnyRelic(game, player, profile);
+
+    await (await game.connect(player).startMatch(units, [relicId, 0, 0])).wait();
+    const equipped = await game.getEquippedRelics(player.address);
+    expect(equipped[0]).to.equal(relicId);
+    expect(equipped[1]).to.equal(0n);
+    expect(equipped[2]).to.equal(0n);
+  });
+
+  it("startMatch saturates attack instead of reverting on synergy overflow", async function () {
+    const { owner, player, unitNFT, profile, game } = await deploySystem();
+    const tokenIds = [];
+    for (let i = 0; i < 4; i++) {
+      await (await unitNFT.connect(owner).ownerMint(player.address, 0, 2, 0, 255, 20, 20)).wait();
+    }
+    const supply = Number(await unitNFT.totalSupply());
+    for (let i = supply - 4; i < supply; i++) {
+      tokenIds.push(i);
+    }
+    await expect(
+      game.connect(player).startMatch(tokenIds, [])
+    ).to.emit(game, "BattleResolved");
   });
 });

@@ -94,16 +94,14 @@ async function main() {
     throw new Error("No BattleEventEmitted logs — replay cannot work");
   }
 
-  const result = await game.getLastBattleResult(signer.address);
   const summary = await game.getLastBattleSummary(signer.address);
 
-  console.log(`  playerWon=${result[0]}`);
-  console.log(`  battleId=${result[3]}`);
+  console.log(`  playerWon=${summary.playerWon}`);
+  console.log(`  battleId=${summary.battleId}`);
   console.log(`  BattleEventEmitted count=${events.length}`);
-  console.log(`  summary.battleId=${summary.battleId}`);
   console.log(`  LevelUpShipsGranted=${grants.length}`);
 
-  if (result[3] !== resolved[0].args.battleId) {
+  if (summary.battleId !== resolved[0].args.battleId) {
     throw new Error("battleId mismatch between result and BattleResolved");
   }
 

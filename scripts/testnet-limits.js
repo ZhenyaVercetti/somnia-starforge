@@ -11,7 +11,23 @@ async function main() {
   );
 
   const remaining = await game.getRemainingBuys(signer.address);
+  console.log("game", live.game);
   console.log("remainingBuys", remaining.toString());
+
+  if (remaining > 0n) {
+    try {
+      await game.buyUnit.staticCall({ value: hre.ethers.parseEther("0.010000000000000001") });
+      throw new Error("overpay buyUnit should revert");
+    } catch (error) {
+      const reason = error.reason || error.shortMessage || error.message || "";
+      if (!String(reason).includes("Wrong payment")) {
+        throw new Error(`expected Wrong payment, got: ${reason}`);
+      }
+      console.log("overpay buyUnit blocked: Wrong payment");
+    }
+  } else {
+    console.log("overpay buyUnit skipped: daily buy cap already used");
+  }
 
   try {
     await game.generateTenShips.staticCall({ value: hre.ethers.parseEther("0.1") });
@@ -27,8 +43,8 @@ async function main() {
     console.log("claimLevelUpShips blocked:", error.reason || error.shortMessage || error.message);
   }
 
-  const result = await game.getLastBattleResult(signer.address);
-  console.log("lastBattleId", result[3]);
+  const summary = await game.getLastBattleSummary(signer.address);
+  console.log("lastBattleId", summary.battleId);
   console.log("packedEventsFn", game.interface.hasFunction("getPackedBattleEvents(address)"));
 }
 
