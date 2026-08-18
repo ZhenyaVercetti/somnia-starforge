@@ -42,63 +42,63 @@ const FACTION = [
 const CLASS_SHOT: ShotLook[] = [
   {
     kind: 'bolt',
-    count: 2,
-    spread: 0.038,
-    stagger: 58,
-    travel: 132,
+    count: 1,
+    spread: 0,
+    stagger: 0,
+    travel: 150,
     charge: 0,
     hold: 0,
     fade: 80,
-    jitter: 3,
+    jitter: 0,
     coreH: 13,
     glowH: 26,
-    length: 56,
-    lunge: 20
+    length: 64,
+    lunge: 16
   },
   {
     kind: 'beam',
     count: 1,
     spread: 0,
     stagger: 0,
-    travel: 36,
-    charge: 50,
-    hold: 210,
-    fade: 150,
+    travel: 40,
+    charge: 40,
+    hold: 160,
+    fade: 140,
     jitter: 0,
     coreH: 7,
-    glowH: 34,
+    glowH: 30,
     length: 0,
-    lunge: 10
+    lunge: 8
   },
   {
     kind: 'slug',
     count: 1,
     spread: 0,
     stagger: 0,
-    travel: 250,
-    charge: 230,
+    travel: 220,
+    charge: 160,
     hold: 0,
     fade: 110,
     jitter: 0,
-    coreH: 22,
-    glowH: 42,
+    coreH: 20,
+    glowH: 36,
     length: 78,
-    lunge: 8
+    lunge: 6
   },
   {
     kind: 'needle',
-    count: 6,
-    spread: 0.13,
-    stagger: 20,
-    travel: 154,
+    count: 2,
+    spread: 0.05,
+    stagger: 40,
+    travel: 150,
     charge: 0,
     hold: 0,
     fade: 70,
-    jitter: 16,
+    jitter: 4,
     coreH: 6,
     glowH: 12,
     length: 28,
-    lunge: 16
+    lunge: 12
   }
 ];
 
@@ -163,7 +163,7 @@ export class CombatVfx {
   boot(): void {
     this.live = true;
     for (let i = 0; i < 10; i++) {
-      const emitter = this.scene.add.particles(0, 0, 'fx_trail', {
+      const emitter = this.scene.add.particles(-2000, -2000, 'fx_soft', {
         lifespan: { min: 120, max: 220 },
         scale: { start: 0.55, end: 0.02 },
         alpha: { start: 0.72, end: 0 },
@@ -176,7 +176,7 @@ export class CombatVfx {
       this.trails.push({ emitter, busy: false });
     }
 
-    this.sparks = this.scene.add.particles(0, 0, 'fx_spark', {
+    this.sparks = this.scene.add.particles(-2000, -2000, 'fx_spark', {
       lifespan: { min: 140, max: 320 },
       speed: { min: 40, max: 180 },
       scale: { start: 0.9, end: 0.1 },
@@ -189,7 +189,7 @@ export class CombatVfx {
     });
     this.sparks.setDepth(466);
 
-    this.motes = this.scene.add.particles(0, 0, 'fx_trail', {
+    this.motes = this.scene.add.particles(-2000, -2000, 'fx_soft', {
       lifespan: { min: 180, max: 420 },
       speed: { min: 8, max: 46 },
       scale: { start: 0.4, end: 0.02 },
@@ -227,11 +227,11 @@ export class CombatVfx {
     const cosmetic = !!req.cosmetic;
     const crit = !!req.crit && !cosmetic;
     if (cosmetic) {
-      look.count = Math.max(1, Math.ceil(look.count * 0.45));
+      look.count = 1;
       look.charge = 0;
-      look.hold = Math.floor(look.hold * 0.45);
-      look.coreH *= 0.7;
-      look.glowH *= 0.65;
+      look.hold = 0;
+      look.coreH *= 0.55;
+      look.glowH *= 0.5;
     }
 
     const finishOnce = (() => {
@@ -573,8 +573,6 @@ export class CombatVfx {
       ease: 'Cubic.easeOut',
       onComplete: () => flash.destroy()
     });
-    this.sparks?.setParticleTint(tint);
-    this.sparks?.explode(Math.round(5 * scale), fromX, fromY);
   }
 
   private impact(
@@ -586,8 +584,6 @@ export class CombatVfx {
     crit: boolean
   ): void {
     if (cosmetic) {
-      this.motes?.setParticleTint(paint.glow);
-      this.motes?.explode(3, x, y);
       return;
     }
     const burst = this.scene.add.image(x, y, 'fx_impact')
@@ -620,10 +616,6 @@ export class CombatVfx {
         onComplete: () => ring.destroy()
       });
     }
-    this.sparks?.setParticleTint(paint.hot);
-    this.sparks?.explode(heavy ? 14 : crit ? 10 : 6, x, y);
-    this.motes?.setParticleTint(paint.glow);
-    this.motes?.explode(heavy ? 10 : 5, x, y);
   }
 
   private ghosts(

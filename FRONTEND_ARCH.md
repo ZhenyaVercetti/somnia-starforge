@@ -59,11 +59,8 @@
 
 ## BattleScene
 - Данные: events / playerWon / HP / unit visuals из логов `BattleResolved` + `BattleEventEmitted` (Variant 1, не storage).
-- Скорость через `time.timeScale` / `tweens.timeScale`:
-  - normal **2.55**, x2 **5.1**, Skip **7.65** (от исходного таймлайна).
-- Skip **не** skip-to-result. На Skip hit-stop выключен. На итоге клавиши ведут назад.
-- Лог: 6 строк, CRIT / DODGE / Last Stand / DESTROYED.
-- HP-бары видны с первого кадра.
+- **Статус 17.08: playback неприемлем.** Слой cinema / частицы / крен кораблей отклонён. Не латать. Полный реворк — TODO P0.
+- Контрактный поток не менять.
 - `outer_frame` не рисуется.
 
 ## BootScene

@@ -10,6 +10,18 @@ import { unlockAchievement } from '../lib/achievements';
 import { beginOrResumeTutorial, showAchievementToasts } from '../utils/MetaHud';
 import { CombatVfx, classLunge, preloadCombatFx } from '../utils/combatVfx';
 import { preloadDestroyedShips, preloadShipPortraits } from '../utils/preloadGameAssets';
+import {
+  type BattleCinema,
+  bootBattleCinema,
+  destroyBattleCinema,
+  flashShipHit,
+  preloadBattleCinema,
+  showRoundBanner,
+  spawnBloomBurst,
+  spawnCritFlare,
+  spawnLastStandDome,
+  tickBattleCinema
+} from '../utils/battleCinema';
 
 interface BattleEvent {
   round: number;
@@ -41,6 +53,8 @@ interface Combatant {
   alive: boolean;
   lastStandLit: boolean;
   idleTween: Phaser.Tweens.Tween | null;
+  rollTween: Phaser.Tweens.Tween | null;
+  baseAngle: number;
   maxHp: number;
   currentHp: number;
 }
@@ -51,10 +65,9 @@ const FACTION_ENGINE: Record<number, { tint: number; tintAlt: number; glow: numb
   2: { tint: 0xffb347, tintAlt: 0xfff1a8, glow: 0xff7a18 }
 };
 
-// Original timeline * 1.7 (70% faster), then another 50% (1.5x).
-const PLAYBACK_SCALE_NORMAL = 2.55;
+const PLAYBACK_SCALE_NORMAL = 2.025;
 const PLAYBACK_SCALE_FAST = PLAYBACK_SCALE_NORMAL * 2;
-const PLAYBACK_SCALE_SKIP = PLAYBACK_SCALE_NORMAL * 3;
+const PLAYBACK_SCALE_SKIP = PLAYBACK_SCALE_NORMAL * 2.7;
 
 export default class BattleScene extends Phaser.Scene {
   private battleEvents: BattleEvent[] = [];
@@ -101,6 +114,7 @@ export default class BattleScene extends Phaser.Scene {
   private pendingTimers: Phaser.Time.TimerEvent[] = [];
   private savedTeam: number[] = [];
   private vfx: CombatVfx | null = null;
+  private cinema: BattleCinema | null = null;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -144,6 +158,7 @@ export default class BattleScene extends Phaser.Scene {
     this.load.image('engine_blob', 'assets/effects/engine_blob.png');
     this.load.image('shield_glow', 'assets/effects/shield_glow.png');
     preloadCombatFx(this);
+    preloadBattleCinema(this);
     this.load.spritesheet('spark_sheet', 'assets/effects/spark_sheet.png', {
       frameWidth: 64,
       frameHeight: 64
@@ -166,6 +181,7 @@ export default class BattleScene extends Phaser.Scene {
     this.createFxAnimations();
     this.createParallaxBackground();
     this.createArenaPlatform();
+    this.cinema = bootBattleCinema(this);
     this.createSharedEmitters();
     this.vfx = new CombatVfx(this);
     this.vfx.boot();
@@ -194,9 +210,12 @@ export default class BattleScene extends Phaser.Scene {
     this.delay(700, () => this.processNextEvent());
   }
 
-  update(_time: number, _delta: number) {
+  update(_time: number, delta: number) {
     this.syncCombatantAttachments(this.playerUnits);
     this.syncCombatantAttachments(this.aiUnits);
+    if (this.cinema) {
+      tickBattleCinema(this.cinema, delta, this.isPlaying && !this.resultOpen);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -251,74 +270,85 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private createSharedEmitters() {
-    this.plasmaEmitter = this.add.particles(0, 0, 'engine_blob', {
-      lifespan: { min: 280, max: 620 },
-      speed: { min: 20, max: 110 },
-      scale: { start: 0.42, end: 0.04 },
-      alpha: { start: 0.7, end: 0 },
-      rotate: { min: -30, max: 30 },
-      blendMode: 'ADD',
-      emitting: false,
-      frequency: -1,
-      quantity: 1
-    });
+    this.plasmaEmitter = this.hideEmitter(
+      this.add.particles(-2000, -2000, 'fx_soft', {
+        lifespan: { min: 280, max: 620 },
+        speed: { min: 20, max: 110 },
+        scale: { start: 0.42, end: 0.04 },
+        alpha: { start: 0.7, end: 0 },
+        blendMode: 'ADD',
+        emitting: false,
+        frequency: -1,
+        quantity: 1
+      })
+    );
     this.plasmaEmitter.setDepth(455);
 
-    this.debrisEmitter = this.add.particles(0, 0, 'spark_sheet', {
-      frame: [0, 1, 2, 3],
-      lifespan: { min: 500, max: 1100 },
-      speed: { min: 40, max: 220 },
-      gravityY: 90,
-      scale: { start: 0.28, end: 0.04 },
-      alpha: { start: 0.9, end: 0 },
-      rotate: { min: 0, max: 360 },
-      blendMode: 'ADD',
-      emitting: false,
-      frequency: -1,
-      quantity: 1
-    });
+    this.debrisEmitter = this.hideEmitter(
+      this.add.particles(-2000, -2000, 'fx_soft', {
+        lifespan: { min: 500, max: 1100 },
+        speed: { min: 40, max: 220 },
+        gravityY: 90,
+        scale: { start: 0.28, end: 0.04 },
+        alpha: { start: 0.9, end: 0 },
+        rotate: { min: 0, max: 360 },
+        blendMode: 'ADD',
+        emitting: false,
+        frequency: -1,
+        quantity: 1
+      })
+    );
     this.debrisEmitter.setDepth(448);
 
-    this.critEmitter = this.add.particles(0, 0, 'spark_sheet', {
-      frame: [0, 1, 2, 3],
-      lifespan: { min: 260, max: 700 },
-      speed: { min: 40, max: 180 },
-      scale: { start: 0.5, end: 0.05 },
-      alpha: { start: 0.95, end: 0 },
-      blendMode: 'ADD',
-      emitting: false,
-      frequency: -1,
-      quantity: 1,
-      tint: 0xffe566
-    });
+    this.critEmitter = this.hideEmitter(
+      this.add.particles(-2000, -2000, 'fx_soft', {
+        lifespan: { min: 260, max: 700 },
+        speed: { min: 40, max: 180 },
+        scale: { start: 0.5, end: 0.05 },
+        alpha: { start: 0.95, end: 0 },
+        blendMode: 'ADD',
+        emitting: false,
+        frequency: -1,
+        quantity: 1,
+        tint: 0xffe566
+      })
+    );
     this.critEmitter.setDepth(465);
 
-    this.victoryEmitter = this.add.particles(960, 200, 'engine_blob', {
-      lifespan: { min: 900, max: 1800 },
-      speed: { min: 30, max: 140 },
-      angle: { min: 240, max: 300 },
-      scale: { start: 0.38, end: 0 },
-      alpha: { start: 0.55, end: 0 },
-      blendMode: 'ADD',
-      emitting: false,
-      frequency: 80,
-      quantity: 2,
-      gravityY: -20
-    });
+    this.victoryEmitter = this.hideEmitter(
+      this.add.particles(-2000, -2000, 'fx_soft', {
+        lifespan: { min: 900, max: 1800 },
+        speed: { min: 30, max: 140 },
+        angle: { min: 240, max: 300 },
+        scale: { start: 0.38, end: 0 },
+        alpha: { start: 0.55, end: 0 },
+        blendMode: 'ADD',
+        emitting: false,
+        frequency: 80,
+        quantity: 2,
+        gravityY: -20
+      })
+    );
     this.victoryEmitter.setDepth(520);
+  }
+
+  private hideEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter) {
+    emitter.setVisible(true);
+    // Phaser can blit the source texture as a static quad. Park it off-screen.
+    emitter.setPosition(-2000, -2000);
+    return emitter;
   }
 
   private createEngineEmitter(x: number, y: number, faction: number, isPlayer: boolean) {
     const palette = FACTION_ENGINE[faction] || FACTION_ENGINE[0];
-    const emitter = this.add.particles(x, y, 'engine_blob', {
-      lifespan: { min: 280, max: 540 },
-      speedX: isPlayer ? { min: -80, max: -22 } : { min: 22, max: 80 },
-      speedY: { min: -14, max: 14 },
-      scale: { start: 0.48, end: 0.04 },
-      alpha: { start: 0.7, end: 0 },
-      rotate: isPlayer ? 90 : -90,
+    const emitter = this.add.particles(x, y, 'fx_soft', {
+      lifespan: { min: 240, max: 460 },
+      speedX: isPlayer ? { min: -70, max: -18 } : { min: 18, max: 70 },
+      speedY: { min: -10, max: 10 },
+      scale: { start: 0.22, end: 0.02 },
+      alpha: { start: 0.55, end: 0 },
       blendMode: 'ADD',
-      frequency: 34,
+      frequency: 40,
       quantity: 1,
       tint: [palette.tint, palette.tintAlt]
     });
@@ -406,9 +436,9 @@ export default class BattleScene extends Phaser.Scene {
     cam.setZoom(1);
     this.cameraDriftTween = this.tweens.add({
       targets: cam,
-      scrollX: { from: -10, to: 10 },
-      scrollY: { from: -6, to: 6 },
-      duration: 9000,
+      scrollX: { from: -4, to: 4 },
+      scrollY: { from: -2, to: 2 },
+      duration: 14000,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
@@ -564,46 +594,49 @@ export default class BattleScene extends Phaser.Scene {
     const key = shipKey(faction, unitClass);
     const palette = FACTION_ENGINE[faction] || FACTION_ENGINE[0];
 
-    const shadow = this.add.sprite(x + 9, y + 20, key)
-      .setScale(baseScale * 0.5)
-      .setAlpha(0.24)
+    // 3/4 portraits already face the board. Flip sides only — no extra yaw.
+    const baseAngle = 0;
+    const shadow = this.add.sprite(x + 8, y + 16, key)
+      .setScale(baseScale * 0.48)
+      .setAlpha(0.22)
       .setTint(0x000000)
       .setDepth(y - 6)
-      .setFlipX(isPlayer);
+      .setFlipX(isPlayer)
+      .setAngle(0);
 
     const ship = this.add.sprite(x, y, key)
       .setScale(baseScale)
       .setDepth(y + 12)
-      .setFlipX(isPlayer);
+      .setFlipX(isPlayer)
+      .setAngle(0);
 
     const engine = this.createEngineEmitter(
-      x + (isPlayer ? -22 : 22),
-      y + 10,
+      x + (isPlayer ? -18 : 18),
+      y + 12,
       faction,
       isPlayer
     );
-    engine.startFollow(ship, isPlayer ? -22 : 22, 10);
+    engine.startFollow(ship, isPlayer ? -18 : 18, 12);
 
     const barY = y - 42;
-    const hpBg = this.add.rectangle(x, barY, 56, 6, 0x140818)
-      .setStrokeStyle(1, palette.glow, 0.45)
+    const hpBg = this.add.rectangle(x, barY, 64, 8, 0x0a0610)
+      .setStrokeStyle(1, palette.glow, 0.7)
       .setDepth(y + 34)
-      .setAlpha(0.92);
-    const hpFill = this.add.rectangle(x, barY, 56, 6, isPlayer ? 0x5dffb0 : 0xff6b7d)
+      .setAlpha(0.94);
+    const hpFill = this.add.rectangle(x, barY, 62, 6, isPlayer ? 0x5dffb0 : 0xff6b7d)
       .setDepth(y + 35)
       .setAlpha(1);
 
 
     const idleTween = this.tweens.add({
       targets: ship,
-      y: y - 3.5,
-      scaleX: baseScale * 1.018,
-      scaleY: baseScale * 1.018,
-      duration: 1500 + Math.floor(Math.random() * 500),
+      y: y - 1.2,
+      duration: 3200,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
+    const rollTween = null;
 
     this.tweens.add({
       targets: shadow,
@@ -630,6 +663,8 @@ export default class BattleScene extends Phaser.Scene {
       alive: true,
       lastStandLit: false,
       idleTween,
+      rollTween,
+      baseAngle,
       maxHp,
       currentHp: maxHp
     };
@@ -646,48 +681,40 @@ export default class BattleScene extends Phaser.Scene {
       unit.shadow.setFlipX(unit.ship.flipX);
       unit.shadow.setDepth(y - 6);
       unit.hpBg.setPosition(x, y - 42);
-      unit.hpFill.setPosition(x, y - 42);
+      unit.hpFill.setPosition(x - 31 + unit.hpFill.width / 2, y - 42);
       unit.hpBg.setDepth(y + 34);
       unit.hpFill.setDepth(y + 35);
       unit.engine.setDepth(y - 1);
     }
   }
 
-  // Art faces left. flipX = nose to the right. Extra angle is a bank toward the target.
-  private faceToward(unit: Combatant, tx: number, ty: number) {
+  private faceToward(unit: Combatant, _tx: number, _ty: number) {
     if (!unit.alive || !unit.ship?.active) return;
-    const dx = tx - unit.ship.x;
-    const dy = ty - unit.ship.y;
-    const faceRight = dx >= 0;
-    unit.ship.setFlipX(faceRight);
-    unit.shadow.setFlipX(faceRight);
-    const pitch = Phaser.Math.Clamp(
-      Math.atan2(dy, Math.max(48, Math.abs(dx))),
-      -0.28,
-      0.28
-    );
-    const deg = Phaser.Math.RadToDeg(faceRight ? pitch : -pitch);
-    this.tweens.add({
-      targets: unit.ship,
-      angle: deg,
-      duration: 90 * this.battleSpeedMultiplier,
-      ease: 'Sine.easeOut'
-    });
-    this.syncEngine(unit, faceRight);
+    unit.ship.setFlipX(unit.isPlayer);
+    unit.shadow.setFlipX(unit.isPlayer);
+    unit.ship.setAngle(0);
+    unit.idleTween?.pause();
+    this.syncEngine(unit, unit.isPlayer);
   }
 
   private restFacing(unit: Combatant) {
     if (!unit.ship?.active) return;
-    const faceRight = unit.isPlayer;
-    unit.ship.setFlipX(faceRight);
-    unit.shadow.setFlipX(faceRight);
+    unit.ship.setFlipX(unit.isPlayer);
+    unit.shadow.setFlipX(unit.isPlayer);
+    unit.ship.setAngle(0);
     this.tweens.add({
       targets: unit.ship,
-      angle: 0,
-      duration: 200 * this.battleSpeedMultiplier,
-      ease: 'Sine.easeInOut'
+      x: unit.homeX,
+      y: unit.homeY,
+      duration: 220,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        if (unit.alive) {
+          unit.idleTween?.resume();
+        }
+      }
     });
-    this.syncEngine(unit, faceRight);
+    this.syncEngine(unit, unit.isPlayer);
   }
 
   private syncEngine(unit: Combatant, faceRight: boolean) {
@@ -724,14 +751,10 @@ export default class BattleScene extends Phaser.Scene {
     this.animateEvent(event);
 
     const kill = Number(event.remainingHp) <= 0;
-    const extra = kill ? 420 : (event.specialEffect === 'CRIT' ? 180 : 0);
+    const extra = kill ? 360 : (event.specialEffect === 'CRIT' ? 120 : 0);
     const attacker = (event.isPlayerSide ? this.playerUnits : this.aiUnits)[event.attackerIndex];
-    const chargePad = attacker && attacker.unitClass === 2 ? 260 : attacker && attacker.unitClass === 1 ? 80 : 0;
-    const delay = (1480 + extra + chargePad) * this.battleSpeedMultiplier;
-    if (!this.skipActive && this.currentEventIndex < this.battleEvents.length) {
-      this.delay(delay * 0.34, () => this.fireAmbientTracers());
-      this.delay(delay * 0.7, () => this.fireAmbientTracers());
-    }
+    const chargePad = attacker && attacker.unitClass === 2 ? 180 : attacker && attacker.unitClass === 1 ? 50 : 0;
+    const delay = (1680 + extra + chargePad) * this.battleSpeedMultiplier;
     this.delay(delay, () => this.processNextEvent());
   }
 
@@ -752,20 +775,18 @@ export default class BattleScene extends Phaser.Scene {
     const lunge = classLunge(attacker.unitClass);
 
     this.faceToward(attacker, target.ship.x, target.ship.y);
-    this.faceToward(target, attacker.ship.x, attacker.ship.y);
-    this.vfx?.markTarget(target.ship.x, target.ship.y, attacker.faction);
 
     const startX = attacker.ship.x;
-    const startY = attacker.ship.y;
-    const startScale = attacker.ship.scaleX;
-    const aim = Phaser.Math.Angle.Between(startX, startY, target.ship.x, target.ship.y);
+    const startY = attacker.homeY;
+    const startScale = attacker.baseScale;
+    const dir = attacker.isPlayer ? 1 : -1;
 
     this.tweens.add({
       targets: attacker.ship,
-      x: startX + Math.cos(aim) * lunge,
-      y: startY + Math.sin(aim) * lunge,
-      scaleX: startScale * 1.08,
-      scaleY: startScale * 1.08,
+      x: startX + dir * lunge,
+      y: startY,
+      scaleX: startScale * 1.03,
+      scaleY: startScale * 1.03,
       duration: 95 * speed,
       ease: 'Cubic.easeOut',
       onComplete: () => {
@@ -777,7 +798,7 @@ export default class BattleScene extends Phaser.Scene {
               this.playDodge(target);
               this.spawnFloatingText(target.ship.x, target.ship.y - 58, 'DODGE', '#7ad7ff', 34);
             } else {
-              this.playHitStop(isCrit ? 70 : 48);
+              this.playHitStop(isCrit ? 36 : 22);
               this.impactCamera(dmg, isCrit, Number(event.remainingHp) <= 0);
               this.playImpact(target, dmg, isCrit, attacker.unitClass);
               this.updateHealthBar(target, event.remainingHp);
@@ -812,16 +833,12 @@ export default class BattleScene extends Phaser.Scene {
               y: attacker.homeY,
               scaleX: attacker.baseScale,
               scaleY: attacker.baseScale,
-              duration: 170 * speed,
+              duration: 200 * speed,
               ease: 'Sine.easeOut',
-              onComplete: () => this.delay(420 * speed, () => this.restFacing(attacker))
+              onComplete: () => this.restFacing(attacker)
             });
-            if (target.alive) {
-              this.delay(560 * speed, () => this.restFacing(target));
-            }
           }
         });
-        this.fireCosmeticSupport(attacker, target, isPlayer);
       }
     });
   }
@@ -924,11 +941,12 @@ export default class BattleScene extends Phaser.Scene {
 
   private playImpact(target: Combatant, damage: number, isCrit: boolean, attackerClass = 0) {
     const knock = attackerClass === 2 ? 14 : attackerClass === 1 ? 9 : attackerClass === 3 ? 5 : 7;
+    flashShipHit(target.ship, isCrit);
+    const kick = target.isPlayer ? -knock * 0.35 : knock * 0.35;
     this.tweens.add({
       targets: target.ship,
-      x: target.ship.x + (Math.random() * knock - knock / 2),
-      y: target.ship.y - (attackerClass === 2 ? 7 : 4),
-      duration: 50 * this.battleSpeedMultiplier,
+      x: target.homeX + kick,
+      duration: 70 * this.battleSpeedMultiplier,
       yoyo: true,
       ease: 'Sine.easeOut'
     });
@@ -939,9 +957,8 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private playCritBurst(x: number, y: number) {
-    if (this.critEmitter) {
-      this.critEmitter.explode(16, x, y);
-    }
+    spawnCritFlare(this, x, y);
+    spawnBloomBurst(this, x, y, 0.36, 0xffe566);
     const ring = this.add.image(x, y, 'energy_ring')
       .setScale(0.22)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -982,14 +999,11 @@ export default class BattleScene extends Phaser.Scene {
       ease: 'Sine.easeOut'
     });
 
-    if (this.plasmaEmitter) {
-      this.plasmaEmitter.setParticleTint(0x6ecbff);
-      this.plasmaEmitter.explode(10, target.ship.x, target.ship.y);
-    }
   }
 
   private playLastStand(target: Combatant) {
     target.lastStandLit = true;
+    spawnLastStandDome(this, target.ship.x, target.ship.y);
     const shield = this.add.image(target.ship.x, target.ship.y, 'shield_glow')
       .setScale(0.42)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -1021,10 +1035,9 @@ export default class BattleScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: target.ship,
-      tint: 0xff6677,
-      duration: 90,
+      tint: 0xff8899,
+      duration: 160,
       yoyo: true,
-      repeat: 3,
       onComplete: () => target.ship.clearTint()
     });
   }
@@ -1036,14 +1049,15 @@ export default class BattleScene extends Phaser.Scene {
       target.idleTween.stop();
       target.idleTween = null;
     }
+    if (target.rollTween) {
+      target.rollTween.stop();
+      target.rollTween = null;
+    }
     target.engine.stop();
-    target.engine.explode(8, target.ship.x, target.ship.y);
 
     this.playExplosion(target.ship.x, target.ship.y);
-    if (this.debrisEmitter) {
-      this.debrisEmitter.setParticleTint(0xffaa66);
-      this.debrisEmitter.explode(18, target.ship.x, target.ship.y);
-    }
+    spawnBloomBurst(this, target.ship.x, target.ship.y, 0.58, 0xffc27a);
+
 
     const destroyedKey = this.getDestroyedShipKey(target.faction, target.unitClass);
     if (destroyedKey && this.textures.exists(destroyedKey)) {
@@ -1052,12 +1066,9 @@ export default class BattleScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: target.ship,
-      alpha: 0.55,
-      angle: target.ship.flipX ? -14 : 14,
-      y: target.ship.y + 16,
-      scaleX: target.baseScale * 0.92,
-      scaleY: target.baseScale * 0.92,
-      duration: 420 * this.battleSpeedMultiplier,
+      alpha: 0.45,
+      y: target.homeY + 10,
+      duration: 380 * this.battleSpeedMultiplier,
       ease: 'Cubic.easeOut'
     });
 
@@ -1074,6 +1085,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private playExplosion(x: number, y: number) {
+    spawnBloomBurst(this, x, y, 0.5);
     for (let i = 0; i < 3; i++) {
       this.delay(i * 80, () => {
         const explosion = this.add.sprite(
@@ -1115,12 +1127,19 @@ export default class BattleScene extends Phaser.Scene {
 
     target.hpBg.setAlpha(0.9);
     target.hpFill.setAlpha(0.95);
-    target.hpFill.width = 56 * percent;
+    target.hpFill.width = 62 * percent;
+    target.hpFill.x = target.hpBg.x - 31 + (62 * percent) / 2;
 
     let color = 0x5dffb0;
     if (percent < 0.3) color = 0xff4455;
     else if (percent < 0.6) color = 0xffcc44;
     target.hpFill.setFillStyle(color);
+
+    if (percent < 0.35 && target.alive) {
+      target.ship.setTint(0xffb0a0);
+    } else if (target.alive) {
+      target.ship.clearTint();
+    }
   }
 
   private spawnDamageNumber(x: number, y: number, damage: number, isCrit: boolean) {
@@ -1175,15 +1194,19 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private impactCamera(damage: number, isCrit: boolean, isKill: boolean) {
-    const intensity = Math.min(0.016, 0.0035 + damage / 9000) * (isCrit ? 1.8 : 1) * (isKill ? 1.5 : 1);
-    const duration = isKill ? 220 : isCrit ? 180 : 110;
+    if (!isKill && !isCrit) {
+      return;
+    }
+    const intensity = isKill ? 0.0035 : 0.0016;
+    const duration = isKill ? 90 : 45;
     this.cameras.main.shake(duration, intensity);
+    void damage;
 
-    if (isCrit || isKill) {
+    if (isKill) {
       const cam = this.cameras.main;
       this.tweens.add({
         targets: cam,
-        zoom: isKill ? 1.055 : 1.04,
+        zoom: 1.018,
         duration: 90,
         yoyo: true,
         ease: 'Sine.easeOut'
@@ -1267,6 +1290,12 @@ export default class BattleScene extends Phaser.Scene {
     }
     const total = this.maxRound || round;
     this.roundHud.setText(`ROUND ${round} / ${total}`);
+    if (this.cinema && round > 0 && round !== this.cinema.lastRound) {
+      this.cinema.lastRound = round;
+      if (!this.skipActive) {
+        showRoundBanner(this, round, total);
+      }
+    }
   }
 
   private refreshSideLabels() {
@@ -1365,6 +1394,11 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private showFinalResult() {
+    this.cinema?.motes?.stop();
+    this.cinema?.shards?.stop();
+    this.plasmaEmitter?.stop();
+    this.debrisEmitter?.stop();
+    this.critEmitter?.stop();
     this.isPlaying = false;
     this.resultOpen = true;
     this.skipActive = false;
@@ -1620,6 +1654,7 @@ export default class BattleScene extends Phaser.Scene {
   private destroyCombatants(units: Combatant[]) {
     for (const unit of units) {
       unit.idleTween?.stop();
+      unit.rollTween?.stop();
       unit.engine?.stop();
       unit.engine?.destroy();
       unit.ship?.destroy();
@@ -1637,6 +1672,8 @@ export default class BattleScene extends Phaser.Scene {
     this.pendingTimers = [];
     this.vfx?.destroy();
     this.vfx = null;
+    destroyBattleCinema(this, this.cinema);
+    this.cinema = null;
 
     this.destroyCombatants(this.playerUnits);
     this.destroyCombatants(this.aiUnits);

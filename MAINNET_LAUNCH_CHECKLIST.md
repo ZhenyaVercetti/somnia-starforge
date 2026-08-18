@@ -18,6 +18,7 @@
 - [x] Variant 1 lastBattleEvents + anti-abuse + Shadow Fleet — на testnet
 - [x] Prepare/Collection UX: аудит 15.08 + cleanup 16.08
 - [x] Live Game `0x064f…` (17.08): EOA grind guard, persist relics, verify-live + smoke startMatch
+- [ ] Полный реворк боя (TODO P0) — текущий playback отклонён
 - [ ] Ручной прогон в браузере на Game `0x064f…` (кошелёк → 8 кораблей → бой → коллекция)
 - [ ] v1.6 полностью реализован и протестирован на testnet
 - [ ] Все контракты используют проверенные паттерны
