@@ -13,6 +13,7 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 1080,
   parent: 'game',
   backgroundColor: '#0a0022',
+  transparent: true,
   scene: [BootScene, PrepareScene, BattleScene, CollectionScene],
   scale: {
     mode: Phaser.Scale.FIT,

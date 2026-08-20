@@ -1,7 +1,7 @@
 # FRONTEND_ARCH.md — Архитектура фронтенда
 
-**Стек:** Phaser 3.90.0 + Vite + TypeScript + React (только кошелёк) + viem/wagmi + RainbowKit  
-**Дата актуализации:** 17.08.2026
+**Стек:** Phaser 3.90.0 + Three.js 0.185 (только слой боя) + Vite + TypeScript + React (только кошелёк) + viem/wagmi + RainbowKit  
+**Дата актуализации:** 20.08.2026
 
 Игра 1920×1080, `Phaser.Scale.FIT`, центр. Шрифты: Orbitron (заголовки), Rajdhani (UI) — Google Fonts в `index.html`.
 
@@ -58,9 +58,15 @@
 - Корабли в команде и экипированные реликвии в списке не показываются.
 
 ## BattleScene
-- Данные: events / playerWon / HP / unit visuals из логов `BattleResolved` + `BattleEventEmitted` (Variant 1, не storage).
-- **Статус 17.08: playback неприемлем.** Слой cinema / частицы / крен кораблей отклонён. Не латать. Полный реворк — TODO P0.
-- Контрактный поток не менять.
+- Данные: events / playerWon / HP / unit visuals из логов `BattleResolved` + `BattleEventEmitted` (Variant 1, не storage). Контрактный поток не менять.
+- **Слой 20.08:** Three.js под прозрачным Phaser. Канвас `#battle3d` (`pointer-events: none`, z-index 0). Phaser — только HUD (HP, лог, SKIP/x2, итог). `#game` прозрачный.
+- **Камера:** cinematic 3/4, флоты слева/справа. Слоты: inner x=±6.2 y=0.95, outer x=±8.7 y=1.45, ряд z=`[-4.05,-1.35,1.35,4.05]`. Камера `(0, 3.15, 17.4)` → `(0, 1.15, 0)`, FOV 48.
+- **Корабли:** стоячие карточки hangar-портретов (`hulls.ts`), не примитивные mesh и не UV на бокс. Враг `scale.x = -1`, restYaw к противнику. Drone Swarm = 7 истребителей с независимым idle. Wreck = destroyed-портрет.
+- **Фон:** `stars.png` + слабая `nebula_close` (opacity 0.16). Без планеты, без `battle_sky` / `battle_void`.
+- **Playback:** 1 event = 1 выстрел. Idle bob/drift/yaw/roll. Атака — короткий lunge + bank. SKIP/x2 через `timeScale`. Phaser 3.90 ParticleEmitter **запрещён**.
+- **Расширение фракций/классов:** `battleCatalog.ts` + PNG в `assets/units/combat/`. BattleScene не хардкодить под текущие 3 фракции / 4 класса.
+- **Превью без кошелька:** `?previewBattle=1` (BootScene → `createPreviewBattle()`).
+- **Статус:** архитектура стоит, визуал **не принят**. P0 = доработка этого экрана, не новый жанр.
 - `outer_frame` не рисуется.
 
 ## BootScene
@@ -74,9 +80,14 @@ frontend/src/scenes/BootScene.ts
 frontend/src/scenes/PrepareScene.ts
 frontend/src/scenes/CollectionScene.ts
 frontend/src/scenes/BattleScene.ts
+frontend/src/battle3d/BattleWorld.ts
+frontend/src/battle3d/hulls.ts
+frontend/src/battle3d/canvasHost.ts
+frontend/src/utils/battleCatalog.ts
+frontend/src/utils/battleTypes.ts
+frontend/src/utils/battlePreview.ts
 frontend/src/utils/HudChrome.ts
 frontend/src/utils/UnitVisualFactory.ts
-frontend/src/utils/combatVfx.ts
 frontend/src/utils/MetaHud.ts
 frontend/src/utils/uiFactory.ts
 frontend/src/utils/preloadGameAssets.ts
@@ -103,3 +114,4 @@ frontend/src/lib/unitNormalize.ts
 - `frontend/src/counter.ts`
 - Полноэкранная коллекция (откатили 13.08)
 - `outer_frame` поверх Prepare/Boot/Battle
+- `battleCinema.ts`, `combatVfx.ts`, `BATTLE_REWORK_PROMPT.md`

@@ -1,9 +1,9 @@
 # Somnia StarForge — Game Design Document v1.6
 
-**Статус:** v1.6 — audit 15.08.2026  
+**Статус:** v1.6.5 + 3D battle layer (20.08.2026, визуал боя не принят)  
 **Live:** testnet 50312. Адреса только в `DEPLOYMENT.md`.  
-**Сделано:** Variant 1 events, Shadow Fleet 8, daily 10 + free ship, Collection overlay 0–960, RainbowKit, Last Stand 1 раз, unique team/relics.  
-**Следующий шаг:** ручной прогон шопа/лимитов на новом Game, затем mainnet.
+**Сделано:** Variant 1 events, Shadow Fleet 8, daily 10 + free ship, Collection overlay 0–960, RainbowKit, Last Stand 1 раз, unique team/relics. Playback боя: Three.js + hangar-карточки, Phaser HUD.  
+**Следующий шаг:** доработка текущего экрана боя (TODO P0), затем ручной прогон шопа/лимитов, затем mainnet.
 
 **v1.6 — CollectionScene + Механика реликвий и юнитов текущая цель:**
 - Полностью переработанная CollectionScene с фильтрами, multi-select и instant add (double-click)
@@ -45,7 +45,7 @@ Somnia StarForge — полностью on-chain auto-battler (TFT / Auto Chess 
 
 ## 4. Техническая архитектура
 On-chain: Solidity 0.8.27+, Ownable + ReentrancyGuard + Pausable, Hardhat. UUPS нет.  
-Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + RainbowKit.
+Frontend: Phaser 3.90.0 + Three.js 0.185 (слой боя) + Vite/React + viem/wagmi + RainbowKit.
 
 ## 5. Визуал
 UI Asset Generation — Reference Prompt
@@ -86,9 +86,9 @@ Profile frame
 - [x] Полностью переработанная CollectionScene с фильтрами и multi-select
 - [x] Полная механика equipped relics (drag, swap, unequip)
 - [x] Исправлена система глубин и input во всех сценах
-- [ ] Финальное тестирование и полировка BattleScene
+- [ ] Доработка текущего 3D-экрана боя (посадка, рой, живость, выстрелы) — TODO P0
 - [ ] Подготовка к mainnet (оптимизация газа)
-- [ ] Анти-абуз минтинга: daily limit 10 buyUnit + +1 бесплатный корабль за level-up  
+- [x] Анти-абуз минтинга: daily limit 10 buyUnit + +1 бесплатный корабль за level-up  
 
 
 **v1.7 — Глубина боя**  

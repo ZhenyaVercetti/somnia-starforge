@@ -365,6 +365,7 @@ private async sendGameTransaction(
   }
 
 create() {
+  this.input.enabled = true;
   this.team = emptyTeamSlots();
   this.teamSlotOccupants = new Array(8).fill(null);
   this.equippedRelics = [0, 0, 0];

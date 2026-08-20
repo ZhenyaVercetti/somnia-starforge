@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import WalletManager from '../lib/WalletManager';
 import { gameAudio, SFX_MANIFEST } from '../lib/gameAudio';
 import { preloadRelicsAndFrames, preloadShipPortraits } from '../utils/preloadGameAssets';
+import { createPreviewBattle } from '../utils/battlePreview';
 
 export default class BootScene extends Phaser.Scene {
   private backgroundLayers: Phaser.GameObjects.Image[] = [];
@@ -24,6 +25,12 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
+    const preview = new URLSearchParams(window.location.search).get('previewBattle') === '1';
+    if (preview) {
+      this.scene.start('BattleScene', createPreviewBattle());
+      return;
+    }
+
     this.createParallaxBackground();
 
     this.add.image(960, 56, 'ui_titlebar')

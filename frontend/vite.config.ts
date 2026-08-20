@@ -8,7 +8,7 @@ export default defineConfig({
     open: true
   },
   optimizeDeps: {
-    include: ['phaser']
+    include: ['phaser', 'three']
   },
   build: {
     outDir: 'dist'

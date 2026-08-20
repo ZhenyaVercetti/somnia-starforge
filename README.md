@@ -1,6 +1,6 @@
 # Somnia StarForge
 
-On-chain auto-battler on Somnia. Version **v1.6.5** (live Game 17.08.2026).
+On-chain auto-battler on Somnia. Version **v1.6.5** (live Game 17.08.2026) + 3D battle layer (20.08, visual not accepted).
 
 ## Live testnet
 
@@ -11,6 +11,8 @@ Addresses: **`DEPLOYMENT.md`** (single source of truth). Frontend mirror: `front
 ## Scenes
 
 Boot → Prepare (hub) → Battle. Collection launches as a left-half overlay on Prepare. Wallet: RainbowKit.
+
+Battle field is Three.js (`#battle3d`); Phaser draws HUD only. Preview without a wallet: `?previewBattle=1`.
 
 ## Run
 

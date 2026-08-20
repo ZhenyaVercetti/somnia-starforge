@@ -17,9 +17,18 @@
         overflow: hidden;
         background: #0a0022;
       }
+      #battle3d {
+        position: fixed;
+        display: none;
+        pointer-events: none;
+        z-index: 0;
+      }
       #game {
         width: 100vw;
         height: 100vh;
+        position: relative;
+        z-index: 1;
+        background: transparent;
       }
       #react-root {
         position: fixed;
@@ -36,6 +45,7 @@
     </style>
   </head>
   <body>
+    <canvas id="battle3d"></canvas>
     <div id="game"></div>
     <div id="react-root"></div>
     <script type="module" src="/src/main.ts"></script>

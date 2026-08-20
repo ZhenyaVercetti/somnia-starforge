@@ -1,5 +1,17 @@
 # Changelog — Somnia StarForge
 
+## 20.08.2026 — 3D battle layer (черновик, визуал не принят)
+
+- BattleScene: Phaser только HUD. Поле боя — Three.js (`BattleWorld` + EffectComposer / UnrealBloom / OutputPass) на канвасе `#battle3d` под прозрачным Phaser.
+- Корабли: hangar 3/4 портреты как стоячие карточки, флоты слева/справа. Враг зеркалится. Drone Swarm = рой из 7 истребителей.
+- Фон: `stars.png` + слабая туманность. Планета и яркая полоса `battle_sky` / `battle_void` убраны.
+- Catalog: фракции/классы/выстрелы в `battleCatalog.ts`. Новые типы — PNG + запись в catalog, без правок сцены.
+- Превью: `?previewBattle=1`.
+- Удалены `battleCinema.ts`, `combatVfx.ts`, `BATTLE_REWORK_PROMPT.md`. Phaser ParticleEmitter не используется.
+- Зависимость: `three` ^0.185.1, `@types/three`.
+- Контракты / адреса без изменений (`0x064f…`). Playback по-прежнему Variant 1 events.
+- **Не финал.** TODO P0 = доработка этого экрана (посадка, живость, рой, выстрелы), не новый жанр.
+
 ## 17.08.2026 — v1.6.5 snapshot (бой не принят)
 
 - Попытка «кино»-слоя боя (cinema, новые FX, крены, частицы) **отклонена**: дешево, неестественно, висящие светящиеся спрайты.

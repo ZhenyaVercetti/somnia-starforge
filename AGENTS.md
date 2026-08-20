@@ -15,7 +15,7 @@ Never suggest other developers or agents.
 - Deploy: `npx hardhat run scripts/deploy.js --network somniaTestnet` (Remix only as fallback)
 - Testnet: Chain ID 50312, RPC https://dream-rpc.somnia.network
 - Mainnet: Chain ID 5031
-- Frontend: Phaser 3.90.0 + Vite/React + viem/wagmi + RainbowKit
+- Frontend: Phaser 3.90.0 + Three.js 0.185 (battle layer only) + Vite/React + viem/wagmi + RainbowKit
 - Patterns in use: Ownable + ReentrancyGuard + Pausable on Game; AccessControl only on PlayerProfile; ERC-721 / ERC-1155 soulbound. No UUPS.
 
 ## Core Rules (never break)
@@ -58,13 +58,13 @@ When updating StarForgeRelic.sol:
 
 Always remind current addresses from DEPLOYMENT.md and the new ones after update.
 
-## Current state (17.08.2026)
-- Version: v1.6.5 / post-audit + rejected battle cinema pass
+## Current state (20.08.2026)
+- Version: v1.6.5 + 3D battle layer (visual not accepted)
 - Live Game (testnet): `0x064fE7661b1eb52b727e562E652764b94c008383` — see DEPLOYMENT.md
 - previousGame: `0x6DE0834950Ed5f4d13E90A5EA049d43a3Ade9118` (GAME_ROLE снят)
 - On-chain: Variant 1 events, daily 10 + free ship, Shadow Fleet, ctor previousGame, exact payment, multi-hop free ships, EOA-only grind paths, startMatch persists relics
-- Frontend: Phaser + RainbowKit. Fleet slots: empty = `-1`, token 0 is a valid ship. Collection = left half. No outer_frame.
-- **Battle playback is not accepted. First task: execute `BATTLE_REWORK_PROMPT.md` in full. Do not patch BattleScene incrementally.**
+- Frontend: Phaser HUD + Three.js battle world (`#battle3d`). Fleet slots: empty = `-1`, token 0 is a valid ship. Collection = left half. No outer_frame.
+- **First task: polish the current battle screen** (framing, facing, swarm, idle, shots, quiet space). Do not start a new genre. Do not restore cinema / top-down 2D / primitive hulls / portrait-on-box. `BATTLE_REWORK_PROMPT.md` is deleted.
 - Goal: keep improving on testnet. Shop prices / daily 10 / AI — do not retune unless asked
 - Full context: AUDIT_HANDOFF.md
 - Do not redeploy NFT or Profile without a migration plan (wipes ships / progress)
