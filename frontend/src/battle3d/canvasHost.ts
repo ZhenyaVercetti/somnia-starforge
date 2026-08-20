@@ -13,6 +13,7 @@ export function getBattleCanvas(): HTMLCanvasElement {
   host.style.position = 'fixed';
   host.style.pointerEvents = 'none';
   host.style.zIndex = '0';
+  host.style.isolation = 'isolate';
   host.style.display = 'none';
   return host;
 }

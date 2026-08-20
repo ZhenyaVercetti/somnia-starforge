@@ -101,7 +101,8 @@ export default class BattleScene extends Phaser.Scene {
     this.cameras.main.setZoom(1);
     this.cameras.main.centerOn(960, 540);
     this.game.canvas.style.background = 'transparent';
-    this.game.canvas.style.zIndex = '1';
+    this.game.canvas.style.zIndex = '2';
+    this.game.canvas.style.position = 'relative';
 
     this.world = new BattleWorld();
     this.createSpeedButton();
@@ -449,22 +450,22 @@ export default class BattleScene extends Phaser.Scene {
     this.logTitle?.destroy();
     this.logContainer?.destroy();
 
-    this.logPlate = this.add.image(960, 1024, 'ui_plate')
-      .setDisplaySize(1040, 112)
-      .setAlpha(0.72)
+    this.logPlate = this.add.image(960, 1008, 'ui_plate')
+      .setDisplaySize(1080, 128)
+      .setAlpha(0.88)
       .setDepth(878)
       .setScrollFactor(0);
-    this.logPanel = this.add.rectangle(960, 1026, 980, 84, 0x080d16, 0.42)
-      .setStrokeStyle(1, 0x1f3a4d, 0.6)
+    this.logPanel = this.add.rectangle(960, 1010, 1020, 96, 0x080d16, 0.58)
+      .setStrokeStyle(1, 0x1f3a4d, 0.7)
       .setDepth(879)
       .setScrollFactor(0);
-    this.logTitle = this.add.text(470, 984, 'COMBAT LOG', displayText({
+    this.logTitle = this.add.text(450, 968, 'COMBAT LOG', displayText({
       fontSize: '13px',
       color: HUD.color.gold,
       stroke: '#1a1020',
       strokeThickness: 3
     })).setOrigin(0, 0.5).setDepth(881).setScrollFactor(0);
-    this.logContainer = this.add.container(470, 996).setDepth(880).setScrollFactor(0);
+    this.logContainer = this.add.container(450, 980).setDepth(880).setScrollFactor(0);
   }
 
   private setupBattleChrome() {
@@ -610,20 +611,14 @@ export default class BattleScene extends Phaser.Scene {
     this.tweens.timeScale = 1;
     this.world?.setTimeScale(1);
     this.world?.dimForResult();
+    this.world?.focusWinner(this.playerWon);
     clearTutorialCard(this);
 
     const hudFade: Phaser.GameObjects.GameObject[] = [
-      this.logPlate,
-      this.logPanel,
-      this.logTitle,
-      this.logContainer,
       this.speedBtnBase,
       this.speedBtnText,
       this.skipBtnBase,
-      this.skipBtnText,
-      this.roundHud,
-      this.sideLabelPlayer,
-      this.sideLabelEnemy
+      this.skipBtnText
     ].filter((obj): obj is NonNullable<typeof obj> => obj !== null);
     if (hudFade.length > 0) {
       this.tweens.add({

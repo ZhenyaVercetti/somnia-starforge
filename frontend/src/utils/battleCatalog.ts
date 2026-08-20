@@ -29,7 +29,15 @@ export type ClassVisual = {
   length: number;
   coreH: number;
   glowH: number;
+  forward: number;
+  lift: number;
+  rear: number;
+  hpLift: number;
+  weaponFit: number;
+  worldFit: number;
 };
+
+export const DRONE_VARIANT_COUNT = 4;
 
 export const BATTLE_FACTIONS: FactionVisual[] = [
   { id: 0, slug: 'emperial', display: 'Empire', glow: 0x3aa7ff, core: 0xe8f7ff, hot: 0xffffff },
@@ -54,7 +62,13 @@ export const BATTLE_CLASSES: ClassVisual[] = [
     stagger: 0,
     length: 150,
     coreH: 28,
-    glowH: 44
+    glowH: 44,
+    forward: 0.12,
+    lift: 0.04,
+    rear: 0,
+    hpLift: 1.45,
+    weaponFit: 0,
+    worldFit: 2.12
   },
   {
     id: 1,
@@ -72,7 +86,13 @@ export const BATTLE_CLASSES: ClassVisual[] = [
     stagger: 0,
     length: 0,
     coreH: 7,
-    glowH: 28
+    glowH: 28,
+    forward: 0,
+    lift: 0,
+    rear: 0.08,
+    hpLift: 1.78,
+    weaponFit: 0,
+    worldFit: 2.62
   },
   {
     id: 2,
@@ -90,7 +110,13 @@ export const BATTLE_CLASSES: ClassVisual[] = [
     stagger: 0,
     length: 170,
     coreH: 48,
-    glowH: 68
+    glowH: 68,
+    forward: -0.04,
+    lift: -0.04,
+    rear: 0.16,
+    hpLift: 2.12,
+    weaponFit: 0,
+    worldFit: 3.18
   },
   {
     id: 3,
@@ -100,15 +126,21 @@ export const BATTLE_CLASSES: ClassVisual[] = [
     fit: 172,
     lunge: 14,
     charge: 0,
-    travel: 120,
+    travel: 130,
     hold: 0,
     fade: 70,
-    count: 3,
-    spread: 12,
-    stagger: 32,
+    count: 5,
+    spread: 14,
+    stagger: 26,
     length: 90,
     coreH: 10,
-    glowH: 16
+    glowH: 16,
+    forward: 0.08,
+    lift: 0.1,
+    rear: 0,
+    hpLift: 1.55,
+    weaponFit: 0,
+    worldFit: 0.98
   }
 ];
 
@@ -163,9 +195,85 @@ export function classVisual(id: number): ClassVisual {
     stagger: 0,
     length: 150,
     coreH: 26,
-    glowH: 40
+    glowH: 40,
+    forward: 0.4,
+    lift: 0.15,
+    rear: 0.1,
+    hpLift: 1.55,
+    weaponFit: 0,
+    worldFit: 2.2
   };
 }
+
+export function droneTexturePath(faction: number, variant: number): string {
+  const known = factionById.has(faction);
+  const slug = known ? factionVisual(faction).slug : 'emperial';
+  const index = ((variant % DRONE_VARIANT_COUNT) + DRONE_VARIANT_COUNT) % DRONE_VARIANT_COUNT;
+  return `assets/units/drones/${slug}_${index}.png`;
+}
+
+export function droneWreckPath(faction: number, variant: number): string {
+  const known = factionById.has(faction);
+  const slug = known ? factionVisual(faction).slug : 'emperial';
+  const index = ((variant % DRONE_VARIANT_COUNT) + DRONE_VARIANT_COUNT) % DRONE_VARIANT_COUNT;
+  return `assets/units/drones/${slug}_${index}_destroyed.png`;
+}
+
+export function weaponTexturePath(faction: number, unitClass: number): string {
+  const visF = factionVisual(faction);
+  const visC = classVisual(unitClass);
+  const slugF = factionById.has(faction) ? visF.slug : 'emperial';
+  return `assets/units/weapons/${slugF}_${visC.slug}.png`;
+}
+
+export function battleFxPath(name: string): string {
+  return `assets/fx/${name}.png`;
+}
+
+export function droneLoadJobs(): CombatLoadJob[] {
+  const jobs: CombatLoadJob[] = [];
+  for (const faction of BATTLE_FACTIONS) {
+    for (let variant = 0; variant < DRONE_VARIANT_COUNT; variant++) {
+      jobs.push({
+        key: `drone_${faction.slug}_${variant}`,
+        path: droneTexturePath(faction.id, variant)
+      });
+      jobs.push({
+        key: `drone_${faction.slug}_${variant}_destroyed`,
+        path: droneWreckPath(faction.id, variant)
+      });
+    }
+  }
+  return jobs;
+}
+
+export function weaponLoadJobs(): CombatLoadJob[] {
+  const jobs: CombatLoadJob[] = [];
+  for (const faction of BATTLE_FACTIONS) {
+    for (const unitClass of BATTLE_CLASSES) {
+      if (unitClass.slug === 'droneswarm') {
+        continue;
+      }
+      jobs.push({
+        key: `weapon_${faction.slug}_${unitClass.slug}`,
+        path: weaponTexturePath(faction.id, unitClass.id)
+      });
+    }
+  }
+  return jobs;
+}
+
+export function battleFxLoadJobs(): CombatLoadJob[] {
+  return ['shot_bolt', 'shot_slug', 'shot_needle', 'shot_muzzle', 'shot_impact'].map((name) => ({
+    key: name,
+    path: battleFxPath(name)
+  }));
+}
+
+export type CombatLoadJob = {
+  key: string;
+  path: string;
+};
 
 export function combatTextureKey(faction: number, unitClass: number): string {
   return `combat_${factionVisual(faction).slug}_${classVisual(unitClass).slug}`;
@@ -245,11 +353,6 @@ export function resolveShipTexture(
   }
   return specific;
 }
-
-export type CombatLoadJob = {
-  key: string;
-  path: string;
-};
 
 export function combatLoadJobs(): CombatLoadJob[] {
   const jobs: CombatLoadJob[] = [];

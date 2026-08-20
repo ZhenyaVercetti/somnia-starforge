@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import {
   classVisual,
+  droneTexturePath,
+  droneWreckPath,
   factionVisual,
   portraitPath,
   portraitWreckPath
@@ -13,9 +15,11 @@ export type BuiltShip = {
   hullMeshes: THREE.Mesh[];
   drones: THREE.Object3D[];
   droneHome: THREE.Vector3[];
+  droneMuzzles: THREE.Object3D[];
   shield: THREE.Mesh;
   liveMap: THREE.Texture | null;
   wreckMap: THREE.Texture | null;
+  weaponMesh: THREE.Mesh | null;
   restYaw: number;
 };
 
@@ -52,7 +56,7 @@ export class ShipArt {
 
 let flareTex: THREE.Texture | null = null;
 
-function flareTexture(): THREE.Texture {
+export function flareTexture(): THREE.Texture {
   if (flareTex) {
     return flareTex;
   }
@@ -73,20 +77,62 @@ function flareTexture(): THREE.Texture {
   return flareTex;
 }
 
-function makeCard(map: THREE.Texture | null, width: number, height: number, flipX: boolean): THREE.Mesh {
-  const mat = new THREE.MeshBasicMaterial({
+function cardMaterial(map: THREE.Texture | null): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
     map,
     transparent: true,
-    alphaTest: 0.18,
+    alphaTest: 0.12,
     depthWrite: true,
     side: THREE.DoubleSide
   });
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
-  if (flipX) {
-    card.scale.x = -1;
-  }
-  return card;
 }
+
+function facingMap(map: THREE.Texture | null, flipX: boolean): THREE.Texture | null {
+  if (!map || !flipX) {
+    return map;
+  }
+  const tex = map.clone();
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.repeat.x = -1;
+  tex.offset.x = 1;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeCard(map: THREE.Texture | null, width: number, height: number, flipX: boolean): THREE.Mesh {
+  return new THREE.Mesh(new THREE.PlaneGeometry(width, height), cardMaterial(facingMap(map, flipX)));
+}
+
+function makeFlare(color: number, size: number): THREE.Sprite {
+  const flare = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: flareTexture(),
+      color,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true
+    })
+  );
+  flare.scale.set(size, size, 1);
+  return flare;
+}
+
+function mapAspect(map: THREE.Texture | null): number {
+  const image = map?.image as { width?: number; height?: number } | undefined;
+  if (image?.width && image?.height) {
+    return image.width / image.height;
+  }
+  return 1;
+}
+
+const SWARM_PACK: Array<[number, number, number, number]> = [
+  [0.0, 0.06, 0.04, 1],
+  [-0.52, 0.28, 0.22, 0.86],
+  [0.5, 0.04, 0.24, 0.82],
+  [-0.4, -0.2, -0.2, 0.88],
+  [0.42, 0.3, -0.16, 0.78],
+  [0.06, 0.44, 0.1, 0.74]
+];
 
 export function buildShip(
   faction: number,
@@ -97,65 +143,83 @@ export function buildShip(
   const vis = classVisual(unitClass);
   const paint = factionVisual(faction);
   const isSwarm = vis.slug === 'droneswarm';
-  const liveMap = art.get(portraitPath(faction, isSwarm ? 0 : unitClass));
-  const wreckMap = art.get(portraitWreckPath(faction, isSwarm ? 0 : unitClass));
-  const height = vis.fit / (isSwarm ? 108 : 66);
-  const image = liveMap?.image as { width?: number; height?: number } | undefined;
-  const aspect = image?.width && image?.height ? image.width / image.height : 1;
+  // Portraits have the nose on the left of the texture. Player sits on -X and must
+  // be mirrored so the bow points at the enemy; enemy art already points inward.
+  const flipX = isPlayer;
+  const liveMap = art.get(portraitPath(faction, unitClass));
+  const wreckMap = facingMap(art.get(portraitWreckPath(faction, unitClass)), flipX);
+  const height = vis.worldFit;
+  const aspect = mapAspect(isSwarm ? art.get(droneTexturePath(faction, 0)) : liveMap);
   const width = height * aspect;
-  const restYaw = isPlayer ? 0.22 : -0.22;
+  const restYaw = isPlayer ? 0.05 : -0.05;
+  const side = isPlayer ? 1 : -1;
 
   const root = new THREE.Group();
   const hullMeshes: THREE.Mesh[] = [];
   const engines: THREE.Object3D[] = [];
   const drones: THREE.Object3D[] = [];
   const droneHome: THREE.Vector3[] = [];
+  const droneMuzzles: THREE.Object3D[] = [];
+  let weaponMesh: THREE.Mesh | null = null;
+
+  const muzzle = new THREE.Object3D();
 
   if (isSwarm) {
-    const pack: Array<[number, number, number, number]> = [
-      [0.05, 0.18, 0.05, 1],
-      [-0.62, 0.42, 0.38, 0.82],
-      [0.58, 0.08, 0.42, 0.78],
-      [-0.48, -0.12, -0.4, 0.86],
-      [0.52, 0.48, -0.28, 0.74],
-      [0.02, 0.62, 0.18, 0.7],
-      [-0.18, -0.38, 0.22, 0.8]
-    ];
-    pack.forEach((spec) => {
-      const drone = makeCard(liveMap, width, height, !isPlayer);
+    SWARM_PACK.forEach((spec, index) => {
+      const variant = index % 4;
+      const droneMap = art.get(droneTexturePath(faction, variant)) || liveMap;
+      const droneAspect = mapAspect(droneMap);
+      const droneH = height * spec[3];
+      const droneW = droneH * droneAspect;
+      const droneFlip = !isPlayer;
+      const drone = makeCard(droneMap, droneW, droneH, droneFlip);
       drone.position.set(spec[0], spec[1], spec[2]);
-      drone.scale.multiplyScalar(spec[3]);
+      drone.userData.wreckMap = facingMap(art.get(droneWreckPath(faction, variant)), droneFlip);
       root.add(drone);
       hullMeshes.push(drone);
       drones.push(drone);
       droneHome.push(new THREE.Vector3(spec[0], spec[1], spec[2]));
+
+      const droneMuzzle = new THREE.Object3D();
+      droneMuzzle.position.set(side * droneW * 0.38, droneH * 0.04, 0.08);
+      drone.add(droneMuzzle);
+      droneMuzzles.push(droneMuzzle);
+
+      const flare = makeFlare(paint.glow, droneH * 0.28);
+      flare.position.set(-side * droneW * 0.28, -droneH * 0.04, -0.08);
+      drone.add(flare);
+      engines.push(flare);
     });
+    muzzle.position.set(side * 0.9, 0.16, 0.2);
+    root.add(muzzle);
+    const swarmAura = makeFlare(paint.glow, 1.35);
+    swarmAura.material.opacity = 0.1;
+    swarmAura.position.set(0, 0.1, -0.2);
+    swarmAura.userData.soft = true;
+    root.add(swarmAura);
+    engines.push(swarmAura);
   } else {
-    const card = makeCard(liveMap, width, height, !isPlayer);
+    const card = makeCard(liveMap, width, height, flipX);
     root.add(card);
     hullMeshes.push(card);
+
+    const flare = makeFlare(paint.glow, height * 0.2);
+    flare.position.set(-side * width * 0.28, -height * 0.06, -0.12);
+    root.add(flare);
+    engines.push(flare);
+    const aura = makeFlare(paint.glow, Math.max(width, height) * 0.42);
+    aura.material.opacity = 0.09;
+    aura.position.set(0, -height * 0.04, -0.16);
+    aura.userData.soft = true;
+    root.add(aura);
+    engines.push(aura);
+    muzzle.position.set(side * width * 0.34, height * 0.04, 0.18);
+    root.add(muzzle);
   }
 
-  const flare = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: flareTexture(),
-      color: paint.glow,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true
-    })
-  );
-  flare.position.set(isPlayer ? -width * 0.22 : width * 0.22, -height * 0.06, -0.12);
-  flare.scale.set(height * 0.22, height * 0.22, 1);
-  root.add(flare);
-  engines.push(flare);
-
-  const muzzle = new THREE.Object3D();
-  muzzle.position.set(isPlayer ? width * 0.3 : -width * 0.3, height * 0.06, 0.18);
-  root.add(muzzle);
-
+  const span = isSwarm ? 1.7 : Math.max(width, height);
   const shield = new THREE.Mesh(
-    new THREE.SphereGeometry(Math.max(width, height) * (isSwarm ? 0.85 : 0.55), 24, 16),
+    new THREE.SphereGeometry(span * (isSwarm ? 0.72 : 0.52), 24, 16),
     new THREE.MeshBasicMaterial({
       color: 0x66ddff,
       transparent: true,
@@ -179,9 +243,11 @@ export function buildShip(
     hullMeshes,
     drones,
     droneHome,
+    droneMuzzles,
     shield,
     liveMap,
     wreckMap,
+    weaponMesh,
     restYaw
   };
 }
@@ -189,8 +255,9 @@ export function buildShip(
 export function wreckShip(built: BuiltShip): void {
   built.hullMeshes.forEach((mesh) => {
     const mat = mesh.material as THREE.MeshBasicMaterial;
-    if (built.wreckMap) {
-      mat.map = built.wreckMap;
+    const wreck = (mesh.userData.wreckMap as THREE.Texture | undefined) || built.wreckMap;
+    if (wreck) {
+      mat.map = wreck;
     }
     mat.color.setHex(0x9a9a9a);
     mat.needsUpdate = true;
@@ -198,4 +265,7 @@ export function wreckShip(built: BuiltShip): void {
   built.engines.forEach((engine) => {
     engine.visible = false;
   });
+  if (built.weaponMesh) {
+    built.weaponMesh.visible = false;
+  }
 }

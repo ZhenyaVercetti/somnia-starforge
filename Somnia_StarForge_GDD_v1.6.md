@@ -1,9 +1,9 @@
 # Somnia StarForge — Game Design Document v1.6
 
-**Статус:** v1.6.5 + 3D battle layer (20.08.2026, визуал боя не принят)  
+**Статус:** v1.6.5 + 3D battle layer (20.08.2026, визуал боя не принят: 4/10, цель 8/10)  
 **Live:** testnet 50312. Адреса только в `DEPLOYMENT.md`.  
-**Сделано:** Variant 1 events, Shadow Fleet 8, daily 10 + free ship, Collection overlay 0–960, RainbowKit, Last Stand 1 раз, unique team/relics. Playback боя: Three.js + hangar-карточки, Phaser HUD.  
-**Следующий шаг:** доработка текущего экрана боя (TODO P0), затем ручной прогон шопа/лимитов, затем mainnet.
+**Сделано:** Variant 1 events, Shadow Fleet 8, daily 10 + free ship, Collection overlay 0–960, RainbowKit, Last Stand 1 раз, unique team/relics. Playback боя: Three.js + hangar-карточки, Phaser HUD, уникальный рой, объёмный космос.  
+**Следующий шаг:** доработка текущего экрана боя до читаемого космического боя без наложений (TODO P0), затем ручной прогон шопа/лимитов, затем mainnet.
 
 **v1.6 — CollectionScene + Механика реликвий и юнитов текущая цель:**
 - Полностью переработанная CollectionScene с фильтрами, multi-select и instant add (double-click)

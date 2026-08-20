@@ -59,12 +59,12 @@ When updating StarForgeRelic.sol:
 Always remind current addresses from DEPLOYMENT.md and the new ones after update.
 
 ## Current state (20.08.2026)
-- Version: v1.6.5 + 3D battle layer (visual not accepted)
+- Version: v1.6.5 + 3D battle layer (visual not accepted, user score 4/10, target 8/10)
 - Live Game (testnet): `0x064fE7661b1eb52b727e562E652764b94c008383` — see DEPLOYMENT.md
 - previousGame: `0x6DE0834950Ed5f4d13E90A5EA049d43a3Ade9118` (GAME_ROLE снят)
 - On-chain: Variant 1 events, daily 10 + free ship, Shadow Fleet, ctor previousGame, exact payment, multi-hop free ships, EOA-only grind paths, startMatch persists relics
 - Frontend: Phaser HUD + Three.js battle world (`#battle3d`). Fleet slots: empty = `-1`, token 0 is a valid ship. Collection = left half. No outer_frame.
-- **First task: polish the current battle screen** (framing, facing, swarm, idle, shots, quiet space). Do not start a new genre. Do not restore cinema / top-down 2D / primitive hulls / portrait-on-box. `BATTLE_REWORK_PROMPT.md` is deleted.
+- **First task: battle screen to 8/10.** Fleet must read as a real space fight, ships placed cleanly with **no overlap**. Not a pile of cards on a wallpaper. Keep `#battle3d` architecture. Do not start a new genre. Do not restore cinema / top-down 2D / primitive hulls / portrait-on-box.
 - Goal: keep improving on testnet. Shop prices / daily 10 / AI — do not retune unless asked
 - Full context: AUDIT_HANDOFF.md
 - Do not redeploy NFT or Profile without a migration plan (wipes ships / progress)

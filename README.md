@@ -1,6 +1,6 @@
 # Somnia StarForge
 
-On-chain auto-battler on Somnia. Version **v1.6.5** (live Game 17.08.2026) + 3D battle layer (20.08, visual not accepted).
+On-chain auto-battler on Somnia. Version **v1.6.5** (live Game 17.08.2026) + 3D battle layer (20.08, visual not accepted — 4/10, target 8/10).
 
 ## Live testnet
 

@@ -59,14 +59,15 @@
 
 ## BattleScene
 - Данные: events / playerWon / HP / unit visuals из логов `BattleResolved` + `BattleEventEmitted` (Variant 1, не storage). Контрактный поток не менять.
-- **Слой 20.08:** Three.js под прозрачным Phaser. Канвас `#battle3d` (`pointer-events: none`, z-index 0). Phaser — только HUD (HP, лог, SKIP/x2, итог). `#game` прозрачный.
-- **Камера:** cinematic 3/4, флоты слева/справа. Слоты: inner x=±6.2 y=0.95, outer x=±8.7 y=1.45, ряд z=`[-4.05,-1.35,1.35,4.05]`. Камера `(0, 3.15, 17.4)` → `(0, 1.15, 0)`, FOV 48.
-- **Корабли:** стоячие карточки hangar-портретов (`hulls.ts`), не примитивные mesh и не UV на бокс. Враг `scale.x = -1`, restYaw к противнику. Drone Swarm = 7 истребителей с независимым idle. Wreck = destroyed-портрет.
-- **Фон:** `stars.png` + слабая `nebula_close` (opacity 0.16). Без планеты, без `battle_sky` / `battle_void`.
-- **Playback:** 1 event = 1 выстрел. Idle bob/drift/yaw/roll. Атака — короткий lunge + bank. SKIP/x2 через `timeScale`. Phaser 3.90 ParticleEmitter **запрещён**.
-- **Расширение фракций/классов:** `battleCatalog.ts` + PNG в `assets/units/combat/`. BattleScene не хардкодить под текущие 3 фракции / 4 класса.
-- **Превью без кошелька:** `?previewBattle=1` (BootScene → `createPreviewBattle()`).
-- **Статус:** архитектура стоит, визуал **не принят**. P0 = доработка этого экрана, не новый жанр.
+- **Слой:** Three.js под прозрачным Phaser. Канвас `#battle3d` (`pointer-events: none`, z-index 0). Phaser HUD z-index 2 (HP, лог, SKIP/x2, итог). `#game` прозрачный, z-index 2.
+- **Камера:** сверху-сбоку. Слоты: inner |x|=4.35, outer |x|=9.05, ряд z=`[-6.55,-2.18,2.18,6.55]`. Камера `(0, 5.15, 21.6)` → `(0, 1.28, 0)`, FOV 42. После боя `focusWinner`.
+- **Корабли:** hangar 3/4 карточки (`hulls.ts`). Арт носом влево → UV-flip **игрока**. Размер `worldFit` в catalog (fighter 2.12 / cruiser 2.62 / dread 3.18). Overlay-оружие не вешается. Wreck = destroyed-портрет + tint.
+- **Drone Swarm:** 6 уникальных дронов (`assets/units/drones/{faction}_{0..3}.png`), компактный pack, иглы со своих дул. Не копии истребителей.
+- **Космос:** тёмный clear + star sphere + слои `nebula_mid` / `nebula_close` с параллаксом + пыль near/far + FogExp2. Без планеты, без `battle_sky` / `battle_void` как wallpaper.
+- **Playback:** 1 event = 1 выстрел (тонкий dart / beam / slug / needle). Спокойный idle. Атака — короткий lunge. SKIP/x2 через `timeScale`. Phaser 3.90 ParticleEmitter **запрещён**.
+- **Расширение фракций/классов:** `battleCatalog.ts` + PNG. BattleScene не хардкодить под 3 фракции / 4 класса.
+- **Превью без кошелька:** `?previewBattle=1`.
+- **Статус:** визуал **не принят** (4/10, цель 8/10). P0 = строй без наложений и вид полноценного космического боя. Не новый жанр.
 - `outer_frame` не рисуется.
 
 ## BootScene

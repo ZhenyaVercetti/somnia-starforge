@@ -3,8 +3,16 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { classVisual, factionVisual, portraitLoadJobs } from '../utils/battleCatalog';
-import { buildShip, wreckShip, ShipArt, type BuiltShip } from './hulls';
+import {
+  battleFxLoadJobs,
+  battleFxPath,
+  classVisual,
+  droneLoadJobs,
+  factionVisual,
+  portraitLoadJobs,
+  type ClassVisual
+} from '../utils/battleCatalog';
+import { buildShip, wreckShip, ShipArt, flareTexture, type BuiltShip } from './hulls';
 import { getBattleCanvas, hideBattleCanvas, syncBattleCanvas } from './canvasHost';
 
 export type WorldUnit = {
@@ -19,6 +27,7 @@ export type WorldUnit = {
   busy: boolean;
   seed: number;
   restYaw: number;
+  restPitch: number;
 };
 
 type Tween = {
@@ -37,18 +46,20 @@ function easeInOutSine(t: number): number {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-const INNER_X = 6.2;
-const OUTER_X = 8.7;
-const ROW_Z = [-4.05, -1.35, 1.35, 4.05];
+const ROW_Z = [-6.55, -2.18, 2.18, 6.55];
+const INNER_X = 4.35;
+const OUTER_X = 9.05;
+const X_AXIS = new THREE.Vector3(1, 0, 0);
 
-export function slotWorld(isPlayer: boolean, index: number): { pos: THREE.Vector3 } {
+export function slotWorld(isPlayer: boolean, index: number, unitClass = 0): { pos: THREE.Vector3 } {
+  const vis = classVisual(unitClass);
   const col = ((index % 2) + 2) % 2;
   const row = Math.floor(index / 2);
   const inner = col === 1;
-  const xAbs = inner ? INNER_X : OUTER_X;
+  const xAbs = (inner ? INNER_X : OUTER_X) + vis.rear - vis.forward;
+  const y = (inner ? 1.05 : 1.48) + vis.lift;
+  const z = (ROW_Z[row] ?? (row - 1.5) * 4.35) + (inner ? 0.12 : -0.12);
   const x = isPlayer ? -xAbs : xAbs;
-  const z = ROW_Z[row] ?? (row - 1.5) * 2.9;
-  const y = inner ? 0.95 : 1.45;
   return { pos: new THREE.Vector3(x, y, z) };
 }
 
@@ -65,14 +76,19 @@ export class BattleWorld {
   private fx: THREE.Object3D[] = [];
   private timeScale = 1;
   private clock = 0;
-  private camBase = new THREE.Vector3(0, 3.15, 17.4);
-  private look = new THREE.Vector3(0, 1.15, 0);
+  private camBase = new THREE.Vector3(0, 5.15, 21.6);
+  private look = new THREE.Vector3(0, 1.28, 0);
   private shake = 0;
   private live = false;
+  private resultFocus = false;
   private shotLight: THREE.PointLight;
   private resizeHandler: () => void;
   private projector = new THREE.Vector3();
   private art = new ShipArt();
+  private spaceLayers: Array<{ obj: THREE.Object3D; origin: THREE.Vector3; px: number; py: number }> = [];
+  private dustNear: THREE.Points | null = null;
+  private dustFar: THREE.Points | null = null;
+  private starNear: THREE.Points | null = null;
 
   constructor() {
     this.host = getBattleCanvas();
@@ -82,18 +98,18 @@ export class BattleWorld {
       alpha: false,
       powerPreference: 'high-performance'
     });
-    this.renderer.setClearColor(0x05010c, 1);
+    this.renderer.setClearColor(0x04010a, 1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.08;
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(48, 16 / 9, 0.1, 180);
+    this.camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 280);
     this.camera.position.copy(this.camBase);
     this.camera.lookAt(this.look);
 
     const renderPass = new RenderPass(this.scene, this.camera);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1920, 1080), 0.32, 0.3, 0.58);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1920, 1080), 0.34, 0.42, 0.52);
     const output = new OutputPass();
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(renderPass);
@@ -115,13 +131,12 @@ export class BattleWorld {
     const extra = [
       'assets/background/stars.png',
       'assets/background/nebula_close.png',
-      'assets/fx/vfx_bolt.png',
-      'assets/fx/vfx_slug.png',
-      'assets/fx/vfx_impact.png',
-      'assets/fx/vfx_ring.png'
+      'assets/background/nebula_mid.png'
     ];
     await Promise.all([
       ...portraitLoadJobs().map((job) => this.art.load(job.path)),
+      ...droneLoadJobs().map((job) => this.art.load(job.path)),
+      ...battleFxLoadJobs().map((job) => this.art.load(job.path)),
       ...extra.map((path) => this.art.load(path))
     ]);
     this.buildSpace();
@@ -138,8 +153,12 @@ export class BattleWorld {
     unitClass: number
   ): WorldUnit {
     const id = `${isPlayer ? 'p' : 'a'}-${slot}`;
-    const pose = slotWorld(isPlayer, slot);
+    const pose = slotWorld(isPlayer, slot, unitClass);
     const built = buildShip(faction, unitClass, isPlayer, this.art);
+    const restPitch = ((slot % 4) - 1.5) * 0.018;
+    built.restYaw += ((slot % 2) === 0 ? -0.03 : 0.03);
+    built.root.rotation.y = built.restYaw;
+    built.root.rotation.x = restPitch;
     built.root.position.copy(pose.pos);
     this.scene.add(built.root);
     const unit: WorldUnit = {
@@ -153,7 +172,8 @@ export class BattleWorld {
       alive: true,
       busy: false,
       seed: Math.random() * 10,
-      restYaw: built.restYaw
+      restYaw: built.restYaw,
+      restPitch
     };
     this.units.set(id, unit);
     return unit;
@@ -168,8 +188,9 @@ export class BattleWorld {
     if (!unit) {
       return null;
     }
+    const vis = classVisual(unit.unitClass);
     this.projector.copy(unit.built.root.position);
-    this.projector.y += 1.55;
+    this.projector.y += vis.hpLift;
     this.projector.project(this.camera);
     return {
       x: (this.projector.x * 0.5 + 0.5) * 1920,
@@ -193,29 +214,27 @@ export class BattleWorld {
     attacker.busy = true;
     const origin = attacker.home.clone();
     const toward = target.home.clone().sub(origin).normalize();
-    const lunge = origin.clone().add(toward.multiplyScalar(0.55));
-    const bank = attacker.isPlayer ? -0.18 : 0.18;
-    const startYaw = attacker.built.root.rotation.y;
+    const lunge = origin.clone().add(toward.multiplyScalar(vis.slug === 'dreadnought' ? 0.18 : 0.28));
+    const bank = attacker.isPlayer ? -0.07 : 0.07;
 
-    this.tween(0.16, (k) => {
+    this.tween(0.28, (k) => {
       attacker.built.root.position.lerpVectors(origin, lunge, k);
       attacker.built.root.rotation.z = bank * k;
-      attacker.built.root.rotation.y = startYaw + (attacker.isPlayer ? 0.08 : -0.08) * k;
     }, () => {
-      this.fire(attacker, target, vis.shot, paint.glow, !!opts.crit, () => {
+      this.fire(attacker, target, vis, paint.glow, !!opts.crit, () => {
         opts.onHit?.();
-        this.tween(0.22, (k) => {
+        this.tween(0.34, (k) => {
           attacker.built.root.position.lerpVectors(lunge, origin, k);
           attacker.built.root.rotation.z = bank * (1 - k);
-          attacker.built.root.rotation.y = startYaw + (attacker.isPlayer ? 0.08 : -0.08) * (1 - k);
         }, () => {
           attacker.built.root.position.copy(origin);
           attacker.built.root.rotation.z = 0;
           attacker.built.root.rotation.y = attacker.restYaw;
+          attacker.built.root.rotation.x = attacker.restPitch;
           attacker.busy = false;
         }, easeInOutSine);
       });
-    }, easeOutCubic);
+    }, easeInOutSine);
   }
 
   playImpact(targetId: string, fromId: string, heavy: boolean, crit: boolean): void {
@@ -228,10 +247,10 @@ export class BattleWorld {
     const dir = from
       ? target.home.clone().sub(from.home).normalize()
       : new THREE.Vector3(target.isPlayer ? -1 : 1, 0, 0);
-    const knock = home.clone().add(dir.multiplyScalar(heavy ? 0.55 : 0.32));
+    const knock = home.clone().add(dir.multiplyScalar(heavy ? 0.28 : 0.14));
     this.flashHit(target.built.root.position, crit ? 0xffe566 : factionVisual(target.faction).glow, heavy);
-    this.shake = Math.max(this.shake, heavy || crit ? 0.22 : 0.1);
-    this.tween(0.16, (k) => {
+    this.shake = Math.max(this.shake, heavy || crit ? 0.1 : 0.04);
+    this.tween(0.24, (k) => {
       const u = k < 0.45 ? k / 0.45 : 1 - (k - 0.45) / 0.55;
       target.built.root.position.lerpVectors(home, knock, u);
     }, () => target.built.root.position.copy(home), easeInOutSine);
@@ -287,7 +306,7 @@ export class BattleWorld {
     target.busy = false;
     this.explode(target.built.root.position.clone(), factionVisual(target.faction).glow);
     wreckShip(target.built);
-    this.shake = Math.max(this.shake, 0.38);
+    this.shake = Math.max(this.shake, 0.16);
     const start = target.built.root.rotation.z;
     this.tween(0.8, (k) => {
       target.built.root.rotation.z = start + 0.18 * k;
@@ -296,9 +315,34 @@ export class BattleWorld {
   }
 
   dimForResult(): void {
-    this.bloom.strength = 0.38;
-    this.tween(0.6, (k) => {
-      this.renderer.toneMappingExposure = 1.12 - k * 0.35;
+    this.bloom.strength = 0.26;
+    this.tween(0.8, (k) => {
+      this.renderer.toneMappingExposure = 1.08 - k * 0.22;
+    }, undefined, easeInOutSine);
+  }
+
+  focusWinner(playerWon: boolean): void {
+    this.resultFocus = true;
+    const side = playerWon ? -1 : 1;
+    const startCam = this.camBase.clone();
+    const startLook = this.look.clone();
+    const targetCam = new THREE.Vector3(side * 3.6, 3.9, 14.6);
+    const targetLook = new THREE.Vector3(side * 6.1, 1.25, 0);
+    this.tween(1.6, (k) => {
+      this.camBase.lerpVectors(startCam, targetCam, k);
+      this.look.lerpVectors(startLook, targetLook, k);
+    }, undefined, easeInOutSine);
+    this.units.forEach((unit) => {
+      if (unit.isPlayer === playerWon) {
+        return;
+      }
+      unit.built.hullMeshes.forEach((mesh) => {
+        const mat = mesh.material as THREE.MeshBasicMaterial;
+        mat.color.multiplyScalar(0.38);
+      });
+      unit.built.engines.forEach((engine) => {
+        engine.visible = false;
+      });
     });
   }
 
@@ -313,34 +357,39 @@ export class BattleWorld {
     this.units.forEach((unit) => {
       const t = this.clock;
       const s = unit.seed;
+      const vis = classVisual(unit.unitClass);
       if (unit.alive) {
         unit.built.drones.forEach((drone, i) => {
           const home = unit.built.droneHome[i];
           if (!home) {
             return;
           }
-          drone.position.x = home.x + Math.sin(t * 2.1 + s + i) * 0.07;
-          drone.position.y = home.y + Math.cos(t * 1.7 + s * 1.4 + i) * 0.06;
-          drone.position.z = home.z + Math.sin(t * 1.9 + i * 0.7) * 0.05;
-          drone.rotation.z = Math.sin(t * 1.6 + i) * 0.14;
-          drone.rotation.x = Math.cos(t * 1.2 + i) * 0.06;
+          drone.position.x = home.x + Math.sin(t * 0.55 + s + i * 0.7) * 0.045;
+          drone.position.y = home.y + Math.cos(t * 0.42 + s * 1.1 + i) * 0.035;
+          drone.position.z = home.z + Math.sin(t * 0.38 + i * 0.5) * 0.03;
+          drone.rotation.z = Math.sin(t * 0.48 + i) * 0.05;
+          drone.rotation.x = Math.cos(t * 0.36 + i) * 0.02;
         });
       }
-      unit.built.engines.forEach((engine) => {
+      unit.built.engines.forEach((engine, i) => {
         const sprite = engine as THREE.Sprite;
         if (sprite.material) {
-          sprite.material.opacity = 0.4 + Math.sin(t * 6.5 + s) * 0.28;
+          const soft = !!sprite.userData.soft;
+          sprite.material.opacity = soft
+            ? 0.12 + Math.sin(t * 0.6 + s) * 0.03
+            : 0.48 + Math.sin(t * 2.1 + s + i) * 0.1;
         }
       });
       if (unit.busy || !unit.alive) {
         return;
       }
-      unit.built.root.position.x = unit.home.x + Math.sin(t * 0.65 + s) * 0.12 + Math.sin(t * 1.35 + s * 2) * 0.04;
-      unit.built.root.position.y = unit.home.y + Math.sin(t * 1.05 + s) * 0.16 + Math.cos(t * 0.55 + s) * 0.05;
-      unit.built.root.position.z = unit.home.z + Math.cos(t * 0.8 + s * 1.3) * 0.14;
-      unit.built.root.rotation.y = unit.restYaw + Math.sin(t * 0.58 + s) * 0.07;
-      unit.built.root.rotation.z = Math.sin(t * 0.92 + s) * 0.055;
-      unit.built.root.rotation.x = Math.sin(t * 0.47 + s * 0.8) * 0.03;
+      const amp = vis.slug === 'dreadnought' ? 0.028 : vis.slug === 'cruiser' ? 0.038 : vis.slug === 'droneswarm' ? 0.05 : 0.042;
+      unit.built.root.position.x = unit.home.x + Math.sin(t * 0.28 + s) * amp;
+      unit.built.root.position.y = unit.home.y + Math.sin(t * 0.34 + s * 0.7) * amp * 0.7;
+      unit.built.root.position.z = unit.home.z + Math.cos(t * 0.24 + s * 0.9) * amp * 0.55;
+      unit.built.root.rotation.y = unit.restYaw + Math.sin(t * 0.22 + s) * 0.012;
+      unit.built.root.rotation.z = Math.sin(t * 0.26 + s) * 0.01;
+      unit.built.root.rotation.x = unit.restPitch + Math.sin(t * 0.2 + s * 0.6) * 0.008;
     });
 
     const incoming = this.tweens;
@@ -356,14 +405,20 @@ export class BattleWorld {
       }
     });
 
-    this.shake *= Math.pow(0.04, dt * 4);
+    this.shake *= Math.pow(0.08, dt * 3);
     const cam = this.camBase.clone();
-    cam.x += Math.sin(this.clock * 0.12) * 0.22;
-    cam.y += Math.cos(this.clock * 0.09) * 0.1;
-    cam.x += (Math.random() - 0.5) * this.shake;
-    cam.y += (Math.random() - 0.5) * this.shake;
+    if (this.resultFocus) {
+      cam.x += Math.sin(this.clock * 0.18) * 0.22;
+      cam.y += Math.cos(this.clock * 0.14) * 0.08;
+    } else {
+      cam.x += Math.sin(this.clock * 0.045) * 0.32;
+      cam.y += Math.cos(this.clock * 0.033) * 0.16;
+    }
+    cam.x += this.shake * 0.4;
+    cam.y += this.shake * 0.25;
     this.camera.position.copy(cam);
     this.camera.lookAt(this.look);
+    this.tickSpace(cam);
 
     this.shotLight.intensity *= Math.pow(0.001, dt);
     this.composer.render();
@@ -387,72 +442,79 @@ export class BattleWorld {
   private fire(
     attacker: WorldUnit,
     target: WorldUnit,
-    kind: string,
+    vis: ClassVisual,
     glow: number,
     crit: boolean,
     onHit: () => void
   ): void {
-    const from = attacker.built.root.position.clone();
-    from.x += attacker.isPlayer ? 1.55 : -1.55;
-    from.y += 1.05;
-    const to = target.built.root.position.clone();
-    to.y += 0.95;
+    const to = new THREE.Vector3();
+    target.built.root.getWorldPosition(to);
+    to.y += 0.55;
     const color = crit ? 0xffe9a0 : glow;
+    const from = new THREE.Vector3();
+    attacker.built.muzzle.getWorldPosition(from);
     this.shotLight.color.setHex(color);
     this.shotLight.position.copy(from);
-    this.shotLight.intensity = crit ? 8 : 5;
+    this.shotLight.intensity = crit ? 4.2 : 2.6;
+    this.muzzleFlash(from, color, vis.slug === 'dreadnought' ? 0.85 : 0.55);
 
-    if (kind === 'beam') {
+    if (vis.shot === 'beam') {
       this.beam(from, to, color, onHit);
       return;
     }
-    if (kind === 'slug') {
-      this.bolt(from, to, color, 0.28, 0.32, true, onHit);
+    if (vis.shot === 'slug') {
+      this.dart(from, to, color, 0.09, 0.72, vis.travel / 1000, true, onHit);
       return;
     }
-    if (kind === 'needle') {
-      const vis = classVisual(attacker.unitClass);
-      for (let i = 0; i < vis.count; i++) {
-        const perp = new THREE.Vector3(0, 1, 0).cross(to.clone().sub(from).normalize()).normalize();
-        const off = (i - (vis.count - 1) / 2) * 0.22;
-        const a = from.clone().add(perp.clone().multiplyScalar(off));
-        const b = to.clone().add(perp.clone().multiplyScalar(off));
+    if (vis.shot === 'needle') {
+      const muzzles = attacker.built.droneMuzzles.length > 0
+        ? attacker.built.droneMuzzles
+        : [attacker.built.muzzle];
+      const shots = Math.min(vis.count, muzzles.length);
+      for (let i = 0; i < shots; i++) {
+        const muzzle = muzzles[i];
         this.after(i * vis.stagger / 1000, () => {
-          this.bolt(a, b, color, 0.07, vis.travel / 1000, false, i === 0 ? onHit : undefined);
+          const a = new THREE.Vector3();
+          muzzle.getWorldPosition(a);
+          const b = to.clone();
+          b.y += (i - (shots - 1) / 2) * 0.1;
+          b.z += (i - (shots - 1) / 2) * 0.12;
+          this.muzzleFlash(a, color, 0.32);
+          this.dart(a, b, color, 0.018, 0.32, vis.travel / 1000, false, i === 0 ? onHit : undefined);
         });
       }
       return;
     }
-    this.bolt(from, to, color, 0.11, 0.16, false, onHit);
+    this.dart(from, to, color, 0.038, 0.48, vis.travel / 1000, false, onHit);
   }
 
-  private bolt(
+  private dart(
     from: THREE.Vector3,
     to: THREE.Vector3,
     color: number,
     radius: number,
+    length: number,
     duration: number,
     heavy: boolean,
     onHit?: () => void
   ): void {
-    const dir = to.clone().sub(from);
-    const len = dir.length();
-    const geom = new THREE.CapsuleGeometry(radius, Math.max(0.4, len * 0.22), 4, 8);
+    const geom = new THREE.CapsuleGeometry(radius, length, 3, 6);
     geom.rotateZ(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
+      opacity: 0.95,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.copy(from);
-    mesh.lookAt(to);
-    mesh.rotateY(Math.PI / 2);
+    this.aimAlong(mesh, from, to);
     this.scene.add(mesh);
     this.fx.push(mesh);
     this.tween(duration, (k) => {
       mesh.position.lerpVectors(from, to, k);
+      this.aimAlong(mesh, from, to);
       this.shotLight.position.copy(mesh.position);
     }, () => {
       onHit?.();
@@ -460,12 +522,44 @@ export class BattleWorld {
       this.scene.remove(mesh);
       geom.dispose();
       mat.dispose();
-    }, heavy ? easeOutCubic : easeOutCubic);
+    }, easeOutCubic);
+  }
+
+  private aimAlong(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
+    const dir = to.clone().sub(from);
+    if (dir.lengthSq() < 0.0001) {
+      return;
+    }
+    dir.normalize();
+    mesh.quaternion.setFromUnitVectors(X_AXIS, dir);
+  }
+
+  private muzzleFlash(pos: THREE.Vector3, color: number, scale: number): void {
+    const tex = this.art.get(battleFxPath('shot_muzzle'));
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      color,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(pos);
+    sprite.scale.set(0.22 * scale, 0.22 * scale, 1);
+    this.scene.add(sprite);
+    this.fx.push(sprite);
+    this.tween(0.12, (k) => {
+      sprite.scale.setScalar(0.22 * scale * (1 + k * 1.1));
+      mat.opacity = 0.85 * (1 - k);
+    }, () => {
+      this.scene.remove(sprite);
+      mat.dispose();
+    });
   }
 
   private beam(from: THREE.Vector3, to: THREE.Vector3, color: number, onHit: () => void): void {
     const dist = from.distanceTo(to);
-    const geom = new THREE.CylinderGeometry(0.06, 0.06, dist, 10);
+    const geom = new THREE.CylinderGeometry(0.016, 0.022, dist, 8);
     geom.rotateZ(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
       color,
@@ -476,48 +570,91 @@ export class BattleWorld {
     });
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.copy(from).add(to).multiplyScalar(0.5);
-    mesh.lookAt(to);
-    mesh.rotateY(Math.PI / 2);
+    this.aimAlong(mesh, from, to);
     this.scene.add(mesh);
     this.fx.push(mesh);
-    this.tween(0.06, (k) => {
+
+    const glowGeom = new THREE.CylinderGeometry(0.045, 0.06, dist, 8);
+    glowGeom.rotateZ(-Math.PI / 2);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const glow = new THREE.Mesh(glowGeom, glowMat);
+    glow.position.copy(mesh.position);
+    glow.quaternion.copy(mesh.quaternion);
+    this.scene.add(glow);
+
+    this.tween(0.07, (k) => {
       mat.opacity = k;
-      mesh.scale.set(1, 1 + k * 0.4, 1 + k * 0.4);
+      glowMat.opacity = k * 0.35;
+      mesh.scale.set(1, 1 + k * 0.35, 1 + k * 0.35);
     }, () => {
       onHit();
       this.flashHit(to, color, false);
-      this.tween(0.28, (k) => {
+      this.tween(0.3, (k) => {
         mat.opacity = 1 - k;
+        glowMat.opacity = 0.35 * (1 - k);
       }, () => {
         this.scene.remove(mesh);
+        this.scene.remove(glow);
         geom.dispose();
         mat.dispose();
+        glowGeom.dispose();
+        glowMat.dispose();
       });
     });
   }
 
   private flashHit(pos: THREE.Vector3, color: number, heavy: boolean): void {
-    const mat = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.95,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 0.55 : 0.32, 14, 12), mat);
-    mesh.position.copy(pos);
-    this.scene.add(mesh);
-    this.fx.push(mesh);
-    this.shotLight.position.copy(pos);
-    this.shotLight.intensity = heavy ? 10 : 6;
-    this.tween(0.22, (k) => {
-      mesh.scale.setScalar(1 + k * (heavy ? 2.4 : 1.6));
-      mat.opacity = 0.95 * (1 - k);
-    }, () => {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      mat.dispose();
-    });
+    const tex = this.art.get(battleFxPath('shot_impact'));
+    if (tex) {
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        color,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(pos);
+      const start = heavy ? 0.42 : 0.24;
+      sprite.scale.setScalar(start);
+      this.scene.add(sprite);
+      this.fx.push(sprite);
+      this.shotLight.position.copy(pos);
+      this.shotLight.intensity = heavy ? 5 : 3;
+      this.tween(heavy ? 0.22 : 0.16, (k) => {
+        sprite.scale.setScalar(start * (1 + k * (heavy ? 1.35 : 0.9)));
+        mat.opacity = 1 - k;
+      }, () => {
+        this.scene.remove(sprite);
+        mat.dispose();
+      });
+    } else {
+      const mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 0.55 : 0.32, 14, 12), mat);
+      mesh.position.copy(pos);
+      this.scene.add(mesh);
+      this.fx.push(mesh);
+      this.tween(0.22, (k) => {
+        mesh.scale.setScalar(1 + k * (heavy ? 2.4 : 1.6));
+        mat.opacity = 0.95 * (1 - k);
+      }, () => {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+        mat.dispose();
+      });
+    }
 
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.15, 0.03, 8, 24),
@@ -533,7 +670,7 @@ export class BattleWorld {
     ring.lookAt(this.camera.position);
     this.scene.add(ring);
     this.tween(0.28, (k) => {
-      ring.scale.setScalar(1 + k * 6);
+      ring.scale.setScalar(1 + k * 2.8);
       (ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - k);
     }, () => {
       this.scene.remove(ring);
@@ -543,6 +680,7 @@ export class BattleWorld {
   }
 
   private explode(pos: THREE.Vector3, color: number): void {
+    this.flashHit(pos, color, true);
     for (let i = 0; i < 3; i++) {
       const delay = i * 0.04;
       this.after(delay, () => {
@@ -569,64 +707,200 @@ export class BattleWorld {
   }
 
   private buildLights(): void {
-    const hemi = new THREE.HemisphereLight(0xc8d8ff, 0x120818, 0.9);
+    const hemi = new THREE.HemisphereLight(0x8aa4d8, 0x120814, 0.55);
     this.scene.add(hemi);
-    const key = new THREE.DirectionalLight(0xfff4e8, 2.2);
-    key.position.set(8, 14, 18);
+    const key = new THREE.DirectionalLight(0xffe6c8, 1.35);
+    key.position.set(16, 12, 10);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0x88a6ff, 1.4);
-    rim.position.set(-12, 6, -10);
+    const rim = new THREE.DirectionalLight(0x7a5cff, 1.05);
+    rim.position.set(-14, 3, -8);
     this.scene.add(rim);
+    const fill = new THREE.DirectionalLight(0x3a6a88, 0.35);
+    fill.position.set(0, -8, 12);
+    this.scene.add(fill);
   }
 
   private buildSpace(): void {
-    this.scene.background = new THREE.Color(0x070414);
-    const stars = this.art.get('assets/background/stars.png');
-    if (stars) {
-      stars.colorSpace = THREE.SRGBColorSpace;
-      this.scene.background = stars;
-    }
-    const nebula = this.art.get('assets/background/nebula_close.png');
-    if (nebula) {
-      nebula.colorSpace = THREE.SRGBColorSpace;
-      const veil = new THREE.Mesh(
-        new THREE.PlaneGeometry(48, 28),
+    this.scene.background = new THREE.Color(0x03010a);
+    this.scene.fog = new THREE.FogExp2(0x070312, 0.012);
+    this.spaceLayers = [];
+
+    const starsTex = this.art.get('assets/background/stars.png');
+    if (starsTex) {
+      starsTex.colorSpace = THREE.SRGBColorSpace;
+      const sky = new THREE.Mesh(
+        new THREE.SphereGeometry(130, 32, 24),
         new THREE.MeshBasicMaterial({
-          map: nebula,
-          transparent: true,
-          opacity: 0.22,
-          blending: THREE.AdditiveBlending,
+          map: starsTex,
+          side: THREE.BackSide,
           depthWrite: false,
-          side: THREE.DoubleSide
+          fog: false
         })
       );
-      veil.position.set(-4, 4.2, -20);
-      (veil.material as THREE.MeshBasicMaterial).opacity = 0.16;
-      this.scene.add(veil);
+      this.placeLayer(sky, new THREE.Vector3(0, 0, 0), 0.03, 0.02);
     }
 
-    const starGeo = new THREE.BufferGeometry();
-    const count = 1600;
+    this.addNebula('assets/background/nebula_mid.png', 110, 62, new THREE.Vector3(10, 8, -62), 0.22, 0.1, 0.07);
+    this.addNebula('assets/background/nebula_mid.png', 70, 40, new THREE.Vector3(-18, -6, -38), 0.14, 0.2, 0.14);
+    this.addNebula('assets/background/nebula_close.png', 42, 26, new THREE.Vector3(-22, 9, -24), 0.08, 0.32, 0.22);
+    this.addNebula('assets/background/nebula_close.png', 34, 20, new THREE.Vector3(20, -4, -18), 0.06, 0.38, 0.26);
+
+    const sun = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: flareTexture(),
+        color: 0xffd8a8,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.85,
+        fog: false
+      })
+    );
+    sun.scale.set(11, 11, 1);
+    this.placeLayer(sun, new THREE.Vector3(34, 16, -48), 0.08, 0.05);
+
+    this.scene.add(this.scatterPoints(2400, 48, 125, 0.16, 0.62, true));
+    this.starNear = this.scatterBox(90, -14, 14, -3, 7, 5, 16, 0.055, 0.7);
+    this.dustFar = this.scatterBox(520, -22, 22, -8, 12, -18, 8, 0.09, 0.16);
+    this.dustNear = this.scatterBox(220, -10, 10, -2, 6, 6, 17, 0.05, 0.22);
+    this.scene.add(this.starNear);
+    this.scene.add(this.dustFar);
+    this.scene.add(this.dustNear);
+  }
+
+  private addNebula(
+    path: string,
+    width: number,
+    height: number,
+    origin: THREE.Vector3,
+    opacity: number,
+    px: number,
+    py: number
+  ): void {
+    const map = this.art.get(path);
+    if (!map) {
+      return;
+    }
+    map.colorSpace = THREE.SRGBColorSpace;
+    const veil = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshBasicMaterial({
+        map,
+        transparent: true,
+        opacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        fog: false
+      })
+    );
+    this.placeLayer(veil, origin, px, py);
+  }
+
+  private placeLayer(obj: THREE.Object3D, origin: THREE.Vector3, px: number, py: number): void {
+    obj.position.copy(origin);
+    this.scene.add(obj);
+    this.spaceLayers.push({ obj, origin: origin.clone(), px, py });
+  }
+
+  private scatterPoints(
+    count: number,
+    inner: number,
+    outer: number,
+    size: number,
+    opacity: number,
+    far: boolean
+  ): THREE.Points {
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      const r = 22 + Math.random() * 40;
+      const r = inner + Math.random() * (outer - inner);
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       positions[i * 3 + 2] = r * Math.cos(phi);
-      const c = 0.75 + Math.random() * 0.25;
-      colors[i * 3] = c;
-      colors[i * 3 + 1] = c;
+      const warm = Math.random();
+      const c = 0.62 + Math.random() * 0.38;
+      colors[i * 3] = warm > 0.82 ? c : warm > 0.55 ? c * 0.75 : c * 0.85;
+      colors[i * 3 + 1] = warm > 0.82 ? c * 0.82 : c;
+      colors[i * 3 + 2] = warm > 0.55 ? c : c * 1.05;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        size,
+        vertexColors: true,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        sizeAttenuation: true,
+        fog: !far
+      })
+    );
+  }
+
+  private scatterBox(
+    count: number,
+    x0: number,
+    x1: number,
+    y0: number,
+    y1: number,
+    z0: number,
+    z1: number,
+    size: number,
+    opacity: number
+  ): THREE.Points {
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = x0 + Math.random() * (x1 - x0);
+      positions[i * 3 + 1] = y0 + Math.random() * (y1 - y0);
+      positions[i * 3 + 2] = z0 + Math.random() * (z1 - z0);
+      const c = 0.45 + Math.random() * 0.55;
+      colors[i * 3] = c * 0.85;
+      colors[i * 3 + 1] = c * 0.9;
       colors[i * 3 + 2] = c;
     }
-    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    this.scene.add(new THREE.Points(
-      starGeo,
-      new THREE.PointsMaterial({ size: 0.11, vertexColors: true, transparent: true, opacity: 0.85 })
-    ));
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        size,
+        vertexColors: true,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true
+      })
+    );
+  }
+
+  private tickSpace(cam: THREE.Vector3): void {
+    const t = this.clock;
+    this.spaceLayers.forEach((layer) => {
+      layer.obj.position.x = layer.origin.x + cam.x * layer.px;
+      layer.obj.position.y = layer.origin.y + cam.y * layer.py;
+    });
+    if (this.dustNear) {
+      this.dustNear.rotation.y = t * 0.01;
+      this.dustNear.position.z = Math.sin(t * 0.07) * 0.4;
+      const mat = this.dustNear.material as THREE.PointsMaterial;
+      mat.opacity = 0.16 + Math.sin(t * 0.35) * 0.04;
+    }
+    if (this.dustFar) {
+      this.dustFar.rotation.y = t * 0.004;
+    }
+    if (this.starNear) {
+      const mat = this.starNear.material as THREE.PointsMaterial;
+      mat.opacity = 0.55 + Math.sin(t * 0.9) * 0.12;
+    }
   }
 
   private tween(
