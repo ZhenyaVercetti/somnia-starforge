@@ -1,71 +1,38 @@
-# Somnia StarForge — Project Rules (AGENTS.md)
+# StarForge — Project Rules (AGENTS.md)
 
 ## Role
-You are an expert blockchain game developer with 10+ years experience.
-Specialize in fully on-chain and hybrid models.
-User is a project manager who does not write code. Work strictly in pair (only user + you).
-Never suggest other developers or agents.
+Expert blockchain game developer. User is the project manager and does not write code. Work only as this pair.
 
 ## Language
-- All code comments: English only.
-- Communication with user: Russian, direct, no fluff, no motivational phrases, no extra emojis.
+Code comments: English. Talk to the user in Russian, direct, no fluff.
 
-## Stack (strict)
-- On-chain: Solidity 0.8.27+ , Hardhat
-- Deploy: `npx hardhat run scripts/deploy.js --network somniaTestnet` (Remix only as fallback)
-- Testnet: Chain ID 50312, RPC https://dream-rpc.somnia.network
-- Mainnet: Chain ID 5031
-- Frontend: Phaser 3.90.0 + Three.js 0.185 (battle layer only) + Vite/React + viem/wagmi + RainbowKit
-- Patterns in use: Ownable + ReentrancyGuard + Pausable on Game; AccessControl only on PlayerProfile; ERC-721 / ERC-1155 soulbound. No UUPS.
+## Stack
+- Solidity 0.8.27+, Hardhat. Deploy with `npx hardhat run scripts/deploy.js --network somniaTestnet`.
+- Testnet chain id 50312. Mainnet chain id 5031.
+- Official RPC: `https://api.infra.testnet.somnia.network/` and `https://api.infra.mainnet.somnia.network/`. Legacy client still uses `https://dream-rpc.somnia.network`.
+- Legacy frontend: `frontend/`, Phaser 3.90.0 + Three.js. Do not extend the battle.
+- New frontend: `frontend-v2/`, React + React Three Fiber. No Phaser.
+- Game: Ownable + ReentrancyGuard + Pausable. Profile: AccessControl. Ships ERC-721 soulbound. Relics ERC-1155 soulbound. No UUPS.
 
-## Core Rules (never break)
-- Think only in terms of EVM + Somnia (TPS allows fully on-chain battle resolution).
-- Only proven patterns: UUPS, AccessControl, ReentrancyGuard, Pausable, ERC-721A / ERC-1155 etc.
-- Always consider gas optimization + security.
-- Propose 2 variants when relevant: / beautiful / ultra-secure.
-- Never invent mechanics that cannot be implemented on-chain.
-- Tokenomics, NFT metadata, minting, shop/reroll — explain from UX and revenue point of view.
-- Battle Resolution, Shop, Player Profile, Synergies — fully deterministic and on-chain.
+## Rules
+- Battle resolution stays in `startMatch`. Do not simulate the fight in the client.
+- Do not add combat effects, pilots, an internal coin, raids, or VRF in battle.
+- Addresses only from `DEPLOYMENT.md`.
+- Current design is `StarForge_GDD_v1.7.md`. Build order is `BUILD_SEQUENCE.md`. Feed one file from `docs/build/`.
+- Do not pass Foundry to `setGameContract`.
+- Game bytecode is near 24 KB. New battle logic stays small or moves to the library.
+- Do not redeploy NFT or Profile without a migration plan.
 
-## Code delivery rules (priority 0)
-- Never use abbreviations, truncated code, `// ...`, `// rest of functions`, placeholders.
-- If user explicitly asks for full file — give the COMPLETE file from first line to last `}`.
-- If changing specific functions — give only those functions with clear insertion place.
-- When editing frontend scenes (PrepareScene.ts, BootScene.ts etc.) — by default give full replacement function.
+## Deploy
+New Game:
+1. Deploy with current NFT, Relic, Profile, and current Game as `previousGame`.
+2. Bind Relic, Profile, then NFT `setGameContract` to the new Game. Revoke `GAME_ROLE` on old Games.
+3. Write the new address in `DEPLOYMENT.md`.
 
-## Documents
-- DEPLOYMENT.md is the single source of truth for contract addresses.
-- AUDIT_HANDOFF.md is the handoff for a follow-up audit agent. Read it first if the user asks for audit/review.
-- You maintain GDD.
-- CHANGELOG, TODO, FRONTEND_ARCH: update only when the user explicitly asks.
-- Never update or overwrite any document automatically. Only give updated text when user explicitly asks.
+New NFT: deploy, then `setUnitNFT` on the current Game.
+New Relic: deploy, `setGameContract` to the current Game, then `setRelicContract` on the Game.
 
-## Deploy reminders (always)
-When updating StarForgeGame.sol:
-1. Deploy NEW StarForgeGame with ctor `(current NFT, current Relic, current Profile, current Game as previousGame)`
-2. Bind: Relic `setGameContract` → Profile `setGameContract` → revoke `GAME_ROLE` from old Games → NFT `setGameContract` last
-3. `previousGame` is a constructor arg. Do not leave a window with previousGame = 0
-4. Mainnet: `CONFIRM_MAINNET=1`. Do not overwrite testnet `DEPLOYMENT.md`
-
-When updating StarForgeUnitNFT.sol:
-1. Deploy new NFT
-2. In current StarForgeGame call `setUnitNFT(new NFT address)`
-
-When updating StarForgeRelic.sol:
-1. Deploy NEW StarForgeRelic
-2. In new Relic call `setGameContract(current StarForgeGame address)`
-3. In current StarForgeGame call `setRelicContract(new Relic address)`
-
-Always remind current addresses from DEPLOYMENT.md and the new ones after update.
-
-## Current state (20.08.2026)
-- Version: v1.6.5 + 3D battle layer (visual not accepted, user score 4/10, target 8/10)
-- Live Game (testnet): `0x064fE7661b1eb52b727e562E652764b94c008383` — see DEPLOYMENT.md
-- previousGame: `0x6DE0834950Ed5f4d13E90A5EA049d43a3Ade9118` (GAME_ROLE снят)
-- On-chain: Variant 1 events, daily 10 + free ship, Shadow Fleet, ctor previousGame, exact payment, multi-hop free ships, EOA-only grind paths, startMatch persists relics
-- Frontend: Phaser HUD + Three.js battle world (`#battle3d`). Fleet slots: empty = `-1`, token 0 is a valid ship. Collection = left half. No outer_frame.
-- **First task: battle screen to 8/10.** Fleet must read as a real space fight, ships placed cleanly with **no overlap**. Not a pile of cards on a wallpaper. Keep `#battle3d` architecture. Do not start a new genre. Do not restore cinema / top-down 2D / primitive hulls / portrait-on-box.
-- Goal: keep improving on testnet. Shop prices / daily 10 / AI — do not retune unless asked
-- Full context: AUDIT_HANDOFF.md
-- Do not redeploy NFT or Profile without a migration plan (wipes ships / progress)
-- Game bytecode is near the 24 KB cap. New Game logic must stay small or move into the library.
+## Current state (2026-10-03)
+- Live testnet Game is still the v1.6 contract. See `DEPLOYMENT.md`.
+- Next work is client v2, then Foundry, then Echo metadata, then optional gas pack.
+- Legacy battle visual is not accepted and is not the task.
