@@ -1,7 +1,8 @@
 # DEPLOYMENT.md
-**Актуально на 17 августа 2026 — единственный источник правды по адресам**
+**Адреса ниже живые на 17.08.2026. Курс с 2026-10-03 их не менял. Единственный источник адресов.**
 
-Testnet: Chain ID **50312**, RPC `https://dream-rpc.somnia.network`
+Testnet: Chain ID **50312**. Официальный RPC `https://api.infra.testnet.somnia.network/`. Legacy-клиент всё ещё вызывает `https://dream-rpc.somnia.network`.
+Mainnet не задеплоен. Chain ID 5031, RPC `https://api.infra.mainnet.somnia.network/`.
 
 ## Актуальные адреса (testnet)
 
@@ -14,6 +15,8 @@ Testnet: Chain ID **50312**, RPC `https://dream-rpc.somnia.network`
   - Last Stand 1 раз, unique team/relics, previousGame = old Game
   - EOA-only: `buyUnit` / `generateTenShips` / `buyFromShop` / `startMatch`
   - `startMatch` пишет экип реликвий в storage
+
+Foundry и Echo ещё не задеплоены. Когда появятся, адрес писать сюда. Foundry не подставлять в `setGameContract`.
 
 ## Предыдущие Game (GAME_ROLE снят)
 
@@ -33,17 +36,16 @@ Testnet: Chain ID **50312**, RPC `https://dream-rpc.somnia.network`
    - `_playerProfile` = `0x2C8976ECc9e9bDf939745ee61b1aD858607563d9`
    - `_previousGame` = `0x064fE7661b1eb52b727e562E652764b94c008383`
 
-2. После деплоя выполняем:
+2. После деплоя:
 
 ```solidity
 StarForgeUnitNFT.setGameContract(<NEW>)
 StarForgeRelic.setGameContract(<NEW>)
 StarForgePlayerProfile.setGameContract(<NEW>)
-StarForgeGame constructor previousGame = 0x064fE7661b1eb52b727e562E652764b94c008383
 ```
 
 Команда: `npx hardhat run scripts/deploy.js --network somniaTestnet`
 
-Порядок bind в скрипте: Relic → Profile → revoke `GAME_ROLE` со старых Game → NFT last.
+Порядок bind: Relic → Profile → revoke `GAME_ROLE` со старых Game → NFT last.
 
 Live verify 17.08: wiring OK, все старые GAME_ROLE сняты. Smoke `startMatch` `0x9b1758bf…` (10 events).
