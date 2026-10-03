@@ -39,7 +39,7 @@ Feed one file at a time. Index: [BUILD_SEQUENCE.md](BUILD_SEQUENCE.md).
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Contract addresses |
 | [StarForge_GDD_v1.7.md](StarForge_GDD_v1.7.md) | Current design |
 | [BUILD_SEQUENCE.md](BUILD_SEQUENCE.md) | What to build, in order |
-| [docs/build/](docs/build/01_CLIENT_V2.md) | Feed files for Build |
+| [docs/build/README.md](docs/build/README.md) | Feed files for Build |
 | [AGENTS.md](AGENTS.md) | Agent rules |
 | [TODO.md](TODO.md) | Open work |
 | [FRONTEND_ARCH.md](FRONTEND_ARCH.md) | Legacy client plus v2 plan |
