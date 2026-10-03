@@ -1,41 +1,36 @@
-# Somnia StarForge
+# StarForge
 
-On-chain auto-battler on Somnia. Version **v1.6.5** (live Game 17.08.2026) + 3D battle layer (20.08, visual not accepted — 4/10, target 8/10).
+On-chain auto-battler. Current design is **GDD v1.7** (2026-10-03). Live contracts are still the v1.6 testnet set.
+
+Forge is the core. Battle proves the hull and stays inside `startMatch`. Mainnet is not the next step.
 
 ## Live testnet
 
-Chain ID **50312** · RPC `https://dream-rpc.somnia.network`
+Chain ID **50312**. Addresses: **`DEPLOYMENT.md`** only. Frontend mirror: `frontend/src/lib/contractAddresses.ts`.
 
-Addresses: **`DEPLOYMENT.md`** (single source of truth). Frontend mirror: `frontend/src/lib/contractAddresses.ts`.
+Official network RPC is `https://api.infra.testnet.somnia.network/`. The legacy client still calls `https://dream-rpc.somnia.network` until client v2.
 
-## Scenes
+## Clients
 
-Boot → Prepare (hub) → Battle. Collection launches as a left-half overlay on Prepare. Wallet: RainbowKit.
-
-Battle field is Three.js (`#battle3d`); Phaser draws HUD only. Preview without a wallet: `?previewBattle=1`.
-
-## Run
+Legacy Phaser 3.90 + Three.js stays in `frontend/`. Visual battle was not accepted. Do not extend it.
 
 ```
 cd frontend
 npm run dev
 ```
 
-Contracts:
-
-```
-npx hardhat test
-npx hardhat run scripts/deploy.js --network somniaTestnet
-```
+New client is not in `main` yet. Spec: `docs/build/01_CLIENT_V2.md`, branch `client-v2`, folder `frontend-v2/`.
 
 ## Documents
 
 | File | Role |
 |---|---|
 | `DEPLOYMENT.md` | Contract addresses |
-| `AUDIT_HANDOFF.md` | Audit / session snapshot |
-| `AGENTS.md` | Agent rules + deploy ritual |
-| `FRONTEND_ARCH.md` | Frontend layout |
-| `Somnia_StarForge_GDD_v1.6.md` | Design |
+| `StarForge_GDD_v1.7.md` | Current design |
+| `BUILD_SEQUENCE.md` | What to build, in order |
+| `docs/build/` | Feed files for Build |
+| `AGENTS.md` | Agent rules |
 | `TODO.md` | Open work |
-| `CHANGELOG.md` | History |
+| `FRONTEND_ARCH.md` | Legacy client plus v2 plan |
+| `Somnia_StarForge_GDD_v1.6.md` | Retired |
+| `changelog.md` | History through 20.08.2026 |
