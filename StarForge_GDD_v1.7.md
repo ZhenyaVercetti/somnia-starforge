@@ -1,6 +1,6 @@
 # StarForge GDD v1.7
 
-Статус: текущий дизайн-документ, 2026-10-03. В контракты не влит. Адреса только в `DEPLOYMENT.md`. Очередь — `BUILD_SEQUENCE.md`. GDD v1.6 снят с курса.
+Статус: текущий дизайн-документ, 2026-10-03. В контракты не влит. Адреса только в [DEPLOYMENT.md](DEPLOYMENT.md). Очередь — [BUILD_SEQUENCE.md](BUILD_SEQUENCE.md). [GDD v1.6](Somnia_StarForge_GDD_v1.6.md) снят с курса.
 
 ## Курс
 
@@ -8,11 +8,11 @@
 
 Цель игрока: Зал Эха, 12 именных Legendary, по одному классу на каждую из трёх фракций. Дубликат в зал не встаёт.
 
-Mainnet не следующий шаг. Сначала принятый клиент, потом кузница.
+Mainnet не следующий шаг. Сначала принятый клиент, потом кузница. Чеклист: [MAINNET_LAUNCH_CHECKLIST.md](MAINNET_LAUNCH_CHECKLIST.md).
 
 ## Что уже в сети
 
-Testnet chain id 50312. Живой Game, NFT, Relic, Profile — в `DEPLOYMENT.md`. Бой: `BattleResolved` + `BattleEventEmitted`. Crit = 1, Dodge = 2, Last Stand = 3. Shadow Fleet на 8. Лимит 10 платных минтов в сутки, 2 реролла, +1 корабль за уровень. XP +25 / +10, порог `level * 55 + 90`.
+Testnet chain id 50312. Живой Game, NFT, Relic, Profile — в [DEPLOYMENT.md](DEPLOYMENT.md). Бой: `BattleResolved` + `BattleEventEmitted`. Crit = 1, Dodge = 2, Last Stand = 3. Shadow Fleet на 8. Лимит 10 платных минтов в сутки, 2 реролла, +1 корабль за уровень. XP +25 / +10, порог `level * 55 + 90`.
 
 Фракции: 0 Empire, 1 Voidborn, 2 Mechanoids. Классы: 0 Fighter, 1 Cruiser, 2 Dreadnought, 3 Drone Swarm. Редкости контракта: Common, Rare, Legendary. Epic нет. До 8 кораблей на сторону.
 
@@ -20,7 +20,7 @@ Testnet chain id 50312. Живой Game, NFT, Relic, Profile — в `DEPLOYMENT.
 
 ## Клиент
 
-`frontend/` остаётся legacy. Новый клиент — `frontend-v2/` на ветке `client-v2`: React и React Three Fiber. Phaser не импортировать. Старые PNG корпусов не использовать. Задача: `docs/build/01_CLIENT_V2.md`.
+`frontend/` остаётся legacy. Новый клиент — `frontend-v2/` на ветке `client-v2`: React и React Three Fiber. Phaser не импортировать. Старые PNG корпусов не использовать. Задача: [docs/build/01_CLIENT_V2.md](docs/build/01_CLIENT_V2.md).
 
 ## Кузница
 
@@ -31,7 +31,7 @@ Testnet chain id 50312. Живой Game, NFT, Relic, Profile — в `DEPLOYMENT.
 - Ascend: 3 корабля одного класса, фракции и редкости сгорают. Common→Rare с уровня 4 и 6 пыли. Rare→Legendary с уровня 10 и 18 пыли. Предки в событии.
 - Имя Legendary один раз, 3–18 байт, с уровня 10.
 
-Задача: `docs/build/02_FORGE.md`.
+Задача: [docs/build/02_FORGE.md](docs/build/02_FORGE.md).
 
 ## NFT
 
@@ -39,11 +39,11 @@ Testnet chain id 50312. Живой Game, NFT, Relic, Profile — в `DEPLOYMENT.
 
 Торгуемое — ERC-721 Echo. Без статов. Бой его не читает. Минт только за действие: первый именной Legendary (1/1), сет фракции, Зал 12 (одно на аккаунт). Royalty ERC-2981 на treasury. Свой маркет не писать.
 
-Задача: `docs/build/03_NFT.md`.
+Задача: [docs/build/03_NFT.md](docs/build/03_NFT.md).
 
 ## Газ боя
 
-Возможный этап после приёмки реплея, не блокер. Упаковать логи ударов, не писать `lastAI` и массивы HP, минт уровня только в `claimLevelUpShips`. Формулу урона не менять. Сначала замер `gasUsed` на Shannon. Задача: `docs/build/04_GAS.md`.
+Возможный этап после приёмки реплея, не блокер. Упаковать логи ударов, не писать `lastAI` и массивы HP, минт уровня только в `claimLevelUpShips`. Формулу урона не менять. Сначала замер `gasUsed` на Shannon. Задача: [docs/build/04_GAS.md](docs/build/04_GAS.md).
 
 ## Не делать
 
