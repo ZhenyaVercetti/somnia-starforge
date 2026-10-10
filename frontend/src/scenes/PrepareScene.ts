@@ -36,6 +36,7 @@ import {
 } from '../lib/prepareSession';
 import { LORE_LOG, loreByIndex, loreIndexForContext } from '../lib/lore';
 import { gameAudio } from '../lib/gameAudio';
+import { openChainBattle } from '../battle/openBattle';
 import { normalizeUnit, type NormalizedUnit } from '../lib/unitNormalize';
 import { addButtonEffects } from '../utils/uiFactory';
 import { preloadRelicsAndFrames, preloadShipPortraits } from '../utils/preloadGameAssets';
@@ -1635,14 +1636,14 @@ private async startBattle() {
     this.saveCurrentTeam();
     this.hideBusyOverlay();
     this.matchBusy = false;
-    this.scene.start('BattleScene', {
-      events: events,
-      playerWon: playerWon,
-      playerMaxHp: playerMaxHp,
-      aiMaxHp: aiMaxHp,
-      playerUnitsData: playerUnitsData,
-      aiUnitsData: aiUnitsData,
-      battleId: battleId,
+    openChainBattle({
+      events,
+      playerWon,
+      playerMaxHp,
+      aiMaxHp,
+      playerUnitsData,
+      aiUnitsData,
+      battleId,
       savedTeam: [...this.team]
     });
 
