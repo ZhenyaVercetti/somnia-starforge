@@ -9,7 +9,7 @@ Code comments: English. Talk to the user in Russian, direct, no fluff. New and r
 ## Stack
 - Solidity 0.8.27+, Hardhat. Deploy with `npx hardhat run scripts/deploy.js --network somniaTestnet`.
 - Testnet chain id 50312. Mainnet chain id 5031.
-- Official RPC: `https://api.infra.testnet.somnia.network/` and `https://api.infra.mainnet.somnia.network/`. On 2026-10-15 both testnet URLs below answered chain id 50312. The client and the Hardhat default still use `https://dream-rpc.somnia.network`. Do not switch them unless the owner asks.
+- Client testnet RPC: `https://api.infra.testnet.somnia.network/`. Chain id stays 50312. Hardhat `somniaTestnet` still defaults to `https://dream-rpc.somnia.network` unless `SOMNIA_TESTNET_RPC` is set. Do not fill the Hardhat mainnet RPC. That is a phase 5 task in `ROADMAP.md`. The placeholder stays `REPLACE_WITH_SOMNIA_MAINNET_RPC`.
 - One client: `frontend/`. Phaser 3.90.0 for Boot, Prepare, Collection, and the wallet shell. Battle is React + React Three Fiber in `frontend/src/battle/`. There is no `frontend-v2` and no `client-v2` branch. Do not create them.
 - Game: Ownable + ReentrancyGuard + Pausable. Profile: AccessControl. Ships ERC-721 soulbound. Relics ERC-1155 soulbound. No UUPS.
 
@@ -17,7 +17,7 @@ Code comments: English. Talk to the user in Russian, direct, no fluff. New and r
 - Battle resolution stays in `startMatch`. Do not simulate the fight in the client.
 - One battle path. `startMatch` and `?previewBattle=1` both open `frontend/src/battle/`. Do not bring back a Phaser battle scene.
 - Do not add combat effects, pilots, an internal coin, raids, or VRF in battle.
-- If image-to-3D is unavailable, stop. Do not substitute procedural hulls, Three.js primitives, or portrait billboards. Do not run `frontend/tools/build_ships.py` to replace `frontend/public/assets/ships/`. Do not delete the twelve GLBs or the twelve portraits until real replacements exist.
+- If image-to-3D is unavailable, stop. Do not substitute procedural hulls, Three.js primitives, or portrait billboards. Do not restore a hull generator. Do not delete the twelve GLBs or the twelve portraits until real replacements exist.
 - Addresses only from `DEPLOYMENT.md`.
 - Current design is `docs/GDD.md`. Order is `ROADMAP.md`. Current sprint is `TODO.md`. Do not feed files from `docs/archive/` as a task.
 - Do not pass Foundry to `setGameContract`.

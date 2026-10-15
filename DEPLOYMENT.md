@@ -1,8 +1,8 @@
 # DEPLOYMENT.md
 **Адреса ниже живые на 17.08.2026. Курс с 03.10.2026 и чистка 15.10.2026 их не меняли. Единственный источник адресов.**
 
-Testnet: Chain ID **50312**. Официальный RPC `https://api.infra.testnet.somnia.network/`. Клиент и Hardhat по умолчанию вызывают `https://dream-rpc.somnia.network`. 15.10.2026 оба адреса ответили `eth_chainId` `0xc488`.
-Mainnet не задеплоен. Chain ID 5031, официальный RPC `https://api.infra.mainnet.somnia.network/` (15.10.2026 ответил `0x13a7`). В Hardhat mainnet оставлен плейсхолдер, см. [STATUS.md](STATUS.md).
+Testnet: Chain ID **50312**. Клиент вызывает `https://api.infra.testnet.somnia.network/`. Hardhat `somniaTestnet` по умолчанию вызывает `https://dream-rpc.somnia.network` (переопределение: `SOMNIA_TESTNET_RPC`). 15.10.2026 оба адреса ответили `eth_chainId` `0xc488`.
+Mainnet не задеплоен. Chain ID 5031, официальный RPC `https://api.infra.mainnet.somnia.network/` (15.10.2026 ответил `0x13a7`). В Hardhat mainnet оставлен плейсхолдер до [фазы 5](ROADMAP.md).
 
 ## Актуальные адреса (testnet)
 

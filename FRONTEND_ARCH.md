@@ -16,7 +16,7 @@ Vite + TypeScript. React только для кошелька (`src/main-react.t
 
 После успешного разбора чека Prepare вызывает `openChainBattle`. События: `BattleResolved` и `BattleEventEmitted`. Байт эффекта: 1 crit, 2 dodge, 3 last stand. Клиент урон не считает.
 
-Адреса: [src/lib/contractAddresses.ts](frontend/src/lib/contractAddresses.ts). Они должны совпадать с [DEPLOYMENT.md](DEPLOYMENT.md). Chain id 50312. RPC клиента: `https://dream-rpc.somnia.network`.
+Адреса: [src/lib/contractAddresses.ts](frontend/src/lib/contractAddresses.ts). Они должны совпадать с [DEPLOYMENT.md](DEPLOYMENT.md). Chain id 50312. RPC клиента: `https://api.infra.testnet.somnia.network/`.
 
 Портреты ангара: `public/assets/units/portraits/`, ключ `emperial` / `voidborn` / `mechanoid` и класс `fighter` / `cruiser` / `dreadnought` / `droneswarm`.
 
@@ -34,7 +34,7 @@ Vite + TypeScript. React только для кошелька (`src/main-react.t
 
 Вход — `BattleInitData` из чека или из `src/utils/battlePreview.ts`. Закрытие возвращает на Prepare после настоящего боя и на Boot после превью.
 
-Двенадцать GLB сейчас — заглушка. Замена описана в [ROADMAP.md](ROADMAP.md), фаза 1. Генератор `frontend/tools/build_ships.py` не запускать.
+Двенадцать GLB сейчас — заглушка. Замена описана в [ROADMAP.md](ROADMAP.md), фаза 1. Процедурный генератор корпусов удалён, новый не писать.
 
 ## Чего в клиенте больше нет
 

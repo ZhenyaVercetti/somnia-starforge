@@ -8,7 +8,7 @@
 - Foundry и Echo не задеплоены.
 - Клиент один: `frontend/`. Phaser ведёт Boot, Prepare, коллекцию и кошелёк. Бой — React Three Fiber в `frontend/src/battle/`, коммит `0649cb7` от 10.10.2026.
 - `startMatch` и `?previewBattle=1` открывают одну сцену.
-- 12 GLB в `frontend/public/assets/ships/` — заглушки из `frontend/tools/build_ships.py`. Это не результат image-to-3D.
+- 12 GLB в `frontend/public/assets/ships/` — процедурные заглушки, не image-to-3D. Генератор удалён.
 - 12 портретов на месте. Файлы Empire приведены к `emperial_*`: загрузчик ангара просит нижний регистр, на Linux `Emperial_*` не находился.
 
 ## Принято
@@ -35,20 +35,12 @@ error: Zero Data Retention teams do not have access to deferred endpoints. Indee
 
 Полный разбор: [docs/archive/image-to-3d-access-report.md](docs/archive/image-to-3d-access-report.md).
 
-## RPC, проверено 15.10.2026
+## RPC
 
-Оба тестнет-адреса ответили `eth_chainId` = `0xc488` (50312):
+Клиент на `https://api.infra.testnet.somnia.network/`, chain id 50312. Hardhat `somniaTestnet` по умолчанию остаётся на `https://dream-rpc.somnia.network`. 15.10.2026 оба ответили `eth_chainId` `0xc488`.
 
-- официальный `https://api.infra.testnet.somnia.network/`
-- тот, что в клиенте и в Hardhat по умолчанию: `https://dream-rpc.somnia.network`
-
-Официальный mainnet `https://api.infra.mainnet.somnia.network/` ответил `0x13a7` (5031). В `hardhat.config.js` сеть `somniaMainnet` всё ещё смотрит на плейсхолдер `REPLACE_WITH_SOMNIA_MAINNET_RPC`, чтобы случайный деплой туда не ушёл.
-
-Клиент на официальный тестнет-RPC не переключался.
+Mainnet RPC в Hardhat не заполнен: плейсхолдер `REPLACE_WITH_SOMNIA_MAINNET_RPC`. Это задача [фазы 5](ROADMAP.md). Официальный `https://api.infra.mainnet.somnia.network/` в тот же день ответил `0x13a7` (5031).
 
 ## Открыто
 
-- Переключать ли клиент и Hardhat с `dream-rpc` на официальный testnet RPC. Оба живые.
-- Удалять ли `frontend/tools/build_ships.py` после того, как появятся настоящие GLB. Сейчас скрипт оставлен и помечен «не запускать».
 - Переносить ли достижения `first_battle`, `first_blood`, `last_stand` в сцену R3F. Их выдавала только старая Phaser-сцена. Живой `startMatch` с коммита `0649cb7` их уже не выдавал.
-- Заполнять ли mainnet RPC в Hardhat. Плейсхолдер оставлен нарочно.

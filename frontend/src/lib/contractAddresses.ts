@@ -7,4 +7,4 @@ export const RELIC_ADDRESS = '0x619e19df1975A8D289545834aAff3FEEf1b84909' as con
 export const PLAYER_PROFILE_ADDRESS = '0x2C8976ECc9e9bDf939745ee61b1aD858607563d9' as const;
 
 export const CHAIN_ID = 50312;
-export const RPC_URL = 'https://dream-rpc.somnia.network';
+export const RPC_URL = 'https://api.infra.testnet.somnia.network/';

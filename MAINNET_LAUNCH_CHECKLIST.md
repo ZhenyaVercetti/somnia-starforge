@@ -15,3 +15,4 @@
 - [ ] Контракты верифицированы на [explorer.somnia.network](https://explorer.somnia.network/)
 - [ ] Отдельный mainnet-деплой, testnet-адреса в [DEPLOYMENT.md](DEPLOYMENT.md) не затирать
 - [ ] Клиент смотрит на chain id 5031
+- [ ] В Hardhat заполнен mainnet RPC. До этой фазы плейсхолдер `REPLACE_WITH_SOMNIA_MAINNET_RPC` не снимать. Официальный URL: `https://api.infra.mainnet.somnia.network/`

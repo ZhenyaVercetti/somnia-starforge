@@ -1,5 +1,11 @@
 # Changelog — Somnia StarForge
 
+## 15.10.2026 — решения владельца
+
+- Клиент переведён на `https://api.infra.testnet.somnia.network/`. Chain id 50312. Hardhat `somniaTestnet` по умолчанию остаётся на `https://dream-rpc.somnia.network`.
+- Mainnet RPC в Hardhat не заполнен. Это задача фазы 5.
+- Удалён процедурный генератор корпусов. Двенадцать GLB не перезаписывались.
+
 ## 15.10.2026 — чистка базы
 
 - Курс сведён: [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), [docs/GDD.md](docs/GDD.md), [docs/decisions.md](docs/decisions.md). Спринт — [TODO.md](TODO.md).
@@ -7,13 +13,13 @@
 - Один путь боя. `?previewBattle=1` открывает ту же R3F-сцену, что и `startMatch`. Удалены Phaser `BattleScene`, `battle3d/` и неиспользуемые спрайты старого боя (`effects/`, `fx/`, `units/combat`, `units/drones`, `units/weapons`, `units/destroyed`).
 - 12 GLB и 12 портретов сохранены. Портреты Empire переименованы в `emperial_*`, чтобы ангар находил их на Linux.
 - Старые постановки перенесены в [docs/archive/](docs/archive/README.md).
-- RPC проверен: `dream-rpc` и `api.infra.testnet` оба отдают chain id 50312. Клиент не переключался.
+- RPC проверен: `dream-rpc` и `api.infra.testnet` оба отдают chain id 50312. На момент чистки клиент ещё был на `dream-rpc`, затем переключён решением владельца.
 - Контракты и адреса без изменений.
 
 ## 10.10.2026 — боевая сцена R3F в текущем клиенте (`0649cb7`)
 
 - `frontend/src/battle/`: после разбора чека `startMatch` открывается сцена React Three Fiber. Магазин, ангар, Prepare и кошелёк не переписывались.
-- 12 GLB в `frontend/public/assets/ships/` собраны `frontend/tools/build_ships.py`. Это не image-to-3D. Визуал не принят.
+- 12 GLB в `frontend/public/assets/ships/` собраны процедурным генератором. Это не image-to-3D. Визуал не принят. Генератор удалён 15.10.
 - Превью из Boot в этом коммите всё ещё открывало старую `BattleScene`. Сведено к одной сцене 15.10.
 - Зависимости: React 19 и `@react-three/fiber`. Контракты и адреса без изменений.
 - Повторная замена корпусов через `grok-imagine-3d` встала: HTTP 400, Zero Data Retention, команда `e6b727ae-7a90-4c3f-bf60-9ab135a157be`, тикет T-G99754. Разбор: [docs/archive/image-to-3d-access-report.md](docs/archive/image-to-3d-access-report.md).

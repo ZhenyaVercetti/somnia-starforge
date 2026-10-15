@@ -1,5 +1,6 @@
 import { createConfig, http } from 'wagmi';
 import { defineChain } from 'viem';
+import { RPC_URL } from './contractAddresses';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import {
   rainbowWallet,
@@ -19,7 +20,7 @@ export const somniaTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://dream-rpc.somnia.network'],
+      http: [RPC_URL],
     },
   },
   blockExplorers: {
@@ -55,7 +56,7 @@ export const config = createConfig({
   chains: [somniaTestnet],
   connectors,
   transports: {
-    [somniaTestnet.id]: http(),
+    [somniaTestnet.id]: http(RPC_URL),
   },
   ssr: false,
 });
