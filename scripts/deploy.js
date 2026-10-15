@@ -243,7 +243,7 @@ function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile, previousGa
   const deployment = `# DEPLOYMENT.md
 **Актуально на ${dateLabel} — единственный источник правды по адресам**
 
-Testnet: Chain ID **50312**, RPC \`https://dream-rpc.somnia.network\`
+Testnet: Chain ID **50312**. Клиент: \`https://api.infra.testnet.somnia.network/\`. Hardhat somniaTestnet по умолчанию: \`https://dream-rpc.somnia.network\`. 15.10.2026 оба ответили chain id 50312.
 
 ## Актуальные адреса (testnet)
 
@@ -290,7 +290,7 @@ export const RELIC_ADDRESS = '${relic}' as const;
 export const PLAYER_PROFILE_ADDRESS = '${playerProfile}' as const;
 
 export const CHAIN_ID = 50312;
-export const RPC_URL = 'https://dream-rpc.somnia.network';
+export const RPC_URL = 'https://api.infra.testnet.somnia.network/';
 `;
 
   fs.writeFileSync(

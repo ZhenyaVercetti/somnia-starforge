@@ -12,9 +12,7 @@ export function openChainBattle(data: BattleInitData): void {
   if (active) return;
   const game = (window as Window & { game?: GameLike }).game;
   const host = document.getElementById('game');
-  const legacy = document.getElementById('battle3d');
   if (host) host.style.visibility = 'hidden';
-  if (legacy) legacy.style.display = 'none';
   game?.loop.sleep();
 
   const mount = document.createElement('div');

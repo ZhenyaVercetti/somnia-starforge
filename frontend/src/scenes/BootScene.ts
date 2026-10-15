@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import WalletManager from '../lib/WalletManager';
 import { gameAudio, SFX_MANIFEST } from '../lib/gameAudio';
 import { preloadRelicsAndFrames, preloadShipPortraits } from '../utils/preloadGameAssets';
+import { openChainBattle } from '../battle/openBattle';
 import { createPreviewBattle } from '../utils/battlePreview';
 
 export default class BootScene extends Phaser.Scene {
@@ -26,10 +27,6 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     const preview = new URLSearchParams(window.location.search).get('previewBattle') === '1';
-    if (preview) {
-      this.scene.start('BattleScene', createPreviewBattle());
-      return;
-    }
 
     this.createParallaxBackground();
 
@@ -86,6 +83,11 @@ export default class BootScene extends Phaser.Scene {
     };
     connectBtn.on('pointerdown', openModal);
     connectText.setInteractive({ useHandCursor: true }).on('pointerdown', openModal);
+
+    if (preview) {
+      openChainBattle(createPreviewBattle());
+      return;
+    }
 
     this.time.delayedCall(500, () => {
       if (walletManager.isConnected()) {

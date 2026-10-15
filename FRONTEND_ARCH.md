@@ -1,19 +1,41 @@
-# FRONTEND_ARCH.md
+# Архитектура клиента
 
-Актуально 2026-10-03. Дизайн: [StarForge_GDD_v1.7.md](StarForge_GDD_v1.7.md).
+Актуально 15.10.2026. Дизайн: [docs/GDD.md](docs/GDD.md). Клиент один: `frontend/`.
 
-## Legacy — `frontend/`
+## Оболочка — Phaser 3.90
 
-Phaser 3.90.0 + Three.js 0.185 + Vite + React только для кошелька. Сцены: Boot, Prepare, Collection overlay, Battle. Бой: Phaser HUD поверх `BattleWorld`. Корабли — карточки в `battle3d/hulls.ts`. Визуал не принят.
+Vite + TypeScript. React только для кошелька (`src/main-react.tsx`, RainbowKit) и для боя.
 
-Этот клиент не развивать. Он остаётся запускаемым, пока v2 не принят. Адреса в [frontend/src/lib/contractAddresses.ts](frontend/src/lib/contractAddresses.ts) должны совпадать с [DEPLOYMENT.md](DEPLOYMENT.md). Chain id 50312.
+| Сцена | Файл | Роль |
+|---|---|---|
+| Boot | `src/scenes/BootScene.ts` | Логотип, CONNECT. `?previewBattle=1` открывает бой |
+| Prepare | `src/scenes/PrepareScene.ts` | Флот, магазин, реликвии, `startMatch` |
+| Collection | `src/scenes/CollectionScene.ts` | Оверлей ангара |
 
-Контрактный поток, который v2 обязан сохранить: `buyUnit`, `buyFromShop`, `rerollShop`, `generateTenShips`, `claimLevelUpShips`, `equipRelics`, `startMatch`. События боя: `BattleResolved` и `BattleEventEmitted`. Эффект 1 crit, 2 dodge, 3 last stand.
+Контрактный поток: `buyUnit`, `buyFromShop`, `rerollShop`, `generateTenShips`, `claimLevelUpShips`, `equipRelics`, `startMatch`.
 
-## Planned — `frontend-v2/`
+После успешного разбора чека Prepare вызывает `openChainBattle`. События: `BattleResolved` и `BattleEventEmitted`. Байт эффекта: 1 crit, 2 dodge, 3 last stand. Клиент урон не считает.
 
-Ещё не в `main`. Ветка `client-v2`. React + React Three Fiber, один canvas. Phaser не импортировать. Старые PNG корпусов не грузить.
+Адреса: [src/lib/contractAddresses.ts](frontend/src/lib/contractAddresses.ts). Они должны совпадать с [DEPLOYMENT.md](DEPLOYMENT.md). Chain id 50312. RPC клиента: `https://api.infra.testnet.somnia.network/`.
 
-Экраны: `/` кошелёк, `/forge` алтарь, `/collection`, `/battle`. Превью без кошелька: `/battle?preview=1`.
+Портреты ангара: `public/assets/units/portraits/`, ключ `emperial` / `voidborn` / `mechanoid` и класс `fighter` / `cruiser` / `dreadnought` / `droneswarm`.
 
-Спека: [docs/build/01_CLIENT_V2.md](docs/build/01_CLIENT_V2.md). Кузница и Echo подключаются следующими файлами [BUILD_SEQUENCE.md](BUILD_SEQUENCE.md), не этим.
+## Бой — React Three Fiber
+
+Каталог `src/battle/`:
+
+| Файл | Роль |
+|---|---|
+| `openBattle.tsx` | Монтирует сцену поверх страницы, прячет `#game`, усыпляет цикл Phaser |
+| `BattleView.tsx` | Canvas, панель 1x / 2x / Skip, карточка итога |
+| `ChainField.tsx` | Поле и проигрывание |
+| `playback.ts` | Тайминг по уже посчитанным событиям |
+| `shipMount.ts` | Грузит `/assets/ships/{empire\|voidborn\|mechanoids}_{fighter\|cruiser\|dreadnought\|swarm}.glb` |
+
+Вход — `BattleInitData` из чека или из `src/utils/battlePreview.ts`. Закрытие возвращает на Prepare после настоящего боя и на Boot после превью.
+
+Двенадцать GLB сейчас — заглушка. Замена описана в [ROADMAP.md](ROADMAP.md), фаза 1. Процедурный генератор корпусов удалён, новый не писать.
+
+## Чего в клиенте больше нет
+
+Phaser `BattleScene`, каталог `src/battle3d/`, спрайтовые корпуса, дроны, пушки и fx старого боя. Их постановка была в архиве, код снят 15.10.2026.
