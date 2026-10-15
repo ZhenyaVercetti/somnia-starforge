@@ -4,14 +4,13 @@ export type TutorialStepId =
   | 'fleet'
   | 'relics'
   | 'start'
-  | 'collection'
-  | 'battle';
+  | 'collection';
 
 export type TutorialStep = {
   id: TutorialStepId;
   title: string;
   body: string;
-  scene: 'PrepareScene' | 'CollectionScene' | 'BattleScene';
+  scene: 'PrepareScene' | 'CollectionScene';
   focus?: { x: number; y: number; w: number; h: number };
 };
 
@@ -57,13 +56,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     body: 'Left half only. Click to inspect. Double-click or ADD to put a ship in the fleet. Relic EQUIP is local — the tx happens at START.',
     scene: 'CollectionScene',
     focus: { x: 480, y: 540, w: 900, h: 980 }
-  },
-  {
-    id: 'battle',
-    title: 'The void',
-    body: 'x2 speeds the fight. SKIP hurries it, it does not jump to the result. Last Stand can fire once per ship.',
-    scene: 'BattleScene',
-    focus: { x: 1766, y: 48, w: 280, h: 70 }
   }
 ];
 

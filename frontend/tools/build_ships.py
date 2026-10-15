@@ -1,11 +1,11 @@
 """Author the twelve StarForge hulls as glTF binary meshes.
 
-The hosted image-to-3D endpoint refuses this team (Zero Data Retention /
-deferred storage). These files are still real meshes: indexed triangles,
-normals, and PBR materials. They are not LatheGeometry, BoxGeometry,
-ConeGeometry, or ExtrudeGeometry, and the battle scene only loads the GLBs.
+DO NOT RUN this to replace frontend/public/assets/ships.
+Decision 2026-10-15: if image-to-3D is unavailable, stop. Do not substitute
+procedural hulls. The GLBs already in the repo stay until real replacements
+land. See docs/decisions.md.
 
-Nose is local +Z. The script checks that the sharp end lies on +Z.
+Nose on the current files is local +Z.
 """
 
 from __future__ import annotations

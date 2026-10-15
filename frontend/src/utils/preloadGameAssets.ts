@@ -1,5 +1,4 @@
 import type Phaser from 'phaser';
-import { combatLoadJobs } from './battleCatalog';
 
 const FACTIONS = ['emperial', 'voidborn', 'mechanoid'] as const;
 const CLASSES = ['fighter', 'cruiser', 'dreadnought', 'droneswarm'] as const;
@@ -10,29 +9,6 @@ export function preloadShipPortraits(scene: Phaser.Scene): void {
       scene.load.image(
         `${faction}_${unitClass}`,
         `assets/units/portraits/${faction}_${unitClass}.png`
-      );
-    }
-  }
-}
-
-export function preloadCombatShips(scene: Phaser.Scene): void {
-  for (const job of combatLoadJobs()) {
-    if (!scene.textures.exists(job.key)) {
-      scene.load.image(job.key, job.path);
-    }
-  }
-}
-
-export function combatShipKey(faction: number, unitClass: number): string {
-  return `combat_${FACTIONS[faction] || FACTIONS[0]}_${CLASSES[unitClass] || CLASSES[0]}`;
-}
-
-export function preloadDestroyedShips(scene: Phaser.Scene): void {
-  for (const faction of FACTIONS) {
-    for (const unitClass of CLASSES) {
-      scene.load.image(
-        `${faction}_${unitClass}_destroyed`,
-        `assets/units/destroyed/${faction}_${unitClass}_destroyed.png`
       );
     }
   }

@@ -243,7 +243,7 @@ function writeDeploymentFiles(newGame, unitNFT, relic, playerProfile, previousGa
   const deployment = `# DEPLOYMENT.md
 **Актуально на ${dateLabel} — единственный источник правды по адресам**
 
-Testnet: Chain ID **50312**, RPC \`https://dream-rpc.somnia.network\`
+Testnet: Chain ID **50312**. Официальный RPC \`https://api.infra.testnet.somnia.network/\`. Клиент и Hardhat по умолчанию: \`https://dream-rpc.somnia.network\`. 15.10.2026 оба ответили chain id 50312.
 
 ## Актуальные адреса (testnet)
 

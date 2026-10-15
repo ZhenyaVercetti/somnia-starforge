@@ -1,5 +1,30 @@
 # Changelog — Somnia StarForge
 
+## 15.10.2026 — чистка базы
+
+- Курс сведён: [README.md](README.md), [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), [docs/GDD.md](docs/GDD.md), [docs/decisions.md](docs/decisions.md). Спринт — [TODO.md](TODO.md).
+- Решение: второго клиента нет. `frontend-v2` / `client-v2` сняты. Бой остаётся в `frontend/src/battle/`.
+- Один путь боя. `?previewBattle=1` открывает ту же R3F-сцену, что и `startMatch`. Удалены Phaser `BattleScene`, `battle3d/` и неиспользуемые спрайты старого боя (`effects/`, `fx/`, `units/combat`, `units/drones`, `units/weapons`, `units/destroyed`).
+- 12 GLB и 12 портретов сохранены. Портреты Empire переименованы в `emperial_*`, чтобы ангар находил их на Linux.
+- Старые постановки перенесены в [docs/archive/](docs/archive/README.md).
+- RPC проверен: `dream-rpc` и `api.infra.testnet` оба отдают chain id 50312. Клиент не переключался.
+- Контракты и адреса без изменений.
+
+## 10.10.2026 — боевая сцена R3F в текущем клиенте (`0649cb7`)
+
+- `frontend/src/battle/`: после разбора чека `startMatch` открывается сцена React Three Fiber. Магазин, ангар, Prepare и кошелёк не переписывались.
+- 12 GLB в `frontend/public/assets/ships/` собраны `frontend/tools/build_ships.py`. Это не image-to-3D. Визуал не принят.
+- Превью из Boot в этом коммите всё ещё открывало старую `BattleScene`. Сведено к одной сцене 15.10.
+- Зависимости: React 19 и `@react-three/fiber`. Контракты и адреса без изменений.
+- Повторная замена корпусов через `grok-imagine-3d` встала: HTTP 400, Zero Data Retention, команда `e6b727ae-7a90-4c3f-bf60-9ab135a157be`, тикет T-G99754. Разбор: [docs/archive/image-to-3d-access-report.md](docs/archive/image-to-3d-access-report.md).
+
+## 03.10.2026 — курс GDD v1.7
+
+- Дизайн: кузница — ядро, бой — проверка корпуса и остаётся в `startMatch`. Торгуемый слой — Echo без статов. Упаковка газа — возможный этап. Mainnet не следующий шаг.
+- В документах того дня следующим шагом был отдельный клиент v2 (`frontend-v2`, ветка `client-v2`) и четыре feed-файла. 15.10 это решение отменено: клиент один, `frontend/`.
+- Живые адреса не менялись. Game по-прежнему `0x064fE7661b1eb52b727e562E652764b94c008383`.
+- В README и DEPLOYMENT зафиксирован официальный RPC `https://api.infra.testnet.somnia.network/`. Клиент оставлен на `https://dream-rpc.somnia.network`.
+
 ## 20.08.2026 — полировка 3D-боя (визуал всё ещё не принят, 4/10)
 
 - Drone Swarm: 4 уникальных дрона на фракцию (`assets/units/drones/`), не копии истребителей. Портреты роя пересобраны.

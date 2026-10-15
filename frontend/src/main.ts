@@ -4,7 +4,6 @@ import './main-react';
 import Phaser from 'phaser';
 import BootScene from './scenes/BootScene';
 import PrepareScene from './scenes/PrepareScene';
-import BattleScene from './scenes/BattleScene';
 import CollectionScene from './scenes/CollectionScene';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -14,7 +13,7 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: 'game',
   backgroundColor: '#0a0022',
   transparent: true,
-  scene: [BootScene, PrepareScene, BattleScene, CollectionScene],
+  scene: [BootScene, PrepareScene, CollectionScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH

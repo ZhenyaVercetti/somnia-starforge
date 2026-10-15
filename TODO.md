@@ -1,22 +1,19 @@
-# TODO — StarForge
+# TODO — текущий спринт
 
-Актуально **2026-10-03**. Курс: [StarForge_GDD_v1.7.md](StarForge_GDD_v1.7.md). Очередь: [BUILD_SEQUENCE.md](BUILD_SEQUENCE.md). Адреса: [DEPLOYMENT.md](DEPLOYMENT.md).
+Актуально 15.10.2026. Курс: [docs/GDD.md](docs/GDD.md). Фазы: [ROADMAP.md](ROADMAP.md). Срез: [STATUS.md](STATUS.md).
 
-Старый P0 «доработать Phaser/карточки до 8/10» снят. Legacy-бой не принят и не чинится.
+Фаза 0 (чистка базы) закрывается этим набором изменений. Дальше — фаза 1. Кузницу не начинать.
 
 ## Сейчас
-- [ ] Feed 1. Клиент v2, ветка `client-v2`, папка `frontend-v2/`. [docs/build/01_CLIENT_V2.md](docs/build/01_CLIENT_V2.md). Контракты не трогать.
-- [ ] Приёмка превью-боя и кошелька на старом `startMatch`.
-- [ ] Feed 2. Кузница, [docs/build/02_FORGE.md](docs/build/02_FORGE.md). Только после приёмки визуала.
-- [ ] Feed 3. NFT metadata и Echo, [docs/build/03_NFT.md](docs/build/03_NFT.md). Только после кузницы на тестнете.
-- [ ] Feed 4, не блокер. Упаковка логов боя, [docs/build/04_GAS.md](docs/build/04_GAS.md). После приёмки реплея. Сначала замер `gasUsed`.
 
-## Не делать
-- Не чинить `frontend/` ради нового боя.
-- Не усложнять библиотеку боя.
-- Не передавать Foundry в `setGameContract`.
-- Не передеплоить NFT и Profile без плана миграции.
-- Не вести внутреннюю монету, пилотов, рейды, VRF в бой.
+- [ ] Снять блокер `grok-imagine-3d`: HTTP 400 на команде `e6b727ae-7a90-4c3f-bf60-9ab135a157be`, тикет **T-G99754**. Либо получить 12 GLB снаружи.
+- [ ] Заменить `frontend/public/assets/ships/*.glb` этими моделями. `frontend/tools/build_ships.py` не запускать. Примитивы и билборды не подставлять.
+- [ ] Принять одну сцену на живом `startMatch`: четыре выстрела, crit, dodge, last stand, добивание, 1x / 2x / Skip, VICTORY / DEFEAT. Превью `?previewBattle=1` — та же сцена.
+- [ ] Контракты, ABI и адреса не менять.
 
-## ARCHIVE — снято 2026-10-03
-P0 от 20.08: доработка `#battle3d` и hangar-портретов до 8/10. Заменено клиентом v2. Снимок: [AUDIT_HANDOFF.md](AUDIT_HANDOFF.md).
+## Не делать в этом спринте
+
+- Не создавать `frontend-v2` и ветку `client-v2`.
+- Не передеплоивать Game, NFT, Relic, Profile.
+- Не начинать кузницу, Echo и упаковку газа.
+- Не переключать RPC, пока владелец не скажет.

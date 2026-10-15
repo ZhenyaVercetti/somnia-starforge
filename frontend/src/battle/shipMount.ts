@@ -3,7 +3,7 @@ import * as THREE from 'three';
 const FACTIONS = ['empire', 'voidborn', 'mechanoids'] as const;
 const CLASSES = ['fighter', 'cruiser', 'dreadnought', 'swarm'] as const;
 
-/** Nose sits at local +Z. tools/build_ships.py rejects a hull whose sharp end is not +Z. */
+/** Nose sits at local +Z on the GLBs already in public/assets/ships. Do not regenerate them. */
 const AUTHORED_FRONT = new THREE.Vector3(0, 0, 1);
 const PARENT_FORWARD = new THREE.Vector3(0, 0, -1);
 
